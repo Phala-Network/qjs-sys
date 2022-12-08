@@ -6188,6 +6188,7 @@ void JS_ComputeMemoryUsage(JSRuntime *rt, JSMemoryUsage *s)
         s->js_func_size + s->js_func_code_size + s->js_func_pc2line_size;
 }
 
+#ifdef DUMP_MEM
 void JS_DumpMemoryUsage(FILE *fp, const JSMemoryUsage *s, JSRuntime *rt)
 {
     fprintf(fp, "QuickJS memory usage -- "
@@ -6316,6 +6317,7 @@ void JS_DumpMemoryUsage(FILE *fp, const JSMemoryUsage *s, JSRuntime *rt)
                 "binary objects", s->binary_object_count, s->binary_object_size);
     }
 }
+#endif
 
 JSValue JS_GetGlobalObject(JSContext *ctx)
 {
