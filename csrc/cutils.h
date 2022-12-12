@@ -25,8 +25,12 @@
 #ifndef CUTILS_H
 #define CUTILS_H
 
+#ifdef __PINK__
+#include "libc.h"
+#else
 #include <stdlib.h>
 #include <inttypes.h>
+#endif
 
 /* set if CPU is big endian */
 #undef WORDS_BIGENDIAN

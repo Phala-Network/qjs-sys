@@ -24,7 +24,11 @@
 #ifndef LIBUNICODE_H
 #define LIBUNICODE_H
 
+#ifdef __PINK__
+#include "libc.h"
+#else
 #include <inttypes.h>
+#endif
 
 #define LRE_BOOL  int       /* for documentation purposes */
 

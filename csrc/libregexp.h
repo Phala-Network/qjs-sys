@@ -24,7 +24,11 @@
 #ifndef LIBREGEXP_H
 #define LIBREGEXP_H
 
+#ifdef __PINK__
+#include "libc.h"
+#else
 #include <stddef.h>
+#endif
 
 #include "libunicode.h"
 

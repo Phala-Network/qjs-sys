@@ -24,9 +24,12 @@
  */
 #ifndef QUICKJS_H
 #define QUICKJS_H
-
+#ifdef __PINK__
+#include "libc.h"
+#else
 #include <stdio.h>
 #include <stdint.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {

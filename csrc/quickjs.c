@@ -22,6 +22,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifdef __PINK__
+#include "libc.h"
+#include "libc/math.h"
+#include "libc/string.h"
+#include "libc/fenv.h"
+#include "libc/stdlib.h"
+#else
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -39,6 +46,7 @@
 #elif defined(__FreeBSD__)
 #include <malloc_np.h>
 #endif
+#endif
 
 #include "cutils.h"
 #include "list.h"
@@ -50,7 +58,7 @@
 
 #define OPTIMIZE         1
 #define SHORT_OPCODES    1
-#if defined(EMSCRIPTEN)
+#if defined(EMSCRIPTEN) || defined(__PINK__)
 #define DIRECT_DISPATCH  0
 #else
 #define DIRECT_DISPATCH  1
@@ -69,11 +77,11 @@
 
 /* define to include Atomics.* operations which depend on the OS
    threads */
-#if !defined(EMSCRIPTEN)
+#if !defined(EMSCRIPTEN) && !defined(__PINK__)
 #define CONFIG_ATOMICS
 #endif
 
-#if !defined(EMSCRIPTEN)
+#if !defined(EMSCRIPTEN) && !defined(__PINK__)
 /* enable stack limitation */
 #define CONFIG_STACK_CHECK
 #endif
@@ -1680,7 +1688,7 @@ static inline size_t js_def_malloc_usable_size(void *ptr)
     return malloc_size(ptr);
 #elif defined(_WIN32)
     return _msize(ptr);
-#elif defined(EMSCRIPTEN)
+#elif defined(EMSCRIPTEN) || defined(__PINK__)
     return 0;
 #elif defined(__linux__)
     return malloc_usable_size(ptr);
@@ -1754,7 +1762,7 @@ static const JSMallocFunctions def_malloc_funcs = {
     malloc_size,
 #elif defined(_WIN32)
     (size_t (*)(const void *))_msize,
-#elif defined(EMSCRIPTEN)
+#elif defined(EMSCRIPTEN) || defined(__PINK__)
     NULL,
 #elif defined(__linux__)
     (size_t (*)(const void *))malloc_usable_size,
@@ -10740,7 +10748,7 @@ static int JS_ToInt64SatFree(JSContext *ctx, int64_t *pres, JSValue val)
             } else {
                 if (d < INT64_MIN)
                     *pres = INT64_MIN;
-                else if (d > INT64_MAX)
+                else if (d > (double)INT64_MAX)
                     *pres = INT64_MAX;
                 else
                     *pres = (int64_t)d;
@@ -41913,11 +41921,11 @@ static uint64_t xorshift64star(uint64_t *pstate)
 
 static void js_random_init(JSContext *ctx)
 {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    ctx->random_state = ((int64_t)tv.tv_sec * 1000000) + tv.tv_usec;
+    // struct timeval tv;
+    // gettimeofday(&tv, NULL);
+    // ctx->random_state = ((int64_t)tv.tv_sec * 1000000) + tv.tv_usec;
     /* the state must be non zero */
-    if (ctx->random_state == 0)
+    // if (ctx->random_state == 0)
         ctx->random_state = 1;
 }
 
@@ -42006,8 +42014,8 @@ static JSValue js___date_clock(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
     int64_t d;
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
+    struct timeval tv = {0};
+    // gettimeofday(&tv, NULL);
     d = (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
     return JS_NewInt64(ctx, d);
 }
@@ -42015,7 +42023,7 @@ static JSValue js___date_clock(JSContext *ctx, JSValueConst this_val,
 /* OS dependent. d = argv[0] is in ms from 1970. Return the difference
    between UTC time and local time 'd' in minutes */
 static int getTimezoneOffset(int64_t time) {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__PINK__)
     /* XXX: TODO */
     return 0;
 #else
@@ -48215,8 +48223,8 @@ static JSValue get_date_string(JSContext *ctx, JSValueConst this_val,
 
 /* OS dependent: return the UTC time in ms since 1970. */
 static int64_t date_now(void) {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
+    struct timeval tv = {0};
+    // gettimeofday(&tv, NULL);
     return (int64_t)tv.tv_sec * 1000 + (tv.tv_usec / 1000);
 }
 

@@ -1,14 +1,15 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+mod sys {
+    #![allow(non_upper_case_globals)]
+    #![allow(non_camel_case_types)]
+    #![allow(non_snake_case)]
+    #![allow(dead_code)]
+
+    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+#[no_mangle]
+pub fn eval(script: &str) -> bool {
+    let bytes = script.as_bytes();
+    let rv = unsafe { sys::js_eval_oneshot(&bytes[0] as *const u8 as _, bytes.len() as _) };
+    rv == 0
 }
