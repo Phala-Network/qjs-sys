@@ -1,10 +1,6 @@
 /* Compressed unicode tables */
 /* Automatically generated file - do not edit */
-#ifdef __PINK__
-#include "libc.h"
-#else
 #include <stdint.h>
-#endif
 
 static const uint32_t case_conv_table1[370] = {
     0x00209a30, 0x00309a00, 0x005a8173, 0x00601730,

@@ -1,14 +1,9 @@
-#ifdef __PINK__
-#include "libc.h"
-#else
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <inttypes.h>
 #include <string.h>
 #include <assert.h>
-#include <unistd.h>
-#endif
 
 #include "cutils.h"
 #include "list.h"
@@ -32,7 +27,7 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val,
         str = JS_ToCStringLen(ctx, &len, argv[i]);
         if (!str)
             return JS_EXCEPTION;
-        // fwrite(str, 1, len, stdout);
+        fwrite(str, 1, len, stdout);
         JS_FreeCString(ctx, str);
     }
     putchar('\n');
@@ -61,8 +56,6 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len,
     int ret;
 
     if ((eval_flags & JS_EVAL_TYPE_MASK) == JS_EVAL_TYPE_MODULE) {
-        /* for the modules, we compile then run to be able to set
-           import.meta */
         val = JS_Eval(ctx, buf, buf_len, filename,
                       eval_flags | JS_EVAL_FLAG_COMPILE_ONLY);
         if (!JS_IsException(val)) {

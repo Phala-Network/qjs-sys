@@ -1,34 +1,41 @@
+
 fn main() {
     let target = std::env::var("TARGET").unwrap();
 
+    let cfiles = [
+        "csrc/cutils.c",
+        "csrc/libregexp.c",
+        "csrc/libunicode.c",
+        "csrc/quickjs.c",
+        "csrc/qjs-pink.c",
+    ];
     let mut cc = cc::Build::new();
+    for file in cfiles.iter() {
+        println!("cargo:rerun-if-changed={}", file);
+        cc.file(file);
+    }
     cc.flag_if_supported("-funsigned-char")
-        .flag_if_supported("-w")
-        .file("csrc/cutils.c")
-        .file("csrc/libregexp.c")
-        .file("csrc/libunicode.c")
-        .file("csrc/quickjs.c")
-        .file("csrc/qjs-pink.c");
+        .flag_if_supported("-w");
 
     if target.starts_with("wasm32") {
-        cc.define("__WASM32__", "1");
-        cc.define("__PINK__", "1");
+        cc.define("__pink__", "1");
         cc.define("_GNU_SOURCE", "");
+        cc.include("wasi-libc/sysroot/include");
+        cc.archiver("llvm-ar");
         cc.warnings(false);
     }
     cc.compile("qjs");
 
+    println!("cargo:rustc-link-search=wasi-libc/sysroot/lib/wasm32-pink");
+    println!("cargo:rustc-link-lib=c");
+
     println!("cargo:rerun-if-changed=wrapper.h");
     let mut builder = bindgen::Builder::default()
-        .header("wrapper.h")
+        .header("csrc/qjs-pink.h")
         .use_core()
         .parse_callbacks(Box::new(bindgen::CargoCallbacks));
     if target.starts_with("wasm32") {
-        builder = builder
-            .clang_arg("-D__WASM32__=1")
-            .clang_arg("-D__PINK__=1")
-            .clang_arg("-D_GNU_SOURCE")
-            .clang_arg("-fvisibility=default")
+        builder = builder.clang_arg("-fvisibility=default")
     }
     let bindings = builder.generate().expect("Unable to generate bindings");
 

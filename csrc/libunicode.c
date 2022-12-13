@@ -21,17 +21,11 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#ifdef __PINK__
-#include "libc.h"
-#include "libc/string.h"
-#include "libc/stdlib.h"
-#else
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 #include <assert.h>
-#endif
 
 #include "cutils.h"
 #include "libunicode.h"
