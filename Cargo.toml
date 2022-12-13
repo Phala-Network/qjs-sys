@@ -8,7 +8,7 @@ inherits = "release"
 debug = true
 
 [lib]
-crate-type = ['rlib', 'cdylib']
+crate-type = ['rlib']
 
 [dependencies]
 

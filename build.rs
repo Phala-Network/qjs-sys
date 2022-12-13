@@ -1,6 +1,19 @@
-
 fn main() {
     let target = std::env::var("TARGET").unwrap();
+    let is_pink = target == "wasm32-unknown-unknown";
+    if is_pink {
+        let status = std::process::Command::new("make")
+            .arg("libc")
+            .spawn()
+            .expect("Failed to run make libc")
+            .wait()
+            .expect("Failed to wait for make libc");
+        if !status.success() {
+            panic!("Failed to run make libc");
+        }
+        println!("cargo:rustc-link-search=pink-libc/sysroot/lib/wasm32-pink");
+        println!("cargo:rustc-link-lib=c");
+    }
 
     let cfiles = [
         "csrc/cutils.c",
@@ -17,17 +30,14 @@ fn main() {
     cc.flag_if_supported("-funsigned-char")
         .flag_if_supported("-w");
 
-    if target.starts_with("wasm32") {
+    if is_pink {
         cc.define("__pink__", "1");
         cc.define("_GNU_SOURCE", "");
-        cc.include("wasi-libc/sysroot/include");
+        cc.include("pink-libc/sysroot/include");
         cc.archiver("llvm-ar");
         cc.warnings(false);
     }
     cc.compile("qjs");
-
-    println!("cargo:rustc-link-search=wasi-libc/sysroot/lib/wasm32-pink");
-    println!("cargo:rustc-link-lib=c");
 
     println!("cargo:rerun-if-changed=wrapper.h");
     let mut builder = bindgen::Builder::default()
