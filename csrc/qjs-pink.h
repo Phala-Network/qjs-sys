@@ -1,4 +1,5 @@
 #ifndef __QJS_PINK_H
 #define __QJS_PINK_H
-int js_eval_oneshot(const void *buf, int buf_len);
+#include <stddef.h>
+int js_eval_oneshot(const void *buf, size_t buf_len);
 #endif

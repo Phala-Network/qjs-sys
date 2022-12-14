@@ -31,6 +31,7 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val,
         JS_FreeCString(ctx, str);
     }
     putchar('\n');
+    fflush(stdout);
     return JS_UNDEFINED;
 }
 
@@ -75,23 +76,25 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len,
     return ret;
 }
 
-int js_eval_oneshot(const void *buf, int buf_len)
+int js_eval_oneshot(const void *buf, size_t buf_len)
 {
     JSRuntime *rt;
     JSContext *ctx;
 
     rt = JS_NewRuntime();
     if (!rt) {
+        fprintf(stderr, "Failed to create JS runtime\n");
         return 2;
     }
 
     ctx = JS_NewContext(rt);
     if (!ctx) {
+        fprintf(stderr, "Failed to create JS context\n");
         return 2;
     }
 
     js_env_add_helpers(ctx);
-    if (eval_buf(ctx, buf, buf_len, "<pink>", 0))
+    if (eval_buf(ctx, buf, buf_len, "<qjs>", 0))
         goto fail;
     return 0;
  fail:
