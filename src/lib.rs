@@ -1,7 +1,9 @@
 #![no_std]
 extern crate alloc;
 
-use alloc::ffi::CString;
+use core::ffi::CStr;
+
+use alloc::string::String;
 
 mod alloc_impl {
     use core::mem::{forget, size_of};
@@ -77,10 +79,32 @@ mod sys {
 }
 
 #[no_mangle]
-pub fn eval(script: &str) -> i32 {
-    let Ok(script) = CString::new(script) else {
-        return -1;
+pub fn eval(script: &str) -> Result<String, String> {
+    let Ok(script) = alloc::ffi::CString::new(script) else {
+        return Err("Invalid script".into());
     };
     let bytes = script.as_bytes();
-    unsafe { sys::js_eval_oneshot(bytes.as_ptr() as _, bytes.len() as _) }
+
+    let mut output = String::new();
+
+    extern "C" fn callback(buf_ptr: *mut core::ffi::c_void, output: *const core::ffi::c_char) {
+        let buf = unsafe { &mut *(buf_ptr as *mut String) };
+        let cstr = unsafe { CStr::from_ptr(output) };
+        let s = cstr.to_str().unwrap_or("<Invalid UTF8 sequnece>");
+        buf.push_str(s);
+    }
+
+    let ret = unsafe {
+        sys::js_evaluate(
+            bytes.as_ptr() as _,
+            bytes.len() as _,
+            &mut output as *mut String as _,
+            Some(callback),
+        )
+    };
+    if ret == 0 {
+        Ok(output)
+    } else {
+        Err(output)
+    }
 }

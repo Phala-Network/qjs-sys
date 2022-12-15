@@ -1,5 +1,11 @@
 fn main() {
-    qjs_sys::eval(r#"console.log("Hello from quickjs");"#);
+    let js = r#"
+    (function(){
+        console.log("Hello, World!");
+        return "Powered by QuickJS in ink!";
+    })()
+    "#;
+    dbg!(qjs_sys::eval(js));
 }
 
 mod polyfill {

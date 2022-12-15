@@ -1,27 +1,26 @@
+#include <assert.h>
+#include <inttypes.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
-#include <inttypes.h>
 #include <string.h>
-#include <assert.h>
 
 #include "cutils.h"
 #include "list.h"
 #include "quickjs.h"
 #include "qjs-pink.h"
 
-static void js_std_dump_error(JSContext *ctx);
+static void js_std_dump_error(JSContext *ctx, JSValueConst exception_val);
 
 /**********************************************************/
 
-static JSValue js_print(JSContext *ctx, JSValueConst this_val,
-                              int argc, JSValueConst *argv)
-{
+static JSValue js_print(JSContext *ctx, JSValueConst this_val, int argc,
+                        JSValueConst *argv) {
     int i;
     const char *str;
     size_t len;
 
-    for(i = 0; i < argc; i++) {
+    for (i = 0; i < argc; i++) {
         if (i != 0)
             putchar(' ');
         str = JS_ToCStringLen(ctx, &len, argv[i]);
@@ -35,8 +34,7 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-void js_env_add_helpers(JSContext *ctx)
-{
+void js_env_add_helpers(JSContext *ctx) {
     JSValue global_obj, console, args;
     global_obj = JS_GetGlobalObject(ctx);
     console = JS_NewObject(ctx);
@@ -50,61 +48,64 @@ void js_env_add_helpers(JSContext *ctx)
     JS_FreeValue(ctx, global_obj);
 }
 
+static void put_val(JSContext *ctx, JSValue val, void *userdata,
+                    callback_t callback) {
+    const char *str = JS_ToCString(ctx, val);
+    if (str == NULL) {
+        callback(userdata, "<NullValue>");
+    } else {
+        callback(userdata, str);
+        JS_FreeCString(ctx, str);
+    }
+}
+
 static int eval_buf(JSContext *ctx, const void *buf, int buf_len,
-                    const char *filename, int eval_flags)
-{
+                    void *userdata, callback_t callback) {
     JSValue val;
     int ret;
 
-    if ((eval_flags & JS_EVAL_TYPE_MASK) == JS_EVAL_TYPE_MODULE) {
-        val = JS_Eval(ctx, buf, buf_len, filename,
-                      eval_flags | JS_EVAL_FLAG_COMPILE_ONLY);
-        if (!JS_IsException(val)) {
-            // js_module_set_import_meta(ctx, val, TRUE, TRUE);
-            val = JS_EvalFunction(ctx, val);
-        }
-    } else {
-        val = JS_Eval(ctx, buf, buf_len, filename, eval_flags);
-    }
+    val = JS_Eval(ctx, buf, buf_len, "<qjs>", 0);
     if (JS_IsException(val)) {
-        js_std_dump_error(ctx);
+        JSValue exception_val = JS_GetException(ctx);
+        put_val(ctx, exception_val, userdata, callback);
+        js_std_dump_error(ctx, exception_val);
+        JS_FreeValue(ctx, exception_val);
         ret = -1;
     } else {
         ret = 0;
+        put_val(ctx, val, userdata, callback);
     }
     JS_FreeValue(ctx, val);
     return ret;
 }
 
-int js_eval_oneshot(const void *buf, size_t buf_len)
-{
+int js_evaluate(const void *buf, size_t buf_len, void *userdata,
+                callback_t callback) {
     JSRuntime *rt;
     JSContext *ctx;
 
     rt = JS_NewRuntime();
     if (!rt) {
         fprintf(stderr, "Failed to create JS runtime\n");
+        callback(userdata, "<RuntimeCreationError>");
         return 2;
     }
 
     ctx = JS_NewContext(rt);
     if (!ctx) {
         fprintf(stderr, "Failed to create JS context\n");
+        callback(userdata, "<ContextCreationError>");
         return 2;
     }
 
     js_env_add_helpers(ctx);
-    if (eval_buf(ctx, buf, buf_len, "<qjs>", 0))
-        goto fail;
-    return 0;
- fail:
-    return 1;
+
+    return eval_buf(ctx, buf, buf_len, userdata, callback);
 }
 
-static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val)
-{
+static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val) {
     const char *str;
-    
+
     str = JS_ToCString(ctx, val);
     if (str) {
         fprintf(f, "%s\n", str);
@@ -114,11 +115,10 @@ static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val)
     }
 }
 
-static void js_std_dump_error1(JSContext *ctx, JSValueConst exception_val)
-{
+static void js_std_dump_error(JSContext *ctx, JSValueConst exception_val) {
     JSValue val;
     BOOL is_error;
-    
+
     is_error = JS_IsError(ctx, exception_val);
     js_dump_obj(ctx, stderr, exception_val);
     if (is_error) {
@@ -128,13 +128,4 @@ static void js_std_dump_error1(JSContext *ctx, JSValueConst exception_val)
         }
         JS_FreeValue(ctx, val);
     }
-}
-
-static void js_std_dump_error(JSContext *ctx)
-{
-    JSValue exception_val;
-    
-    exception_val = JS_GetException(ctx);
-    js_std_dump_error1(ctx, exception_val);
-    JS_FreeValue(ctx, exception_val);
 }
