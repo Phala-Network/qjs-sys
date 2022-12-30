@@ -6485,8 +6485,7 @@ static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
     
     js_dbuf_init(ctx, &dbuf);
     if (filename) {
-        dbuf_putstr(&dbuf, "    at ");
-        dbuf_putstr(&dbuf, filename);
+        dbuf_printf(&dbuf, "    at %s", filename);
         if (line_num != -1)
             dbuf_printf(&dbuf, ":%d", line_num);
         dbuf_putc(&dbuf, '\n');
@@ -6532,7 +6531,7 @@ static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
                 dbuf_putc(&dbuf, ')');
             }
         } else {
-            dbuf_putstr(&dbuf, " (native)");
+            dbuf_printf(&dbuf, " (native)");
         }
         dbuf_putc(&dbuf, '\n');
         /* stop backtrace if JS_EVAL_FLAG_BACKTRACE_BARRIER was used */
@@ -41914,11 +41913,11 @@ static uint64_t xorshift64star(uint64_t *pstate)
 
 static void js_random_init(JSContext *ctx)
 {
-    // struct timeval tv;
-    // gettimeofday(&tv, NULL);
-    // ctx->random_state = ((int64_t)tv.tv_sec * 1000000) + tv.tv_usec;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    ctx->random_state = ((int64_t)tv.tv_sec * 1000000) + tv.tv_usec;
     /* the state must be non zero */
-    // if (ctx->random_state == 0)
+    if (ctx->random_state == 0)
         ctx->random_state = 1;
 }
 
@@ -42007,8 +42006,8 @@ static JSValue js___date_clock(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
     int64_t d;
-    struct timeval tv = {0};
-    // gettimeofday(&tv, NULL);
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
     d = (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
     return JS_NewInt64(ctx, d);
 }
@@ -48216,8 +48215,8 @@ static JSValue get_date_string(JSContext *ctx, JSValueConst this_val,
 
 /* OS dependent: return the UTC time in ms since 1970. */
 static int64_t date_now(void) {
-    struct timeval tv = {0};
-    // gettimeofday(&tv, NULL);
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
     return (int64_t)tv.tv_sec * 1000 + (tv.tv_usec / 1000);
 }
 

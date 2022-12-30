@@ -22,6 +22,7 @@ fn main() {
         "csrc/libunicode.c",
         "csrc/quickjs.c",
         "csrc/qjs-pink.c",
+        "csrc/libbf.c",
     ];
     let mut cc = cc::Build::new();
     for file in cfiles.iter() {
@@ -29,7 +30,8 @@ fn main() {
         cc.file(file);
     }
     cc.flag_if_supported("-funsigned-char")
-        .flag_if_supported("-w");
+        .flag_if_supported("-w")
+        .define("CONFIG_BIGNUM", "");
 
     if is_pink {
         cc.define("__pink__", "1");
