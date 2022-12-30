@@ -5,5 +5,5 @@
 typedef void (*callback_t)(void *userdata, const char *output);
 
 int js_evaluate(const void *buf, size_t buf_len, void *userdata,
-                callback_t callback);
+                callback_t callback, int binary);
 #endif

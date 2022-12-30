@@ -59,6 +59,31 @@ static void put_val(JSContext *ctx, JSValue val, void *userdata,
     }
 }
 
+static int eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
+                       void *userdata, callback_t callback) {
+    int ret = 0;
+    JSValue obj, val;
+    obj = JS_ReadObject(ctx, buf, buf_len, JS_READ_OBJ_BYTECODE);
+    if (JS_IsException(obj))
+        goto exception;
+
+    val = JS_EvalFunction(ctx, obj);
+    if (JS_IsException(val)) {
+        JSValue exception_val;
+    exception:
+        exception_val = JS_GetException(ctx);
+        put_val(ctx, exception_val, userdata, callback);
+        js_std_dump_error(ctx, exception_val);
+        JS_FreeValue(ctx, exception_val);
+        ret = -1;
+    } else {
+        ret = 0;
+        put_val(ctx, val, userdata, callback);
+    }
+    JS_FreeValue(ctx, val);
+    return ret;
+}
+
 static int eval_buf(JSContext *ctx, const void *buf, int buf_len,
                     void *userdata, callback_t callback) {
     JSValue val;
@@ -80,7 +105,7 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len,
 }
 
 int js_evaluate(const void *buf, size_t buf_len, void *userdata,
-                callback_t callback) {
+                callback_t callback, int binary) {
     JSRuntime *rt;
     JSContext *ctx;
 
@@ -100,7 +125,11 @@ int js_evaluate(const void *buf, size_t buf_len, void *userdata,
 
     js_env_add_helpers(ctx);
 
-    return eval_buf(ctx, buf, buf_len, userdata, callback);
+    if (binary) {
+        return eval_binary(ctx, buf, buf_len, userdata, callback);
+    } else {
+        return eval_buf(ctx, buf, buf_len, userdata, callback);
+    }
 }
 
 static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val) {

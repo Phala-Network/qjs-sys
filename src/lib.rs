@@ -78,7 +78,6 @@ mod sys {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-#[no_mangle]
 pub fn eval(script: &str) -> Result<String, String> {
     let Ok(script) = alloc::ffi::CString::new(script) else {
         return Err("Invalid script".into());
@@ -100,6 +99,32 @@ pub fn eval(script: &str) -> Result<String, String> {
             bytes.len() as _,
             &mut output as *mut String as _,
             Some(callback),
+            0,
+        )
+    };
+    if ret == 0 {
+        Ok(output)
+    } else {
+        Err(output)
+    }
+}
+
+pub fn eval_bin(bytecodes: &[u8]) -> Result<String, String> {
+    extern "C" fn callback(buf_ptr: *mut core::ffi::c_void, output: *const core::ffi::c_char) {
+        let buf = unsafe { &mut *(buf_ptr as *mut String) };
+        let cstr = unsafe { CStr::from_ptr(output) };
+        let s = cstr.to_str().unwrap_or("<Invalid UTF8 sequnece>");
+        buf.push_str(s);
+    }
+    let mut output = String::new();
+
+    let ret = unsafe {
+        sys::js_evaluate(
+            bytecodes.as_ptr() as _,
+            bytecodes.len() as _,
+            &mut output as *mut String as _,
+            Some(callback),
+            1,
         )
     };
     if ret == 0 {
