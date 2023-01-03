@@ -2,8 +2,15 @@
 #define __QJS_PINK_H
 #include <stddef.h>
 
-typedef void (*callback_t)(void *userdata, const char *output);
-
-int js_evaluate(const void *buf, size_t buf_len, void *userdata,
-                callback_t callback, int binary);
+typedef void (*output_str_t)(void *userdata, const char *output);
+typedef void (*output_bytes_t)(void *userdata, const char *output, int output_len);
+typedef int (*input_handler_t)(void *userdata, int i, const char *input, int input_len);
+typedef int (*read_args_t)(void *userdata, void *engine_userdata, input_handler_t handler);
+typedef struct {
+    void *userdata;
+    output_str_t output_str;
+    output_bytes_t output_bytes;
+    read_args_t read_args;
+} callbacks_t;
+int js_eval(const void *code, size_t code_len, int is_bytecode, callbacks_t *callbacks);
 #endif

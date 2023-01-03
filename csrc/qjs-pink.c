@@ -20,6 +20,8 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val, int argc,
     const char *str;
     size_t len;
 
+    (void)this_val;
+
     for (i = 0; i < argc; i++) {
         if (i != 0)
             putchar(' ');
@@ -35,7 +37,7 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val, int argc,
 }
 
 void js_env_add_helpers(JSContext *ctx) {
-    JSValue global_obj, console, args;
+    JSValue global_obj, console;
     global_obj = JS_GetGlobalObject(ctx);
     console = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, console, "log",
@@ -48,88 +50,124 @@ void js_env_add_helpers(JSContext *ctx) {
     JS_FreeValue(ctx, global_obj);
 }
 
-static void put_val(JSContext *ctx, JSValue val, void *userdata,
-                    callback_t callback) {
-    const char *str = JS_ToCString(ctx, val);
-    if (str == NULL) {
-        callback(userdata, "<NullValue>");
+struct callback_data {
+    JSContext *ctx;
+    JSValue args;
+};
+
+static int build_args(void *userdata, int i, const char* arg, int len)
+{
+    int ret;
+    struct callback_data *data = (struct callback_data*)userdata;
+
+    ret = JS_DefinePropertyValueUint32(data->ctx, data->args, i,
+                                        JS_NewStringLen(data->ctx, arg, len),
+                                        JS_PROP_C_W_E);
+    if (ret < 0) {
+        return -1;
     } else {
-        callback(userdata, str);
-        JS_FreeCString(ctx, str);
+        return 0;
     }
 }
 
-static int eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
-                       void *userdata, callback_t callback) {
-    int ret = 0;
-    JSValue obj, val;
-    obj = JS_ReadObject(ctx, buf, buf_len, JS_READ_OBJ_BYTECODE);
-    if (JS_IsException(obj))
-        goto exception;
-
-    val = JS_EvalFunction(ctx, obj);
-    if (JS_IsException(val)) {
-        JSValue exception_val;
-    exception:
-        exception_val = JS_GetException(ctx);
-        put_val(ctx, exception_val, userdata, callback);
-        js_std_dump_error(ctx, exception_val);
-        JS_FreeValue(ctx, exception_val);
-        ret = -1;
-    } else {
-        ret = 0;
-        put_val(ctx, val, userdata, callback);
+static int js_env_add_args(JSContext *ctx, callbacks_t* callbacks) {
+    JSValue global_obj, args;
+    int ret = -1;
+    global_obj = JS_GetGlobalObject(ctx);
+    args = JS_NewArray(ctx);
+    if (!JS_IsException(args)) {
+        struct callback_data data = {
+            ctx, args
+        };
+        ret = callbacks->read_args(callbacks->userdata, &data, build_args);
     }
-    JS_FreeValue(ctx, val);
+    if (ret < 0) {
+        JS_FreeValue(ctx, args);
+    } else {
+        JS_SetPropertyStr(ctx, global_obj, "scriptArgs", args);
+    }
+    JS_FreeValue(ctx, global_obj);
     return ret;
 }
 
-static int eval_buf(JSContext *ctx, const void *buf, int buf_len,
-                    void *userdata, callback_t callback) {
+static void put_val(JSContext *ctx, JSValue val, void *userdata,
+                    callbacks_t* callbacks) {
+    if (JS_IsUint8Array(val)) {
+        uint32_t size = 0;
+        uint8_t* buffer = JS_Uint8ArrayGetBuffer(val, &size);
+        if(buffer != NULL) {
+            callbacks->output_bytes(userdata, (const char*)buffer, size);
+        } else {
+        }
+    } else {
+        const char *str = JS_ToCString(ctx, val);
+        if (str == NULL) {
+            callbacks->output_str(userdata, "<NullValue>");
+        } else {
+            callbacks->output_str(userdata, str);
+            JS_FreeCString(ctx, str);
+        }
+    }
+}
+
+static JSValue eval_bytecode(JSContext *ctx, const uint8_t *buf, size_t buf_len) {
+    JSValue obj;
+    obj = JS_ReadObject(ctx, buf, buf_len, JS_READ_OBJ_BYTECODE);
+    if (JS_IsException(obj))
+        return obj;
+
+    return JS_EvalFunction(ctx, obj);
+}
+
+static int eval_buf(JSContext *ctx, const void *buf, int buf_len, int is_bytecode, callbacks_t* callbacks) {
     JSValue val;
     int ret;
 
-    val = JS_Eval(ctx, buf, buf_len, "<qjs>", 0);
+    if (is_bytecode) {
+        val = eval_bytecode(ctx, buf, buf_len);
+    } else {
+        val = JS_Eval(ctx, buf, buf_len, "<qjs>", 0);
+    }
     if (JS_IsException(val)) {
         JSValue exception_val = JS_GetException(ctx);
-        put_val(ctx, exception_val, userdata, callback);
+        put_val(ctx, exception_val, callbacks->userdata, callbacks);
         js_std_dump_error(ctx, exception_val);
         JS_FreeValue(ctx, exception_val);
         ret = -1;
     } else {
         ret = 0;
-        put_val(ctx, val, userdata, callback);
+        put_val(ctx, val, callbacks->userdata, callbacks);
     }
     JS_FreeValue(ctx, val);
     return ret;
 }
 
-int js_evaluate(const void *buf, size_t buf_len, void *userdata,
-                callback_t callback, int binary) {
+int js_eval(const void *code, size_t code_len, int is_bytecode, callbacks_t* callbacks) {
     JSRuntime *rt;
     JSContext *ctx;
 
     rt = JS_NewRuntime();
     if (!rt) {
         fprintf(stderr, "Failed to create JS runtime\n");
-        callback(userdata, "<RuntimeCreationError>");
-        return 2;
+        callbacks->output_str(callbacks->userdata, "<RuntimeCreationError>");
+        return 1;
     }
 
     ctx = JS_NewContext(rt);
     if (!ctx) {
         fprintf(stderr, "Failed to create JS context\n");
-        callback(userdata, "<ContextCreationError>");
+        callbacks->output_str(callbacks->userdata, "<ContextCreationError>");
         return 2;
     }
 
     js_env_add_helpers(ctx);
-
-    if (binary) {
-        return eval_binary(ctx, buf, buf_len, userdata, callback);
-    } else {
-        return eval_buf(ctx, buf, buf_len, userdata, callback);
+    if (js_env_add_args(ctx, callbacks) != 0) {
+        fprintf(stderr, "Failed to build arguments \n");
+        callbacks->output_str(callbacks->userdata, "<InvalidArgs>");
+        return 3;
     }
+
+    return eval_buf(ctx, code, code_len, is_bytecode, callbacks);
 }
 
 static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val) {

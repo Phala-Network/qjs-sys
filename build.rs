@@ -12,7 +12,10 @@ fn main() {
         if !status.success() {
             panic!("Failed to run make libc");
         }
-        println!("cargo:rustc-link-search={}/pink-libc/sysroot/lib/wasm32-pink", rootdir);
+        println!(
+            "cargo:rustc-link-search={}/pink-libc/sysroot/lib/wasm32-pink",
+            rootdir
+        );
         println!("cargo:rustc-link-lib=c");
     }
 
@@ -29,8 +32,8 @@ fn main() {
         println!("cargo:rerun-if-changed={}", file);
         cc.file(file);
     }
-    cc.flag_if_supported("-funsigned-char")
-        .flag_if_supported("-w")
+    cc.flag("-funsigned-char")
+        .flag("-Wno-unknown-attributes")
         .define("CONFIG_BIGNUM", "");
 
     if is_pink {
@@ -53,6 +56,9 @@ fn main() {
     let bindings = builder.generate().expect("Unable to generate bindings");
 
     let out_path = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    bindings
+        .write_to_file("bindings.rs")
+        .expect("Couldn't write bindings!");
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");

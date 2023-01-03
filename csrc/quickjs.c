@@ -54061,3 +54061,26 @@ void JS_AddIntrinsicTypedArrays(JSContext *ctx)
     JS_AddIntrinsicAtomics(ctx);
 #endif
 }
+
+JS_BOOL JS_IsUint8Array(JSValueConst v)
+{
+    JSObject *p;
+    if (JS_VALUE_GET_TAG(v) != JS_TAG_OBJECT)
+        return FALSE;
+    p = JS_VALUE_GET_OBJ(v);
+    if (p->class_id != JS_CLASS_UINT8_ARRAY) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+uint8_t* JS_Uint8ArrayGetBuffer(JSValueConst v, uint32_t *size)
+{
+    JSObject *p;
+    if (!JS_IsUint8Array(v)) {
+        return NULL;
+    }
+    p = JS_VALUE_GET_OBJ(v);
+    *size = p->u.array.count;
+    return p->u.array.u.uint8_ptr;
+}
