@@ -90,6 +90,15 @@ static int js_env_add_args(JSContext *ctx, callbacks_t* callbacks) {
     return ret;
 }
 
+static JSValue get_output(JSContext *ctx) {
+    JSValue global_obj, output;
+
+    global_obj = JS_GetGlobalObject(ctx);
+    output = JS_GetPropertyStr(ctx, global_obj, "scriptOutput");
+    JS_FreeValue(ctx, global_obj);
+    return output;
+}
+
 static void put_val(JSContext *ctx, JSValue val, void *userdata,
                     callbacks_t* callbacks) {
     if (JS_IsUint8Array(val)) {
@@ -126,7 +135,7 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len, int is_bytecod
     if (is_bytecode) {
         val = eval_bytecode(ctx, buf, buf_len);
     } else {
-        val = JS_Eval(ctx, buf, buf_len, "<qjs>", 0);
+        val = JS_Eval(ctx, buf, buf_len, "<eval>", 0);
     }
     if (JS_IsException(val)) {
         JSValue exception_val = JS_GetException(ctx);
@@ -135,8 +144,15 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len, int is_bytecod
         JS_FreeValue(ctx, exception_val);
         ret = -1;
     } else {
+        JSValue output = get_output(ctx);
+
+        if (!JS_IsUndefined(output)) {
+            put_val(ctx, output, callbacks->userdata, callbacks);
+        } else {
+            put_val(ctx, val, callbacks->userdata, callbacks);
+        }
+        JS_FreeValue(ctx, output);
         ret = 0;
-        put_val(ctx, val, callbacks->userdata, callbacks);
     }
     JS_FreeValue(ctx, val);
     return ret;
