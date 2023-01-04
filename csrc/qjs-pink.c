@@ -10,9 +10,33 @@
 #include "quickjs.h"
 #include "qjs-pink.h"
 
-static void js_std_dump_error(JSContext *ctx, JSValueConst exception_val);
 
-/**********************************************************/
+static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val) {
+    const char *str;
+
+    str = JS_ToCString(ctx, val);
+    if (str) {
+        fprintf(f, "%s\n", str);
+        JS_FreeCString(ctx, str);
+    } else {
+        fprintf(f, "[exception]\n");
+    }
+}
+
+static void js_std_dump_error(JSContext *ctx, JSValueConst exception_val) {
+    JSValue val;
+    BOOL is_error;
+
+    is_error = JS_IsError(ctx, exception_val);
+    js_dump_obj(ctx, stderr, exception_val);
+    if (is_error) {
+        val = JS_GetPropertyStr(ctx, exception_val, "stack");
+        if (!JS_IsUndefined(val)) {
+            js_dump_obj(ctx, stderr, val);
+        }
+        JS_FreeValue(ctx, val);
+    }
+}
 
 static JSValue js_print(JSContext *ctx, JSValueConst this_val, int argc,
                         JSValueConst *argv) {
@@ -36,7 +60,7 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val, int argc,
     return JS_UNDEFINED;
 }
 
-void js_env_add_helpers(JSContext *ctx) {
+static void js_env_add_helpers(JSContext *ctx) {
     JSValue global_obj, console;
     global_obj = JS_GetGlobalObject(ctx);
     console = JS_NewObject(ctx);
@@ -99,29 +123,27 @@ static JSValue get_output(JSContext *ctx) {
     return output;
 }
 
-static void put_val(JSContext *ctx, JSValue val, void *userdata,
-                    callbacks_t* callbacks) {
+static void put_val(JSContext *ctx, JSValue val, callbacks_t* callbacks) {
     if (JS_IsUint8Array(val)) {
         uint32_t size = 0;
         uint8_t* buffer = JS_Uint8ArrayGetBuffer(val, &size);
         if(buffer != NULL) {
-            callbacks->output_bytes(userdata, (const char*)buffer, size);
+            callbacks->output_bytes(callbacks->userdata, (const char*)buffer, size);
         } else {
         }
     } else {
         const char *str = JS_ToCString(ctx, val);
         if (str == NULL) {
-            callbacks->output_str(userdata, "<NullValue>");
+            callbacks->output_str(callbacks->userdata, "<NullValue>");
         } else {
-            callbacks->output_str(userdata, str);
+            callbacks->output_str(callbacks->userdata, str);
             JS_FreeCString(ctx, str);
         }
     }
 }
 
 static JSValue eval_bytecode(JSContext *ctx, const uint8_t *buf, size_t buf_len) {
-    JSValue obj;
-    obj = JS_ReadObject(ctx, buf, buf_len, JS_READ_OBJ_BYTECODE);
+    JSValue obj = JS_ReadObject(ctx, buf, buf_len, JS_READ_OBJ_BYTECODE);
     if (JS_IsException(obj))
         return obj;
 
@@ -139,7 +161,7 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len, int is_bytecod
     }
     if (JS_IsException(val)) {
         JSValue exception_val = JS_GetException(ctx);
-        put_val(ctx, exception_val, callbacks->userdata, callbacks);
+        put_val(ctx, exception_val, callbacks);
         js_std_dump_error(ctx, exception_val);
         JS_FreeValue(ctx, exception_val);
         ret = -1;
@@ -147,9 +169,9 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len, int is_bytecod
         JSValue output = get_output(ctx);
 
         if (!JS_IsUndefined(output)) {
-            put_val(ctx, output, callbacks->userdata, callbacks);
+            put_val(ctx, output, callbacks);
         } else {
-            put_val(ctx, val, callbacks->userdata, callbacks);
+            put_val(ctx, val, callbacks);
         }
         JS_FreeValue(ctx, output);
         ret = 0;
@@ -184,31 +206,4 @@ int js_eval(const void *code, size_t code_len, int is_bytecode, callbacks_t* cal
     }
 
     return eval_buf(ctx, code, code_len, is_bytecode, callbacks);
-}
-
-static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val) {
-    const char *str;
-
-    str = JS_ToCString(ctx, val);
-    if (str) {
-        fprintf(f, "%s\n", str);
-        JS_FreeCString(ctx, str);
-    } else {
-        fprintf(f, "[exception]\n");
-    }
-}
-
-static void js_std_dump_error(JSContext *ctx, JSValueConst exception_val) {
-    JSValue val;
-    BOOL is_error;
-
-    is_error = JS_IsError(ctx, exception_val);
-    js_dump_obj(ctx, stderr, exception_val);
-    if (is_error) {
-        val = JS_GetPropertyStr(ctx, exception_val, "stack");
-        if (!JS_IsUndefined(val)) {
-            js_dump_obj(ctx, stderr, val);
-        }
-        JS_FreeValue(ctx, val);
-    }
 }
