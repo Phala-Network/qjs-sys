@@ -60,6 +60,9 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val, int argc,
     return JS_UNDEFINED;
 }
 
+
+JSValue __host_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+
 static void js_env_add_helpers(JSContext *ctx) {
     JSValue global_obj, console;
     global_obj = JS_GetGlobalObject(ctx);
@@ -71,6 +74,8 @@ static void js_env_add_helpers(JSContext *ctx) {
     JS_SetPropertyStr(ctx, global_obj, "console", console);
     JS_SetPropertyStr(ctx, global_obj, "print",
                       JS_NewCFunction(ctx, js_print, "print", 1));
+    JS_SetPropertyStr(ctx, global_obj, "__hostCall",
+                      JS_NewCFunction(ctx, __host_call, "__hostCall", 1));
     JS_FreeValue(ctx, global_obj);
 }
 

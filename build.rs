@@ -33,15 +33,15 @@ fn main() {
         cc.file(file);
     }
     cc.flag("-funsigned-char")
-        .flag("-Wno-unknown-attributes")
-        .define("CONFIG_BIGNUM", "");
+        .define("CONFIG_BIGNUM", None);
 
     if is_pink {
         cc.define("__pink__", "1");
-        cc.define("_GNU_SOURCE", "");
+        cc.define("_GNU_SOURCE", None);
         cc.include("pink-libc/sysroot/include");
         cc.archiver("llvm-ar");
         cc.warnings(false);
+        cc.flag("-w");
     }
     cc.compile("qjs");
 
@@ -51,7 +51,11 @@ fn main() {
         .use_core()
         .parse_callbacks(Box::new(bindgen::CargoCallbacks));
     if target.starts_with("wasm32") {
-        builder = builder.clang_arg("-fvisibility=default")
+        builder = builder
+            .clang_arg("-fvisibility=default")
+            .clang_arg("-D__pink__=1")
+            .clang_arg("-w")
+            .clang_arg(format!("-I{}/pink-libc/sysroot/include", rootdir));
     }
     let bindings = builder.generate().expect("Unable to generate bindings");
 

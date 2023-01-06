@@ -10855,7 +10855,7 @@ int JS_ToInt64(JSContext *ctx, int64_t *pres, JSValueConst val)
 
 int JS_ToInt64Ext(JSContext *ctx, int64_t *pres, JSValueConst val)
 {
-    if (JS_IsBigInt(ctx, val))
+    if (JS_IsBigInt(val))
         return JS_ToBigInt64(ctx, pres, val);
     else
         return JS_ToInt64(ctx, pres, val);
@@ -12212,7 +12212,7 @@ static bf_t *JS_ToBigIntFree(JSContext *ctx, bf_t *buf, JSValue val)
     return r;
 }
 
-static bf_t *JS_ToBigInt(JSContext *ctx, bf_t *buf, JSValueConst val)
+bf_t *JS_ToBigInt(JSContext *ctx, bf_t *buf, JSValueConst val)
 {
     return JS_ToBigIntFree(ctx, buf, JS_DupValue(ctx, val));
 }
@@ -14149,7 +14149,7 @@ static no_inline int js_mul_pow10(JSContext *ctx, JSValue *sp)
     a = JS_ToBigFloat(ctx, &a_s, op1);
     if (!a)
         return -1;
-    if (JS_IsBigInt(ctx, op2)) {
+    if (JS_IsBigInt(op2)) {
         ret = JS_ToBigInt64(ctx, &e, op2);
     } else {
         ret = JS_ToInt64(ctx, &e, op2);
@@ -43838,7 +43838,7 @@ static JSValue js_json_check(JSContext *ctx, JSONStringifyContext *jsc,
 
     if (JS_IsObject(val)
 #ifdef CONFIG_BIGNUM
-    ||  JS_IsBigInt(ctx, val)   /* XXX: probably useless */
+    ||  JS_IsBigInt(val)   /* XXX: probably useless */
 #endif
         ) {
             JSValue f = JS_GetProperty(ctx, val, JS_ATOM_toJSON);
@@ -49202,13 +49202,13 @@ static JSValue js_bigint_constructor(JSContext *ctx,
 
 static JSValue js_thisBigIntValue(JSContext *ctx, JSValueConst this_val)
 {
-    if (JS_IsBigInt(ctx, this_val))
+    if (JS_IsBigInt(this_val))
         return JS_DupValue(ctx, this_val);
 
     if (JS_VALUE_GET_TAG(this_val) == JS_TAG_OBJECT) {
         JSObject *p = JS_VALUE_GET_OBJ(this_val);
         if (p->class_id == JS_CLASS_BIG_INT) {
-            if (JS_IsBigInt(ctx, p->u.object_data))
+            if (JS_IsBigInt(p->u.object_data))
                 return JS_DupValue(ctx, p->u.object_data);
         }
     }
