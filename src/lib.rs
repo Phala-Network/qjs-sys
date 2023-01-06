@@ -3,116 +3,39 @@ extern crate alloc;
 
 use core::ffi::CStr;
 
+use alloc::ffi::CString;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
-mod alloc_impl {
-    use core::mem::{forget, size_of};
+mod alloc_impl;
 
-    use alloc::vec::Vec;
-
-    #[no_mangle]
-    extern "C" fn __pink_malloc(size: usize) -> *mut ::core::ffi::c_void {
-        let mut buf = Vec::<usize>::new();
-        if buf.try_reserve(cap(size)).is_err() {
-            return core::ptr::null_mut();
-        }
-        buf.push(buf.capacity());
-        let ptr = unsafe { buf.as_mut_ptr().offset(1) as *mut ::core::ffi::c_void };
-        forget(buf);
-        ptr
-    }
-
-    #[no_mangle]
-    extern "C" fn __pink_free(ptr: *mut ::core::ffi::c_void) {
-        drop(recover(ptr));
-    }
-
-    #[no_mangle]
-    extern "C" fn __pink_realloc(
-        ptr: *mut ::core::ffi::c_void,
-        size: usize,
-    ) -> *mut ::core::ffi::c_void {
-        match recover(ptr) {
-            Some(mut buffer) => {
-                let cap_required = cap(size);
-                if cap_required > buffer.capacity() {
-                    if buffer
-                        .try_reserve(cap_required - buffer.capacity())
-                        .is_err()
-                    {
-                        return core::ptr::null_mut();
-                    }
-                    buffer[0] = buffer.capacity();
-                }
-                let ptr = unsafe { buffer.as_mut_ptr().offset(1) as *mut ::core::ffi::c_void };
-                forget(buffer);
-                ptr
-            }
-            None => __pink_malloc(size),
-        }
-    }
-
-    fn cap(size: usize) -> usize {
-        size / size_of::<usize>() + 2
-    }
-
-    fn recover(ptr: *mut ::core::ffi::c_void) -> Option<Vec<usize>> {
-        if ptr.is_null() {
-            return None;
-        }
-        unsafe {
-            let ptr = (ptr as *mut usize).offset(-1);
-            let capacity = *ptr;
-            let buf = Vec::<usize>::from_raw_parts(ptr, capacity, capacity);
-            Some(buf)
-        }
-    }
+pub mod c;
+pub mod convert;
+#[cfg_attr(target_pointer_width = "32", path = "inline32.rs")]
+#[cfg_attr(target_pointer_width = "64", path = "inline64.rs")]
+pub mod inline_fns;
+mod libc {
+    pub use core::ffi::*;
 }
 
-mod sys {
-    #![allow(non_upper_case_globals)]
-    #![allow(non_camel_case_types)]
-    #![allow(non_snake_case)]
-    #![allow(dead_code)]
-
-    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+pub fn throw_type_error(ctx: *mut c::JSContext, msg: &str) -> c::JSValue {
+    let cmsg = CString::new(msg).unwrap_or_default();
+    unsafe { c::JS_ThrowTypeError(ctx, cmsg.as_ptr()) }
 }
 
 pub enum JsCode<'a> {
-    Source(&'a str),
+    Source(&'a CStr),
     Bytecode(&'a [u8]),
 }
 
-impl JsCode<'_> {
-    fn is_bytecode(&self) -> bool {
-        match self {
-            JsCode::Source(_) => false,
-            JsCode::Bytecode(_) => true,
-        }
-    }
-}
-
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Output {
     String(String),
     Bytes(Vec<u8>),
     Undefined,
 }
 
-pub fn eval(script: JsCode, args: &[String]) -> Result<Output, String> {
-    let cstr;
-
-    let bytes = match script {
-        JsCode::Source(src) => {
-            let Ok(script) = alloc::ffi::CString::new(src) else {
-                return Err("Invalid script".into());
-            };
-            cstr = script;
-            cstr.as_bytes()
-        }
-        JsCode::Bytecode(code) => code,
-    };
-
+pub fn eval(scripts: &[JsCode], args: &[String]) -> Result<Output, String> {
     struct IO<'a> {
         args: &'a [String],
         output: Option<Output>,
@@ -121,7 +44,7 @@ pub fn eval(script: JsCode, args: &[String]) -> Result<Output, String> {
     extern "C" fn read_args(
         userdata: *mut ::core::ffi::c_void,
         eng_userdata: *mut ::core::ffi::c_void,
-        handler: sys::input_handler_t,
+        handler: c::input_handler_t,
     ) -> ::core::ffi::c_int {
         let io = unsafe { &mut *(userdata as *mut IO) };
 
@@ -141,7 +64,7 @@ pub fn eval(script: JsCode, args: &[String]) -> Result<Output, String> {
         output_len: ::core::ffi::c_int,
     ) {
         let io = unsafe { &mut *(userdata as *mut IO) };
-        let bytes: &[u8] = unsafe { &*core::ptr::slice_from_raw_parts(output as _, output_len as _) };
+        let bytes: &[u8] = unsafe { core::slice::from_raw_parts(output as _, output_len as _) };
         io.output = Some(Output::Bytes(bytes.to_vec()));
     }
 
@@ -157,21 +80,30 @@ pub fn eval(script: JsCode, args: &[String]) -> Result<Output, String> {
 
     let mut userdata = IO { args, output: None };
 
-    let mut callbacks = sys::callbacks_t {
+    let mut callbacks = c::callbacks_t {
         userdata: &mut userdata as *mut _ as *mut ::core::ffi::c_void,
         output_str: Some(output_str),
         output_bytes: Some(output_bytes),
         read_args: Some(read_args),
     };
 
-    let ret = unsafe {
-        sys::js_eval(
-            bytes.as_ptr() as _,
-            bytes.len() as _,
-            if script.is_bytecode() { 1 } else { 0 },
-            &mut callbacks,
-        )
-    };
+    let codes: Vec<_> = scripts
+        .into_iter()
+        .map(|s| match s {
+            JsCode::Source(src) => c::code_t {
+                code: src.as_ptr() as _,
+                code_len: src.to_bytes().len() as _,
+                is_bytecode: 0,
+            },
+            JsCode::Bytecode(bytes) => c::code_t {
+                code: bytes.as_ptr() as _,
+                code_len: bytes.len() as _,
+                is_bytecode: 1,
+            },
+        })
+        .collect();
+
+    let ret = unsafe { c::js_eval(codes.as_ptr() as _, codes.len() as _, &mut callbacks) };
     if ret == 0 {
         let output = match userdata.output {
             Some(output) => output,
@@ -184,5 +116,57 @@ pub fn eval(script: JsCode, args: &[String]) -> Result<Output, String> {
             _ => "UnknownError".to_string(),
         };
         Err(output)
+    }
+}
+
+pub fn compile(code: &str, filename: &str) -> Result<Vec<u8>, &'static str> {
+    use crate::c as js;
+    let code = CString::new(code).or(Err("Invalid encoding in js code"))?;
+    let filename = CString::new(filename).or(Err("Invalid filename"))?;
+    unsafe {
+        let rt = js::JS_NewRuntime();
+        if rt.is_null() {
+            return Err("Failed to create js runtime");
+        }
+        scopeguard::defer! {
+            js::JS_FreeRuntime(rt);
+        }
+
+        let ctx = js::JS_NewContext(rt);
+        if ctx.is_null() {
+            return Err("Failed to create js context");
+        }
+        scopeguard::defer! {
+            js::JS_FreeContext(ctx);
+        }
+
+        let bytecode = js::JS_Eval(
+            ctx,
+            code.as_ptr() as _,
+            code.to_bytes().len() as _,
+            filename.as_ptr() as _,
+            js::JS_EVAL_FLAG_COMPILE_ONLY as _,
+        );
+
+        if js::JS_IsException(bytecode) != 0 {
+            return Err("Failed to compile js code");
+        }
+        scopeguard::defer! {
+            js::JS_FreeValue(ctx, bytecode);
+        }
+
+        let flags = js::JS_WRITE_OBJ_BYTECODE;
+        let mut out_buf_len = 0;
+        let out_buf = js::JS_WriteObject(ctx, &mut out_buf_len, bytecode, flags as _);
+
+        if out_buf.is_null() {
+            return Err("Failed to dump bytecode");
+        }
+        scopeguard::defer! {
+            js::js_free(ctx, out_buf as _);
+        }
+
+        let bytes = core::slice::from_raw_parts(out_buf as *const u8, out_buf_len as _).to_vec();
+        Ok(bytes)
     }
 }

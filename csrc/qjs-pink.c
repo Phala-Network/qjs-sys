@@ -60,6 +60,9 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val, int argc,
     return JS_UNDEFINED;
 }
 
+
+JSValue __host_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+
 static void js_env_add_helpers(JSContext *ctx) {
     JSValue global_obj, console;
     global_obj = JS_GetGlobalObject(ctx);
@@ -71,6 +74,8 @@ static void js_env_add_helpers(JSContext *ctx) {
     JS_SetPropertyStr(ctx, global_obj, "console", console);
     JS_SetPropertyStr(ctx, global_obj, "print",
                       JS_NewCFunction(ctx, js_print, "print", 1));
+    JS_SetPropertyStr(ctx, global_obj, "__hostCall",
+                      JS_NewCFunction(ctx, __host_call, "__hostCall", 1));
     JS_FreeValue(ctx, global_obj);
 }
 
@@ -180,9 +185,11 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len, int is_bytecod
     return ret;
 }
 
-int js_eval(const void *code, size_t code_len, int is_bytecode, callbacks_t* callbacks) {
+int js_eval(code_t *codes, size_t n_codes, callbacks_t *callbacks)
+{
     JSRuntime *rt;
     JSContext *ctx;
+    int ret, i;
 
     rt = JS_NewRuntime();
     if (!rt) {
@@ -205,5 +212,14 @@ int js_eval(const void *code, size_t code_len, int is_bytecode, callbacks_t* cal
         return 3;
     }
 
-    return eval_buf(ctx, code, code_len, is_bytecode, callbacks);
+    for (i = 0; i < n_codes; i++) {
+        ret = eval_buf(ctx, codes[i].code, codes[i].code_len, codes[i].is_bytecode, callbacks);
+        if (ret != 0) {
+            break;
+        }
+    }
+
+    JS_FreeContext(ctx);
+    JS_FreeRuntime(rt);
+    return ret;
 }

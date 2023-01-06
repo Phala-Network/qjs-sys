@@ -568,7 +568,7 @@ static inline JS_BOOL JS_IsNumber(JSValueConst v)
     return tag == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag);
 }
 
-static inline JS_BOOL JS_IsBigInt(JSContext *ctx, JSValueConst v)
+static inline JS_BOOL JS_IsBigInt(JSValueConst v)
 {
     int tag = JS_VALUE_GET_TAG(v);
     return tag == JS_TAG_BIG_INT;
@@ -1039,6 +1039,7 @@ int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
                            const JSCFunctionListEntry *tab, int len);
 JS_BOOL JS_IsUint8Array(JSValueConst v);
 uint8_t* JS_Uint8ArrayGetBuffer(JSValueConst v, uint32_t *size);
+JSValue JS_Uint8ArrayCreate(JSContext *ctx, uint8_t* data, uint32_t data_len);
 
 #undef js_unlikely
 #undef js_force_inline
