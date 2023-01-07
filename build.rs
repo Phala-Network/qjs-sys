@@ -27,16 +27,21 @@ fn main() {
         "csrc/qjs-pink.c",
         "csrc/libbf.c",
     ];
+    let c_flags = [
+        "-funsigned-char",
+        "-DCONFIG_BIGNUM",
+        "-D_GNU_SOURCE",
+        "-D__pink__=1",
+        "-w",
+    ];
     let mut cc = cc::Build::new();
     for file in cfiles.iter() {
         println!("cargo:rerun-if-changed={}", file);
         cc.file(file);
     }
-    cc.flag("-funsigned-char")
-        .define("CONFIG_BIGNUM", None)
-        .define("_GNU_SOURCE", None)
-        .define("__pink__", "1")
-        .flag("-w");
+    for flag in c_flags {
+        cc.flag(flag);
+    }
 
     if is_wasm32 {
         cc.include("pink-libc/sysroot/include");
@@ -48,13 +53,11 @@ fn main() {
     println!("cargo:rerun-if-changed=csrc/qjs-pink.h");
     let mut builder = bindgen::Builder::default()
         .header("csrc/qjs-pink.h")
-        .clang_arg("-funsigned-char")
-        .clang_arg("-DCONFIG_BIGNUM")
-        .clang_arg("-D_GNU_SOURCE")
-        .clang_arg("-D__pink__=1")
-        .clang_arg("-w")
         .use_core()
         .parse_callbacks(Box::new(bindgen::CargoCallbacks));
+    for flag in c_flags {
+        builder = builder.clang_arg(flag);
+    }
     if is_wasm32 {
         builder = builder
             .clang_arg("-fvisibility=default")
