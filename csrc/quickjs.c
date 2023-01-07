@@ -12261,15 +12261,16 @@ static void JS_FreeBigInt(JSContext *ctx, bf_t *a, bf_t *buf)
 static int JS_ToBigInt64Free(JSContext *ctx, int64_t *pres, JSValue val)
 {
     bf_t a_s, *a;
+    int ret;
 
     a = JS_ToBigIntFree(ctx, &a_s, val);
     if (!a) {
         *pres = 0;
         return -1;
     }
-    bf_get_int64(pres, a, BF_GET_INT_MOD);
+    ret = bf_get_int64(pres, a, BF_GET_INT_MOD);
     JS_FreeBigInt(ctx, a, &a_s);
-    return 0;
+    return ret;
 }
 
 int JS_ToBigInt64(JSContext *ctx, int64_t *pres, JSValueConst val)
