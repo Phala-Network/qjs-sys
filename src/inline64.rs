@@ -23,6 +23,7 @@ pub type int32_t = __int32_t;
 pub type int64_t = __int64_t;
 pub type uint32_t = __uint32_t;
 pub type uint64_t = __uint64_t;
+pub type uintptr_t = libc::c_ulong;
 pub type JSAtom = uint32_t;
 pub type C2RustUnnamed = libc::c_int;
 pub const JS_TAG_FLOAT64: C2RustUnnamed = 7;
@@ -80,7 +81,10 @@ pub const JS_CFUNC_generic: JSCFunctionEnum = 0;
 pub const NULL: libc::c_int = 0 as libc::c_int;
 pub const JS_PROP_THROW: libc::c_int = (1 as libc::c_int) << 14 as libc::c_int;
 #[inline]
-pub unsafe extern "C" fn __JS_NewFloat64(mut ctx: *mut JSContext, mut d: libc::c_double) -> JSValue {
+pub unsafe extern "C" fn __JS_NewFloat64(
+    mut ctx: *mut JSContext,
+    mut d: libc::c_double,
+) -> JSValue {
     let mut v: JSValue = JSValue {
         u: JSValueUnion { int32: 0 },
         tag: 0,
@@ -344,4 +348,154 @@ pub unsafe extern "C" fn JS_NewCFunction(
     mut length: libc::c_int,
 ) -> JSValue {
     return JS_NewCFunction2(ctx, func, name, length, JS_CFUNC_generic, 0 as libc::c_int);
+}
+
+#[inline]
+pub fn JS_GetTag(mut v: JSValue) -> int32_t {
+    return v.tag as int32_t;
+}
+#[inline]
+pub fn JS_GetInt(mut v: JSValue) -> int32_t {
+    return unsafe { v.u.int32 };
+}
+#[inline]
+pub fn JS_GetBool(mut v: JSValue) -> int32_t {
+    return unsafe { v.u.int32 };
+}
+#[inline]
+pub fn JS_GetFloat64(mut v: JSValue) -> libc::c_double {
+    return unsafe { v.u.float64 };
+}
+#[inline]
+pub fn JS_GetPtr(mut v: JSValue) -> *mut libc::c_void {
+    return unsafe { v.u.ptr };
+}
+
+#[inline]
+pub const fn JS_MakeValue(mut tag: int32_t, mut val: int32_t) -> JSValue {
+    return {
+        let mut init = JSValue {
+            u: JSValueUnion { int32: val },
+            tag: tag as int64_t,
+        };
+        init
+    };
+}
+
+#[inline]
+pub const fn JS_MakePtr(mut tag: int32_t, mut p: uintptr_t) -> JSValue {
+    return {
+        let mut init = JSValue {
+            u: JSValueUnion {
+                ptr: p as *mut libc::c_void,
+            },
+            tag: tag as int64_t,
+        };
+        init
+    };
+}
+
+#[inline]
+pub const fn JS_MakeNAN() -> JSValue {
+    return JS_NAN;
+}
+const NAN: libc::c_float = ::core::f32::NAN;
+const JS_FLOAT64_NAN: libc::c_float = ::core::f32::NAN;
+const JS_NAN: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            float64: JS_FLOAT64_NAN as libc::c_double,
+        },
+        tag: JS_TAG_FLOAT64 as libc::c_int as int64_t,
+    };
+    init
+};
+#[inline]
+pub const fn JS_MakeNULL() -> JSValue {
+    return JS_NULL;
+}
+const JS_NULL: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            int32: 0 as libc::c_int,
+        },
+        tag: JS_TAG_NULL as libc::c_int as int64_t,
+    };
+    init
+};
+#[inline]
+pub const fn JS_MakeUNDEFINED() -> JSValue {
+    return JS_UNDEFINED;
+}
+const JS_UNDEFINED: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            int32: 0 as libc::c_int,
+        },
+        tag: JS_TAG_UNDEFINED as libc::c_int as int64_t,
+    };
+    init
+};
+#[inline]
+pub const fn JS_MakeFALSE() -> JSValue {
+    return JS_FALSE;
+}
+const JS_FALSE: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            int32: 0 as libc::c_int,
+        },
+        tag: JS_TAG_BOOL as libc::c_int as int64_t,
+    };
+    init
+};
+#[inline]
+pub const fn JS_MakeTRUE() -> JSValue {
+    return JS_TRUE;
+}
+const JS_TRUE: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            int32: 1 as libc::c_int,
+        },
+        tag: JS_TAG_BOOL as libc::c_int as int64_t,
+    };
+    init
+};
+#[inline]
+pub const fn JS_MakeEXCEPTION() -> JSValue {
+    return JS_EXCEPTION;
+}
+const JS_EXCEPTION: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            int32: 0 as libc::c_int,
+        },
+        tag: JS_TAG_EXCEPTION as libc::c_int as int64_t,
+    };
+    init
+};
+#[inline]
+pub const fn JS_MakeUNINITIALIZED() -> JSValue {
+    return JS_UNINITIALIZED;
+}
+const JS_UNINITIALIZED: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            int32: 0 as libc::c_int,
+        },
+        tag: JS_TAG_UNINITIALIZED as libc::c_int as int64_t,
+    };
+    init
+};
+
+#[inline]
+pub const fn JS_MakeFloat64(mut d: libc::c_double) -> JSValue {
+    let mut v: JSValue = JSValue {
+        u: JSValueUnion { int32: 0 },
+        tag: 0,
+    };
+    v.tag = JS_TAG_FLOAT64 as libc::c_int as int64_t;
+    v.u.float64 = d;
+    return v;
 }

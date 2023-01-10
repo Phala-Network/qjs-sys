@@ -13,6 +13,7 @@ use crate::c::*;
 use crate::libc;
 
 pub type size_t = usize;
+pub type uintptr_t = libc::c_ulong;
 pub type intptr_t = libc::c_long;
 pub type int32_t = libc::c_int;
 pub type int64_t = libc::c_longlong;
@@ -124,7 +125,10 @@ pub unsafe extern "C" fn JS_VALUE_GET_FLOAT64(mut v: JSValue) -> libc::c_double 
 pub const JS_FLOAT64_TAG_ADDEND: libc::c_int =
     0x7ff80000 as libc::c_int - JS_TAG_FIRST as libc::c_int + 1 as libc::c_int;
 #[inline]
-pub unsafe extern "C" fn __JS_NewFloat64(mut ctx: *mut JSContext, mut d: libc::c_double) -> JSValue {
+pub unsafe extern "C" fn __JS_NewFloat64(
+    mut ctx: *mut JSContext,
+    mut d: libc::c_double,
+) -> JSValue {
     let mut u: C2RustUnnamed_1 = C2RustUnnamed_1 { d: 0. };
     let mut v: JSValue = 0;
     u.d = d;
@@ -367,3 +371,109 @@ pub unsafe extern "C" fn JS_SetProperty(
     return JS_SetPropertyInternal(ctx, this_obj, prop, val, JS_PROP_THROW);
 }
 pub const JS_PROP_THROW: libc::c_int = (1 as libc::c_int) << 14 as libc::c_int;
+
+#[inline]
+pub fn JS_GetTag(mut v: JSValue) -> int32_t {
+    return (v >> 32 as libc::c_int) as int32_t;
+}
+#[inline]
+pub fn JS_GetInt(mut v: JSValue) -> int32_t {
+    return v as libc::c_int;
+}
+#[inline]
+pub fn JS_GetBool(mut v: JSValue) -> int32_t {
+    return v as libc::c_int;
+}
+#[inline]
+pub fn JS_GetFloat64(mut v: JSValue) -> libc::c_double {
+    return unsafe { JS_VALUE_GET_FLOAT64(v) };
+}
+#[inline]
+pub fn JS_GetPtr(mut v: JSValue) -> *mut libc::c_void {
+    return v as intptr_t as *mut libc::c_void;
+}
+
+#[inline]
+pub const fn JS_MakeValue(mut tag: int32_t, mut val: int32_t) -> JSValue {
+    return (tag as uint64_t) << 32 as libc::c_int | val as uint32_t as libc::c_ulonglong;
+}
+
+#[inline]
+pub const fn JS_MakePtr(mut tag: int32_t, mut p: uintptr_t) -> JSValue {
+    return (tag as uint64_t) << 32 as libc::c_int | p as libc::c_ulonglong;
+}
+
+#[inline]
+pub const fn JS_MakeNAN() -> JSValue {
+    return (0x7ff8000000000000 as libc::c_longlong as libc::c_ulonglong)
+        .wrapping_sub((JS_FLOAT64_TAG_ADDEND as uint64_t) << 32 as libc::c_int);
+}
+#[inline]
+pub const fn JS_MakeNULL() -> JSValue {
+    return JS_NULL;
+}
+const JS_NULL: libc::c_ulonglong = (JS_TAG_NULL as libc::c_int as uint64_t) << 32 as libc::c_int
+    | 0 as libc::c_int as uint32_t as libc::c_ulonglong;
+#[inline]
+pub const fn JS_MakeUNDEFINED() -> JSValue {
+    return JS_UNDEFINED;
+}
+const JS_UNDEFINED: libc::c_ulonglong = (JS_TAG_UNDEFINED as libc::c_int as uint64_t)
+    << 32 as libc::c_int
+    | 0 as libc::c_int as uint32_t as libc::c_ulonglong;
+#[inline]
+pub const fn JS_MakeFALSE() -> JSValue {
+    return JS_FALSE;
+}
+const JS_FALSE: libc::c_ulonglong = (JS_TAG_BOOL as libc::c_int as uint64_t) << 32 as libc::c_int
+    | 0 as libc::c_int as uint32_t as libc::c_ulonglong;
+#[inline]
+pub const fn JS_MakeTRUE() -> JSValue {
+    return JS_TRUE;
+}
+const JS_TRUE: libc::c_ulonglong = (JS_TAG_BOOL as libc::c_int as uint64_t) << 32 as libc::c_int
+    | 1 as libc::c_int as uint32_t as libc::c_ulonglong;
+#[inline]
+pub const fn JS_MakeEXCEPTION() -> JSValue {
+    return JS_EXCEPTION;
+}
+const JS_EXCEPTION: libc::c_ulonglong = (JS_TAG_EXCEPTION as libc::c_int as uint64_t)
+    << 32 as libc::c_int
+    | 0 as libc::c_int as uint32_t as libc::c_ulonglong;
+#[inline]
+pub const fn JS_MakeUNINITIALIZED() -> JSValue {
+    return JS_UNINITIALIZED;
+}
+const JS_UNINITIALIZED: libc::c_ulonglong = (JS_TAG_UNINITIALIZED as libc::c_int as uint64_t)
+    << 32 as libc::c_int
+    | 0 as libc::c_int as uint32_t as libc::c_ulonglong;
+
+#[inline]
+pub const fn JS_MakeFloat64(mut d: libc::c_double) -> JSValue {
+    unsafe {
+        let mut u: C2RustUnnamed_1 = C2RustUnnamed_1 { d: 0. };
+        let mut v: JSValue = 0;
+        u.d = d;
+        let mut current_block_2: u64;
+        if (u.u64_0 & 0x7fffffffffffffff as libc::c_longlong as libc::c_ulonglong
+            > 0x7ff0000000000000 as libc::c_longlong as libc::c_ulonglong) as libc::c_int
+            as libc::c_long
+            != 0
+        {
+            current_block_2 = 4988723283678924448;
+        } else {
+            current_block_2 = 14916268686031723178;
+        }
+        match current_block_2 {
+            14916268686031723178 => {
+                v = (u.u64_0)
+                    .wrapping_sub((JS_FLOAT64_TAG_ADDEND as uint64_t) << 32 as libc::c_int);
+            }
+            _ => {
+                v = (0x7ff8000000000000 as libc::c_longlong as libc::c_ulonglong)
+                    .wrapping_sub((JS_FLOAT64_TAG_ADDEND as uint64_t) << 32 as libc::c_int);
+            }
+        }
+        return v;
+    }
+}
