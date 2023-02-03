@@ -41855,13 +41855,24 @@ static void js_random_init(JSContext *ctx)
         ctx->random_state = 1;
 }
 
+void __pink_getrandom(uint8_t *buf, uint8_t nbytes);
+
 static JSValue js_math_random(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
     JSFloat64Union u;
     uint64_t v;
+#ifdef __pink__
+    union {
+        uint64_t u64;
+        uint8_t buf[8];
+    } r;
 
+    __pink_getrandom(r.buf, sizeof(r.buf));
+    v = r.u64;
+#else
     v = xorshift64star(&ctx->random_state);
+#endif
     /* 1.0 <= u.d < 2 */
     u.u64 = ((uint64_t)0x3ff << 52) | (v >> 12);
     return __JS_NewFloat64(ctx, u.d - 1.0);

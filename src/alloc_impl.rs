@@ -93,3 +93,30 @@ extern "C" fn __host_call(
 
     unsafe { __pink_host_call(id, ctx, &args[1..]) }
 }
+
+#[cfg(feature = "with-polyfills")]
+mod polyfills {
+    use core::ffi::{c_uchar, c_int};
+
+    use super::c;
+
+    #[no_mangle]
+    extern "C" fn __pink_getrandom(_pbuf: *mut u8, _nbytes: u8) {}
+    #[no_mangle]
+    fn __pink_host_call(
+        _id: u32,
+        _ctx: *mut c::JSContext,
+        _args: &[c::JSValueConst],
+    ) -> c::JSValue {
+        c::JS_EXCEPTION
+    }
+    #[no_mangle]
+    extern "C" fn __pink_clock_time_get(_id: u32, _precision: u64, _retptr0: *mut u64) -> u16 {
+        0
+    }
+
+    #[no_mangle]
+    extern "C" fn __pink_fd_write(_fd: c_int, _buf: *const c_uchar, _len: usize) -> usize {
+        unimplemented!()
+    }
+}
