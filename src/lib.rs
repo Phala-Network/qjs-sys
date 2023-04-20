@@ -149,6 +149,12 @@ pub fn compile(code: &str, filename: &str) -> Result<Vec<u8>, &'static str> {
         );
 
         if js::JS_IsException(bytecode) != 0 {
+            extern "C" {
+                fn js_std_dump_error(ctx: *mut js::JSContext, exception_val: js::JSValue);
+            }
+            let exception_val = js::JS_GetException(ctx);
+            js_std_dump_error(ctx, exception_val);
+            js::JS_FreeValue(ctx, exception_val);
             return Err("Failed to compile js code");
         }
         scopeguard::defer! {

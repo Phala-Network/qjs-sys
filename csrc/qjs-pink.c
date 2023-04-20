@@ -23,7 +23,7 @@ static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val) {
     }
 }
 
-static void js_std_dump_error(JSContext *ctx, JSValueConst exception_val) {
+void js_std_dump_error(JSContext *ctx, JSValueConst exception_val) {
     JSValue val;
     BOOL is_error;
 
