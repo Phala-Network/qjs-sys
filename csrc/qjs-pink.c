@@ -166,6 +166,7 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len, int is_bytecod
     }
     if (JS_IsException(val)) {
         JSValue exception_val = JS_GetException(ctx);
+        fprintf(stderr, "Exception:\n");
         put_val(ctx, exception_val, callbacks);
         js_std_dump_error(ctx, exception_val);
         JS_FreeValue(ctx, exception_val);
