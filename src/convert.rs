@@ -46,11 +46,42 @@ pub fn js_object_get_field<T: DecodeFromJSValue>(
     v: c::JSValue,
     field: &str,
 ) -> Result<T, String> {
+    let value = js_object_get_option_field(ctx, v, field)?;
+    value.ok_or_else(|| alloc::format!("missing field '{field}'"))
+}
+
+pub fn js_object_get_option_field<T: DecodeFromJSValue>(
+    ctx: *mut c::JSContext,
+    v: c::JSValue,
+    field: &str,
+) -> Result<Option<T>, String> {
     let cfield =
         alloc::ffi::CString::new(field).or(Err(alloc::format!("invalid field name: '{field}'")))?;
     let value = unsafe { c::JS_GetPropertyStr(ctx, v, cfield.as_ptr()) };
-    Ok(DecodeFromJSValue::decode_into(ctx, value)
-        .or(Err(alloc::format!("invalid value for field '{field}'")))?)
+    if unsafe { c::JS_IsUndefined(value) != 0 } {
+        return Ok(None);
+    }
+    Ok(Some(DecodeFromJSValue::decode_into(ctx, value).or(Err(
+        alloc::format!("invalid value for field '{field}'"),
+    ))?))
+}
+
+pub fn js_array_for_each<F: FnMut(c::JSValue) -> Result<(), String>>(
+    ctx: *mut c::JSContext,
+    v: c::JSValue,
+    mut f: F,
+) -> Result<(), String> {
+    unsafe {
+        let len_value = c::JS_GetPropertyStr(ctx, v, b"length\0".as_ptr() as *const c_char);
+        let len = c::JS_GetInt(len_value) as u32;
+        c::JS_FreeValue(ctx, len_value);
+        for i in 0..len {
+            let value = c::JS_GetPropertyUint32(ctx, v, i);
+            f(value)?;
+            c::JS_FreeValue(ctx, value);
+        }
+    }
+    Ok(())
 }
 
 pub fn js_object_get_field_or_default<T: DecodeFromJSValue + Default>(
@@ -58,14 +89,8 @@ pub fn js_object_get_field_or_default<T: DecodeFromJSValue + Default>(
     v: c::JSValue,
     field: &str,
 ) -> Result<T, String> {
-    let field =
-        alloc::ffi::CString::new(field).or(Err(alloc::format!("failed to get field '{field}'")))?;
-    let value = unsafe { c::JS_GetPropertyStr(ctx, v, field.as_ptr()) };
-    if unsafe { c::JS_IsUndefined(value) != 0 } {
-        Ok(Default::default())
-    } else {
-        Ok(DecodeFromJSValue::decode_into(ctx, value)?)
-    }
+    let value = js_object_get_option_field(ctx, v, field)?;
+    Ok(value.unwrap_or_default())
 }
 
 pub fn js_val_into<T: DecodeFromJSValue>(
