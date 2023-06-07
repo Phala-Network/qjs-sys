@@ -232,6 +232,20 @@ impl DecodeFromJSValue for BTreeMap<String, String> {
     }
 }
 
+pub struct HashableBytes(pub Vec<u8>);
+impl DecodeFromJSValue for HashableBytes {
+    fn decode(ctx: *mut c::JSContext, v: c::JSValue) -> Result<Self, &'static str> {
+        let bytes = unsafe {
+            if c::JS_IsString(v) != 0 {
+                <String as DecodeFromJSValue>::decode(ctx, v)?.into_bytes()
+            } else {
+                <Vec<u8> as DecodeFromJSValue>::decode(ctx, v)?
+            }
+        };
+        Ok(HashableBytes(bytes))
+    }
+}
+
 pub fn js_val_from_bytes(ctx: *mut c::JSContext, bytes: &[u8]) -> c::JSValue {
     return unsafe { c::JS_NewUint8Array(ctx, bytes.as_ptr() as _, bytes.len() as _) };
 }
