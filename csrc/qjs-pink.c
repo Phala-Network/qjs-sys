@@ -63,7 +63,7 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val, int argc,
 
 JSValue __host_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 
-static void js_env_add_helpers(JSContext *ctx) {
+void js_env_add_helpers(JSContext *ctx) {
     JSValue global_obj, console;
     global_obj = JS_GetGlobalObject(ctx);
     console = JS_NewObject(ctx);
@@ -184,6 +184,10 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len, int is_bytecod
     }
     JS_FreeValue(ctx, val);
     return ret;
+}
+
+int js_eval_code(JSContext *ctx, const code_t* code, callbacks_t* callbacks) {
+    return eval_buf(ctx, code->code, code->code_len, code->is_bytecode, callbacks);
 }
 
 int js_eval(code_t *codes, size_t n_codes, callbacks_t *callbacks)

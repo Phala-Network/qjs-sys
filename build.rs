@@ -1,7 +1,8 @@
 fn main() {
     let rootdir = std::env::var("CARGO_MANIFEST_DIR").expect("Missing CARGO_MANIFEST_DIR");
     let target = std::env::var("TARGET").unwrap();
-    let is_wasm32 = target.starts_with("wasm32"); // == "wasm32-unknown-unknown";
+    let is_wasm32 = target.starts_with("wasm32");
+    let use_pink_libc = target.starts_with("wasm32-unknown-unknown");
     if is_wasm32 {
         let status = std::process::Command::new("make")
             .arg("libc")
@@ -12,6 +13,8 @@ fn main() {
         if !status.success() {
             panic!("Failed to run make libc");
         }
+    }
+    if use_pink_libc {
         println!(
             "cargo:rustc-link-search={}/pink-libc/sysroot/lib/wasm32-pink",
             rootdir

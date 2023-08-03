@@ -20,6 +20,8 @@ typedef struct {
 } code_t;
 
 int js_eval(code_t *codes, size_t n_codes, callbacks_t *callbacks);
+void js_env_add_helpers(JSContext *ctx);
+int js_eval_code(JSContext *ctx, const code_t* code, callbacks_t* callbacks);
 
 #ifdef CONFIG_BIGNUM
 #include "libbf.h"

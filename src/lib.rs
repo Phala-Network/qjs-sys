@@ -119,6 +119,82 @@ pub fn eval(scripts: &[JsCode], args: &[String]) -> Result<Output, String> {
     }
 }
 
+pub fn ctx_init(ctx: *mut c::JSContext) {
+    unsafe { c::js_env_add_helpers(ctx) };
+}
+
+pub fn ctx_eval(ctx: *mut c::JSContext, script: JsCode) -> Result<Output, String> {
+    struct IO {
+        output: Option<Output>,
+    }
+
+    unsafe extern "C" fn output_bytes(
+        userdata: *mut ::core::ffi::c_void,
+        output: *const ::core::ffi::c_char,
+        output_len: ::core::ffi::c_int,
+    ) {
+        let io = unsafe { &mut *(userdata as *mut IO) };
+        let bytes: &[u8] = unsafe { core::slice::from_raw_parts(output as _, output_len as _) };
+        io.output = Some(Output::Bytes(bytes.to_vec()));
+    }
+
+    unsafe extern "C" fn output_str(
+        userdata: *mut ::core::ffi::c_void,
+        output: *const ::core::ffi::c_char,
+    ) {
+        let io = unsafe { &mut *(userdata as *mut IO) };
+        let cstr = unsafe { CStr::from_ptr(output) };
+        let s = cstr.to_str().unwrap_or("<Invalid UTF8 sequnece>");
+        io.output = Some(Output::String(s.to_string()));
+    }
+
+    let mut userdata = IO { output: None };
+
+    let mut callbacks = c::callbacks_t {
+        userdata: &mut userdata as *mut _ as *mut ::core::ffi::c_void,
+        output_str: Some(output_str),
+        output_bytes: Some(output_bytes),
+        read_args: None,
+    };
+
+    let code = match script {
+        JsCode::Source(src) => c::code_t {
+            code: src.as_ptr() as _,
+            code_len: src.to_bytes().len() as _,
+            is_bytecode: 0,
+        },
+        JsCode::Bytecode(bytes) => c::code_t {
+            code: bytes.as_ptr() as _,
+            code_len: bytes.len() as _,
+            is_bytecode: 1,
+        },
+    };
+
+    let ret = unsafe { c::js_eval_code(ctx, &code, &mut callbacks) };
+    if ret == 0 {
+        let output = match userdata.output {
+            Some(output) => output,
+            None => Output::Undefined,
+        };
+        Ok(output)
+    } else {
+        let output = match userdata.output {
+            Some(Output::String(s)) => s,
+            _ => "UnknownError".to_string(),
+        };
+        Err(output)
+    }
+}
+
+pub fn ctx_to_string(ctx: *mut c::JSContext, value: c::JSValueConst) -> String {
+    let mut len: c::size_t = 0;
+    let ptr = unsafe { c::JS_ToCStringLen(ctx, &mut len, value) };
+    let bytes: &[u8] = unsafe { core::slice::from_raw_parts(ptr as _, len as _) };
+    let s = String::from_utf8_lossy(bytes).into_owned();
+    unsafe { c::JS_FreeCString(ctx, ptr as _) };
+    s
+}
+
 pub fn compile(code: &str, filename: &str) -> Result<Vec<u8>, &'static str> {
     use crate::c as js;
     let code = CString::new(code).or(Err("Invalid encoding in js code"))?;
