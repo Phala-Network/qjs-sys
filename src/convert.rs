@@ -12,7 +12,6 @@ use c::{
     JS_TAG_OBJECT as TAG_OBJECT, JS_TAG_STRING as TAG_STRING, JS_TAG_UNDEFINED as TAG_UNDEFINED,
 };
 
-#[derive(Debug)]
 pub enum JsValue {
     Undefined,
     Null,
@@ -24,6 +23,7 @@ pub enum JsValue {
     Bytes(Vec<u8>),
     Object(BTreeMap<String, JsValue>),
     BigInt(String),
+    Raw(c::JSValue),
 }
 
 pub trait DecodeFromJSValue {
@@ -409,6 +409,7 @@ pub fn serialize_value(
         JsValue::Bytes(bytes) => unsafe {
             c::JS_NewUint8Array(context, bytes.as_ptr(), bytes.len() as _)
         },
+        JsValue::Raw(value) => value,
     };
     Ok(v)
 }

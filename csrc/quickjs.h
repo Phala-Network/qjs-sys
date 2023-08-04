@@ -27,6 +27,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#define CONFIG_VERSION "1.0"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
