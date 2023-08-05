@@ -1530,7 +1530,7 @@ const JSCFunctionListEntry js_transform_controller_funcs[] = {
 };
 
 int
-js_stream_init(JSContext* ctx, JSModuleDef* m) {
+js_stream_init(JSContext* ctx) {
 
   JS_NewClassID(&js_reader_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_reader_class_id, &js_reader_class);
@@ -1601,41 +1601,19 @@ js_stream_init(JSContext* ctx, JSModuleDef* m) {
 
   // JS_SetPropertyFunctionList(ctx, stream_ctor, js_stream_static_funcs, countof(js_stream_static_funcs));
 
-  if(m) {
-    JS_SetModuleExport(ctx, m, "StreamReader", reader_ctor);
-    JS_SetModuleExport(ctx, m, "StreamWriter", writer_ctor);
-    JS_SetModuleExport(ctx, m, "ReadableStream", readable_ctor);
-    JS_SetModuleExport(ctx, m, "ReadableStreamDefaultController", readable_controller);
-    JS_SetModuleExport(ctx, m, "WritableStream", writable_ctor);
-    JS_SetModuleExport(ctx, m, "WritableStreamDefaultController", writable_controller);
-    JS_SetModuleExport(ctx, m, "TransformStream", transform_ctor);
+  {
+    JSValue global_obj = JS_GetGlobalObject(ctx);
+
+    JS_SetPropertyStr(ctx, global_obj, "StreamReader", reader_ctor);
+    JS_SetPropertyStr(ctx, global_obj, "StreamWriter", writer_ctor);
+    JS_SetPropertyStr(ctx, global_obj, "ReadableStream", readable_ctor);
+    JS_SetPropertyStr(ctx, global_obj, "ReadableStreamDefaultController", readable_controller);
+    JS_SetPropertyStr(ctx, global_obj, "WritableStream", writable_ctor);
+    JS_SetPropertyStr(ctx, global_obj, "WritableStreamDefaultController", writable_controller);
+    JS_SetPropertyStr(ctx, global_obj, "TransformStream", transform_ctor);
+
+    JS_FreeValue(ctx, global_obj);
   }
 
   return 0;
 }
-
-#ifdef JS_SHARED_LIBRARY
-#define JS_INIT_MODULE js_init_module
-#else
-#define JS_INIT_MODULE js_init_module_stream
-#endif
-
-VISIBLE JSModuleDef*
-JS_INIT_MODULE(JSContext* ctx, const char* module_name) {
-  JSModuleDef* m;
-  m = JS_NewCModule(ctx, module_name, js_stream_init);
-  if(!m)
-    return NULL;
-  JS_AddModuleExport(ctx, m, "StreamReader");
-  JS_AddModuleExport(ctx, m, "StreamWriter");
-  JS_AddModuleExport(ctx, m, "ReadableStream");
-  JS_AddModuleExport(ctx, m, "ReadableStreamDefaultController");
-  JS_AddModuleExport(ctx, m, "WritableStream");
-  JS_AddModuleExport(ctx, m, "WritableStreamDefaultController");
-  JS_AddModuleExport(ctx, m, "TransformStream");
-  return m;
-}
-
-/**
- * @}
- */

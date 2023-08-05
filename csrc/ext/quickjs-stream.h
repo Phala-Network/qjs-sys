@@ -154,8 +154,7 @@ JSValue js_transform_get(JSContext*, JSValue, int);
 JSValue js_transform_controller(JSContext*, JSValue, int, JSValue argv[], int magic);
 JSValue js_transform_desired(JSContext*, JSValue);
 void js_transform_finalizer(JSRuntime*, JSValue);
-int js_stream_init(JSContext*, JSModuleDef*);
-JSModuleDef* js_init_module_stream(JSContext*, const char*);
+int js_stream_init(JSContext*);
 
 /* clang-format off */
 static inline BOOL    reader_closed(Reader* rd) { return promise_done(&rd->events[READER_CLOSED].funcs); }

@@ -120,7 +120,10 @@ pub fn eval(scripts: &[JsCode], args: &[String]) -> Result<Output, String> {
 }
 
 pub fn ctx_init(ctx: *mut c::JSContext) {
-    unsafe { c::js_env_add_helpers(ctx) };
+    unsafe {
+        c::js_env_add_helpers(ctx);
+        c::js_stream_init(ctx);
+    };
 }
 
 pub fn ctx_eval(ctx: *mut c::JSContext, script: JsCode) -> Result<Output, String> {
@@ -225,12 +228,7 @@ pub fn compile(code: &str, filename: &str) -> Result<Vec<u8>, &'static str> {
         );
 
         if js::JS_IsException(bytecode) != 0 {
-            extern "C" {
-                fn js_std_dump_error(ctx: *mut js::JSContext, exception_val: js::JSValue);
-            }
-            let exception_val = js::JS_GetException(ctx);
-            js_std_dump_error(ctx, exception_val);
-            js::JS_FreeValue(ctx, exception_val);
+            c::js_std_dump_error(ctx);
             return Err("Failed to compile js code");
         }
         scopeguard::defer! {

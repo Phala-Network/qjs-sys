@@ -23,7 +23,7 @@ static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val) {
     }
 }
 
-void js_std_dump_error(JSContext *ctx, JSValueConst exception_val) {
+void js_dump_exception(JSContext *ctx, JSValueConst exception_val) {
     JSValue val;
     BOOL is_error;
 
@@ -36,6 +36,12 @@ void js_std_dump_error(JSContext *ctx, JSValueConst exception_val) {
         }
         JS_FreeValue(ctx, val);
     }
+}
+
+void js_std_dump_error(JSContext *ctx) {
+    JSValue exception_val = JS_GetException(ctx);
+    js_dump_exception(ctx, exception_val);
+    JS_FreeValue(ctx, exception_val);
 }
 
 static JSValue js_print(JSContext *ctx, JSValueConst this_val, int argc,
@@ -168,7 +174,7 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len, int is_bytecod
         JSValue exception_val = JS_GetException(ctx);
         fprintf(stderr, "Exception:\n");
         put_val(ctx, exception_val, callbacks);
-        js_std_dump_error(ctx, exception_val);
+        js_dump_exception(ctx, exception_val);
         JS_FreeValue(ctx, exception_val);
         ret = -1;
     } else {

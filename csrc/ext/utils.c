@@ -11,7 +11,6 @@
 #include <time.h>
 #include <math.h>
 #include <errno.h>
-#include <signal.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <quickjs-libc.h>
@@ -1772,7 +1771,7 @@ js_value_dump(JSContext* ctx, JSValueConst value, DynBuf* db) {
       dbuf_putc(db, 'l');
     else if(JS_IsBigDecimal(value))
       dbuf_putc(db, 'm');
-    else if(JS_IsBigInt(ctx, value))
+    else if(JS_IsBigInt(value))
       dbuf_putc(db, 'n');
   }
 }
@@ -2469,18 +2468,11 @@ JSValue __attribute__((format(printf, 3, 4))) js_eval_fmt(JSContext* ctx, int fl
   return ret;
 }
 
-thread_local uint64_t js_pending_signals = 0;
-
 int64_t
 js_time_ms(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return (uint64_t)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
-}
-
-int
-js_interrupt_handler(JSRuntime* rt, void* opaque) {
-  return (js_pending_signals >> SIGINT) & 1;
 }
 
 void

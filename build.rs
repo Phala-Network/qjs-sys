@@ -29,12 +29,19 @@ fn main() {
         "csrc/quickjs.c",
         "csrc/qjs-pink.c",
         "csrc/libbf.c",
+        "csrc/ext/queue.c",
+        "csrc/ext/utils.c",
+        "csrc/ext/js-utils.c",
+        "csrc/ext/buffer-utils.c",
+        "csrc/ext/quickjs-stream.c",
+        "csrc/ext/quickjs-blob.c",
     ];
     let c_flags = [
         "-funsigned-char",
         "-DCONFIG_BIGNUM",
         "-D_GNU_SOURCE",
         "-D__pink__=1",
+        "-Icsrc",
         "-w",
     ];
     let mut cc = cc::Build::new();
