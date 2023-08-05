@@ -1607,9 +1607,9 @@ js_stream_init(JSContext* ctx) {
     JS_SetPropertyStr(ctx, global_obj, "StreamReader", reader_ctor);
     JS_SetPropertyStr(ctx, global_obj, "StreamWriter", writer_ctor);
     JS_SetPropertyStr(ctx, global_obj, "ReadableStream", readable_ctor);
-    JS_SetPropertyStr(ctx, global_obj, "ReadableStreamDefaultController", readable_controller);
+    JS_SetPropertyStr(ctx, global_obj, "ReadableStreamDefaultController", JS_DupValue(ctx, readable_controller));
     JS_SetPropertyStr(ctx, global_obj, "WritableStream", writable_ctor);
-    JS_SetPropertyStr(ctx, global_obj, "WritableStreamDefaultController", writable_controller);
+    JS_SetPropertyStr(ctx, global_obj, "WritableStreamDefaultController", JS_DupValue(ctx, writable_controller));
     JS_SetPropertyStr(ctx, global_obj, "TransformStream", transform_ctor);
 
     JS_FreeValue(ctx, global_obj);
