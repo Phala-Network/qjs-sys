@@ -648,7 +648,7 @@ js_readable_constructor(JSContext* ctx, JSValueConst new_target, int argc, JSVal
     st->underlying_source = JS_DupValue(ctx, argv[0]);
 
     st->controller = JS_NewObjectProtoClass(ctx, readable_controller, js_readable_class_id);
-    JS_SetOpaque(st->controller, st);
+    JS_SetOpaque(st->controller, readable_dup(st));
   }
 
   JS_SetOpaque(obj, st);
