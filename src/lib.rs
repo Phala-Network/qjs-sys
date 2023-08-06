@@ -189,6 +189,18 @@ pub fn ctx_eval(ctx: *mut c::JSContext, script: JsCode) -> Result<Output, String
     }
 }
 
+pub fn ctx_get_exception_str(ctx: *mut c::JSContext) -> String {
+    unsafe {
+        let mut len: c::size_t = 0;
+        let e = c::JS_GetException(ctx);
+        let ptr = c::JS_ToCStringLen(ctx, &mut len, e);
+        let bytes: &[u8] = core::slice::from_raw_parts(ptr as _, len as _);
+        let s = String::from_utf8_lossy(bytes).into_owned();
+        c::JS_FreeCString(ctx, ptr as _);
+        s
+    }
+}
+
 pub fn ctx_to_string(ctx: *mut c::JSContext, value: c::JSValueConst) -> String {
     let mut len: c::size_t = 0;
     let ptr = unsafe { c::JS_ToCStringLen(ctx, &mut len, value) };
