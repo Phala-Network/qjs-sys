@@ -52,6 +52,11 @@ fn main() {
     for flag in c_flags {
         cc.flag(flag);
     }
+    #[cfg(feature = "sanitize-address")]
+    {
+        cc.flag("-fsanitize=address");
+        println!("cargo:rustc-link-lib=asan");
+    }
 
     if is_wasm32 {
         cc.include("pink-libc/sysroot/include");
