@@ -19153,7 +19153,7 @@ static int js_async_function_resolve_create(JSContext *ctx,
     return 0;
 }
 
-static void js_async_function_resume(JSContext *ctx, JSAsyncFunctionData *s)
+static JSValue js_async_function_resume(JSContext *ctx, JSAsyncFunctionData *s)
 {
     JSValue func_ret, ret2;
 
@@ -19166,7 +19166,10 @@ static void js_async_function_resume(JSContext *ctx, JSAsyncFunctionData *s)
                        1, (JSValueConst *)&error);
         JS_FreeValue(ctx, error);
         js_async_function_terminate(ctx->rt, s);
-        JS_FreeValue(ctx, ret2); /* XXX: what to do if exception ? */
+        if (JS_IsException(ret2))
+            return ret2;
+        else
+            JS_FreeValue(ctx, ret2);
     } else {
         JSValue value;
         value = s->func_state.frame.cur_sp[-1];
@@ -19208,6 +19211,7 @@ static void js_async_function_resume(JSContext *ctx, JSAsyncFunctionData *s)
                 goto fail;
         }
     }
+    return JS_UNDEFINED;
 }
 
 static JSValue js_async_function_resolve_call(JSContext *ctx,
@@ -19232,8 +19236,24 @@ static JSValue js_async_function_resolve_call(JSContext *ctx,
         /* return value of await */
         s->func_state.frame.cur_sp[-1] = JS_DupValue(ctx, arg);
     }
-    js_async_function_resume(ctx, s);
-    return JS_UNDEFINED;
+    return js_async_function_resume(ctx, s);
+}
+
+static JSValue js_async_function_start_job(JSContext *ctx,
+                                               int argc, JSValueConst *argv)
+{
+    JSValueConst res;
+    JSAsyncFunctionData *s;
+
+#ifdef DUMP_PROMISE
+    printf("js_async_function_start_job\n");
+#endif
+    s = JS_GetOpaque(argv[0], JS_CLASS_OBJECT);
+    JS_FreeValue(ctx, argv[0]);
+
+    res = js_async_function_resume(ctx, s);
+    js_async_function_free(ctx->rt, s);
+    return res;
 }
 
 static JSValue js_async_function_call(JSContext *ctx, JSValueConst func_obj,
@@ -19264,10 +19284,15 @@ static JSValue js_async_function_call(JSContext *ctx, JSValueConst func_obj,
     }
     s->is_active = TRUE;
 
-    js_async_function_resume(ctx, s);
+    {
+        JSValueConst args[1];
 
-    js_async_function_free(ctx->rt, s);
-
+        args[0] = JS_NewObjectClass(ctx, JS_CLASS_OBJECT);
+        if (JS_IsException(args[0]))
+            goto fail;
+        JS_SetOpaque(args[0], s);
+        JS_EnqueueJob(ctx, js_async_function_start_job, 1, args);
+    }
     return promise;
 }
 
@@ -46292,6 +46317,9 @@ static JSValue promise_reaction_job(JSContext *ctx, int argc,
         res2 = JS_Call(ctx, func, JS_UNDEFINED,
                        1, (JSValueConst *)&res);
     } else {
+        if (is_reject) {
+            return JS_Throw(ctx, res);
+        }
         res2 = JS_UNDEFINED;
     }
     JS_FreeValue(ctx, res);
@@ -46307,16 +46335,17 @@ void JS_SetHostPromiseRejectionTracker(JSRuntime *rt,
     rt->host_promise_rejection_tracker_opaque = opaque;
 }
 
-static void fulfill_or_reject_promise(JSContext *ctx, JSValueConst promise,
+static JSValue fulfill_or_reject_promise(JSContext *ctx, JSValueConst promise,
                                       JSValueConst value, BOOL is_reject)
 {
     JSPromiseData *s = JS_GetOpaque(promise, JS_CLASS_PROMISE);
     struct list_head *el, *el1;
     JSPromiseReactionData *rd;
     JSValueConst args[5];
+    BOOL handled = 0;
 
     if (!s || s->promise_state != JS_PROMISE_PENDING)
-        return; /* should never happen */
+        return JS_NULL; /* should never happen */
     set_value(ctx, &s->promise_result, JS_DupValue(ctx, value));
     s->promise_state = JS_PROMISE_FULFILLED + is_reject;
 #ifdef DUMP_PROMISE
@@ -46337,6 +46366,7 @@ static void fulfill_or_reject_promise(JSContext *ctx, JSValueConst promise,
         args[2] = rd->handler;
         args[3] = JS_NewBool(ctx, is_reject);
         args[4] = value;
+        handled = 1;
         JS_EnqueueJob(ctx, promise_reaction_job, 5, args);
         list_del(&rd->link);
         promise_reaction_data_free(ctx->rt, rd);
@@ -46347,12 +46377,16 @@ static void fulfill_or_reject_promise(JSContext *ctx, JSValueConst promise,
         list_del(&rd->link);
         promise_reaction_data_free(ctx->rt, rd);
     }
+    if (is_reject && !handled) {
+        return JS_Throw(ctx, JS_DupValue(ctx, value));
+    }
+    return JS_NULL;
 }
 
-static void reject_promise(JSContext *ctx, JSValueConst promise,
+static JSValue reject_promise(JSContext *ctx, JSValueConst promise,
                            JSValueConst value)
 {
-    fulfill_or_reject_promise(ctx, promise, value, TRUE);
+    return fulfill_or_reject_promise(ctx, promise, value, TRUE);
 }
 
 static JSValue js_promise_resolve_thenable_job(JSContext *ctx,
@@ -46487,12 +46521,13 @@ static JSValue js_promise_resolve_function_call(JSContext *ctx,
         JSValue error;
     fail_reject:
         error = JS_GetException(ctx);
-        reject_promise(ctx, s->promise, error);
+        then = reject_promise(ctx, s->promise, error);
         JS_FreeValue(ctx, error);
+        return then;
     } else if (!JS_IsFunction(ctx, then)) {
         JS_FreeValue(ctx, then);
     done:
-        fulfill_or_reject_promise(ctx, s->promise, resolution, is_reject);
+        return fulfill_or_reject_promise(ctx, s->promise, resolution, is_reject);
     } else {
         args[0] = s->promise;
         args[1] = resolution;
