@@ -714,8 +714,10 @@ js_readable_method(JSContext* ctx, JSValueConst this_val, int argc, JSValueConst
     case READABLE_GET_READER: {
       Reader* rd;
 
-      if((rd = readable_get_reader(st, ctx)))
+      if((rd = readable_get_reader(st, ctx))) {
         ret = js_reader_wrap(ctx, rd);
+        JS_SetPropertyStr(ctx, ret, "_stream", JS_DupValue(ctx, this_val));
+      }
       break;
     }
   }
