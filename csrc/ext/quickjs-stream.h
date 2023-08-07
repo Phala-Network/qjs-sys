@@ -1,6 +1,5 @@
 #ifndef QUICKJS_STREAM_H
 #define QUICKJS_STREAM_H
-
 // #include "defines.h"
 #include "js-utils.h"
 #include "buffer-utils.h"
@@ -8,6 +7,8 @@
 #include <quickjs.h>
 #include <cutils.h>
 #include <stdatomic.h>
+
+#include "quickjs-ext.h"
 
 /**
  * \defgroup quickjs-stream quickjs-stream: Streams
@@ -119,9 +120,6 @@ typedef enum {
   TRANSFORM_WRITABLE,
 } TransformProperties;
 
-extern VISIBLE JSClassID js_reader_class_id, js_writer_class_id, js_readable_class_id, js_writable_class_id, js_transform_class_id;
-extern VISIBLE JSValue reader_proto, reader_ctor, writer_proto, writer_ctor, readable_proto, readable_ctor, writable_proto, writable_ctor, transform_proto, transform_ctor;
-
 JSValue js_reader_constructor(JSContext*, JSValue, int, JSValue argv[]);
 JSValue js_reader_wrap(JSContext*, Reader*);
 JSValue js_reader_method(JSContext*, JSValue, int, JSValue argv[], int magic);
@@ -165,16 +163,16 @@ static inline BOOL    writer_closed(Writer* wr) { return promise_done(&wr->event
 static inline BOOL    writer_ready(Writer* wr) { return promise_done(&wr->events[WRITER_READY].funcs); }
 static inline BOOL    writable_closed(Writable* st) { return atomic_load(&st->closed); }
 static inline Writer* writable_locked(Writable* st) { return atomic_load(&st->writer); }
-static inline Reader* js_reader_data(JSValueConst value) { return JS_GetOpaque(value, js_reader_class_id); }
-static inline Reader* js_reader_data2(JSContext* ctx, JSValueConst value) { return JS_GetOpaque2(ctx, value, js_reader_class_id); }
-static inline Writer* js_writer_data(JSValueConst value) { return JS_GetOpaque(value, js_writer_class_id); }
-static inline Writer* js_writer_data2(JSContext* ctx, JSValueConst value) { return JS_GetOpaque2(ctx, value, js_writer_class_id); }
-static inline Readable* js_readable_data(JSValueConst value) { return JS_GetOpaque(value, js_readable_class_id); }
-static inline Readable* js_readable_data2(JSContext* ctx, JSValueConst value) { return JS_GetOpaque2(ctx, value, js_readable_class_id); }
-static inline Writable* js_writable_data(JSValueConst value) { return JS_GetOpaque(value, js_writable_class_id); }
-static inline Writable* js_writable_data2(JSContext* ctx, JSValueConst value) { return JS_GetOpaque2(ctx, value, js_writable_class_id); }
-static inline Transform* js_transform_data(JSValueConst value) { return JS_GetOpaque(value, js_transform_class_id); }
-static inline Transform* js_transform_data2(JSContext* ctx, JSValueConst value) { return JS_GetOpaque2(ctx, value, js_transform_class_id); }
+static inline Reader* js_reader_data(JSValueConst value) { return JS_GetOpaque(value, JS_CLASS_STREAM_READER); }
+static inline Reader* js_reader_data2(JSContext* ctx, JSValueConst value) { return JS_GetOpaque2(ctx, value, JS_CLASS_STREAM_READER); }
+static inline Writer* js_writer_data(JSValueConst value) { return JS_GetOpaque(value, JS_CLASS_STREAM_WRITER); }
+static inline Writer* js_writer_data2(JSContext* ctx, JSValueConst value) { return JS_GetOpaque2(ctx, value, JS_CLASS_STREAM_WRITER); }
+static inline Readable* js_readable_data(JSValueConst value) { return JS_GetOpaque(value, JS_CLASS_READABLE_STREAM); }
+static inline Readable* js_readable_data2(JSContext* ctx, JSValueConst value) { return JS_GetOpaque2(ctx, value, JS_CLASS_READABLE_STREAM); }
+static inline Writable* js_writable_data(JSValueConst value) { return JS_GetOpaque(value, JS_CLASS_WRITABLE_STREAM); }
+static inline Writable* js_writable_data2(JSContext* ctx, JSValueConst value) { return JS_GetOpaque2(ctx, value, JS_CLASS_WRITABLE_STREAM); }
+static inline Transform* js_transform_data(JSValueConst value) { return JS_GetOpaque(value, JS_CLASS_TRANSFORM_STREAM); }
+static inline Transform* js_transform_data2(JSContext* ctx, JSValueConst value) { return JS_GetOpaque2(ctx, value, JS_CLASS_TRANSFORM_STREAM); }
 /* clang-format on */
 
 /**

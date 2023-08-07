@@ -283,6 +283,7 @@ static const JSCFunctionListEntry js_blob_funcs[] = {
 
 int js_blob_init(JSContext *ctx) {
     return JS_NewGlobalClass(ctx, "Blob", JS_CLASS_BLOB, &js_blob_class,
-                      js_blob_constructor, 1, NULL, 0, js_blob_funcs,
-                      countof(js_blob_funcs));
+                      js_blob_constructor, 1,
+                      js_blob_funcs, countof(js_blob_funcs),
+                      NULL, 0);
 }

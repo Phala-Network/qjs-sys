@@ -12,27 +12,6 @@
  * @{
  */
 
-typedef struct {
-    JSClassID js_readable_class_id;
-    JSClassID js_writable_class_id;
-    JSClassID js_reader_class_id;
-    JSClassID js_writer_class_id;
-    JSClassID js_transform_class_id;
-    JSValue readable_proto;
-    JSValue readable_controller;
-    JSValue readable_ctor;
-    JSValue writable_proto;
-    JSValue writable_controller;
-    JSValue writable_ctor;
-    JSValue transform_proto;
-    JSValue transform_controller;
-    JSValue transform_ctor;
-    JSValue reader_proto;
-    JSValue reader_ctor;
-    JSValue writer_proto;
-    JSValue writer_ctor;
-} StreamDef;
-
 static int reader_update(Reader* rd, JSContext* ctx);
 static BOOL reader_passthrough(Reader* rd, JSValueConst result, JSContext* ctx);
 static int readable_unlock(Readable* st, Reader* rd);
@@ -483,10 +462,11 @@ js_reader_constructor(JSContext* ctx, JSValueConst new_target, int argc, JSValue
   proto = JS_GetPropertyStr(ctx, new_target, "prototype");
   if(JS_IsException(proto))
     goto fail;
-  if(!JS_IsObject(proto))
-    proto = reader_proto;
-
-  obj = JS_NewObjectProtoClass(ctx, proto, js_reader_class_id);
+  if(JS_IsObject(proto)) {
+    obj = JS_NewObjectProtoClass(ctx, proto, JS_CLASS_STREAM_READER);
+  } else {
+    obj = JS_NewObjectClass(ctx, JS_CLASS_STREAM_READER);
+  }
   JS_FreeValue(ctx, proto);
   if(JS_IsException(obj))
     goto fail;
@@ -504,7 +484,7 @@ fail:
 JSValue
 js_reader_wrap(JSContext* ctx, Reader* rd) {
   JSValue obj;
-  obj = JS_NewObjectProtoClass(ctx, reader_proto, js_reader_class_id);
+  obj = JS_NewObjectClass(ctx, JS_CLASS_STREAM_READER);
   JS_SetOpaque(obj, rd);
   return obj;
 }
@@ -591,7 +571,7 @@ void
 js_reader_finalizer(JSRuntime* rt, JSValue val) {
   Reader* rd;
 
-  if((rd = JS_GetOpaque(val, js_reader_class_id))) {
+  if((rd = JS_GetOpaque(val, JS_CLASS_STREAM_READER))) {
     js_free_rt(rt, rd);
   }
 
@@ -650,11 +630,12 @@ js_readable_constructor(JSContext* ctx, JSValueConst new_target, int argc, JSVal
     return JS_EXCEPTION;
 
   proto = JS_GetPropertyStr(ctx, new_target, "prototype");
-  if(JS_IsException(proto))
-    proto = JS_DupValue(ctx, readable_proto);
-
-  obj = JS_NewObjectProtoClass(ctx, proto, js_readable_class_id);
-  JS_FreeValue(ctx, proto);
+  if(JS_IsException(proto)) {
+    obj = JS_NewObjectClass(ctx, JS_CLASS_READABLE_STREAM);
+  } else {
+    obj = JS_NewObjectProtoClass(ctx, proto, JS_CLASS_READABLE_STREAM);
+    JS_FreeValue(ctx, proto);
+  }
   if(JS_IsException(obj))
     goto fail;
 
@@ -664,7 +645,7 @@ js_readable_constructor(JSContext* ctx, JSValueConst new_target, int argc, JSVal
     st->on[READABLE_CANCEL] = JS_GetPropertyStr(ctx, argv[0], "cancel");
     st->underlying_source = JS_DupValue(ctx, argv[0]);
 
-    st->controller = JS_NewObjectProtoClass(ctx, readable_controller, js_readable_class_id);
+    st->controller = JS_NewObjectClass(ctx, JS_CLASS_READABLE_STREAM_CONTROLLER);
     JS_SetOpaque(st->controller, readable_dup(st));
   }
 
@@ -680,7 +661,7 @@ fail:
 JSValue
 js_readable_wrap(JSContext* ctx, Readable* st) {
   JSValue obj;
-  obj = JS_NewObjectProtoClass(ctx, readable_proto, js_readable_class_id);
+  obj = JS_NewObjectClass(ctx, JS_CLASS_READABLE_STREAM);
   ++st->ref_count;
   JS_SetOpaque(obj, st);
   return obj;
@@ -690,7 +671,7 @@ js_readable_wrap(JSContext* ctx, Readable* st) {
 js_readable_next(JSContext* ctx, JSValueConst this_val, int argc, JSValueConst argv[], BOOL* pdone, int magic)
 { Readable* st; JSValue ret = JS_UNDEFINED;
 
-  if(!(st = JS_GetOpaque2(ctx, this_val, js_readable_class_id)))
+  if(!(st = JS_GetOpaque2(ctx, this_val, JS_CLASS_READABLE_STREAM)))
     return JS_EXCEPTION;
 
   *pdone = queue_empty(&st->q);
@@ -780,7 +761,7 @@ js_readable_controller(JSContext* ctx, JSValueConst this_val, int argc, JSValueC
   Readable* st;
   JSValue ret = JS_UNDEFINED;
 
-  if(!(st = js_readable_data2(ctx, this_val)))
+  if(!(st = JS_GetOpaque2(ctx, this_val, JS_CLASS_READABLE_STREAM_CONTROLLER)))
     return JS_EXCEPTION;
 
   switch(magic) {
@@ -842,6 +823,10 @@ const JSCFunctionListEntry js_readable_proto_funcs[] = {
     JS_CGETSET_MAGIC_FLAGS_DEF("locked", js_readable_get, 0, STREAM_LOCKED, JS_PROP_ENUMERABLE),
     JS_PROP_STRING_DEF("[Symbol.toStringTag]", "Readable", JS_PROP_CONFIGURABLE),
     //    JS_CFUNC_DEF("[Symbol.iterator]", 0, js_readable_iterator),
+};
+
+JSClassDef js_readable_controller_class = {
+    .class_name = "ReadableStreamDefaultController",
 };
 
 const JSCFunctionListEntry js_readable_controller_funcs[] = {
@@ -1068,9 +1053,12 @@ js_writer_constructor(JSContext* ctx, JSValueConst new_target, int argc, JSValue
   if(JS_IsException(proto))
     goto fail;
   if(!JS_IsObject(proto))
-    proto = writer_proto;
-
-  obj = JS_NewObjectProtoClass(ctx, proto, js_writer_class_id);
+  {
+    obj = JS_NewObjectClass(ctx, JS_CLASS_STREAM_WRITER);
+  } else {
+    obj = JS_NewObjectProtoClass(ctx, proto, JS_CLASS_STREAM_WRITER);
+  }
+  JS_FreeValue(ctx, proto);
   if(JS_IsException(obj))
     goto fail;
 
@@ -1087,7 +1075,7 @@ fail:
 JSValue
 js_writer_wrap(JSContext* ctx, Writer* wr) {
   JSValue obj;
-  obj = JS_NewObjectProtoClass(ctx, writer_proto, js_writer_class_id);
+  obj = JS_NewObjectClass(ctx, JS_CLASS_STREAM_WRITER);
   JS_SetOpaque(obj, wr);
   return obj;
 }
@@ -1165,7 +1153,7 @@ void
 js_writer_finalizer(JSRuntime* rt, JSValue val) {
   Writer* wr;
 
-  if((wr = JS_GetOpaque(val, js_writer_class_id))) {
+  if((wr = JS_GetOpaque(val, JS_CLASS_STREAM_WRITER))) {
     js_free_rt(rt, wr);
   }
 }
@@ -1205,10 +1193,12 @@ js_writable_constructor(JSContext* ctx, JSValueConst new_target, int argc, JSVal
     return JS_EXCEPTION;
 
   proto = JS_GetPropertyStr(ctx, new_target, "prototype");
-  if(JS_IsException(proto))
-    proto = JS_DupValue(ctx, writable_proto);
-
-  obj = JS_NewObjectProtoClass(ctx, proto, js_writable_class_id);
+  if(JS_IsException(proto)) {
+    obj = JS_NewObjectClass(ctx, JS_CLASS_WRITABLE_STREAM);
+  } else {
+    obj = JS_NewObjectProtoClass(ctx, proto, JS_CLASS_WRITABLE_STREAM);
+    JS_FreeValue(ctx, proto);
+  }
   if(JS_IsException(obj))
     goto fail;
 
@@ -1218,7 +1208,7 @@ js_writable_constructor(JSContext* ctx, JSValueConst new_target, int argc, JSVal
     st->on[WRITABLE_CLOSE] = JS_GetPropertyStr(ctx, argv[0], "close");
     st->on[WRITABLE_ABORT] = JS_GetPropertyStr(ctx, argv[0], "abort");
     st->underlying_sink = JS_DupValue(ctx, argv[0]);
-    st->controller = JS_NewObjectProtoClass(ctx, writable_controller, js_writable_class_id);
+    st->controller = JS_NewObjectClass(ctx, JS_CLASS_WRITABLE_STREAM_CONTROLLER);
     JS_SetOpaque(st->controller, writable_dup(st));
   }
 
@@ -1234,7 +1224,7 @@ fail:
 JSValue
 js_writable_wrap(JSContext* ctx, Writable* st) {
   JSValue obj;
-  obj = JS_NewObjectProtoClass(ctx, writable_proto, js_writable_class_id);
+  obj = JS_NewObjectClass(ctx, JS_CLASS_WRITABLE_STREAM);
   ++st->ref_count;
   JS_SetOpaque(obj, st);
   return obj;
@@ -1260,7 +1250,7 @@ js_writable_method(JSContext* ctx, JSValueConst this_val, int argc, JSValueConst
   Writable* st;
   JSValue ret = JS_UNDEFINED;
 
-  if(!(st = JS_GetOpaque2(ctx, this_val, js_writable_class_id)))
+  if(!(st = JS_GetOpaque2(ctx, this_val, JS_CLASS_WRITABLE_STREAM)))
     return JS_EXCEPTION;
 
   switch(magic) {
@@ -1294,7 +1284,7 @@ js_writable_get(JSContext* ctx, JSValueConst this_val, int magic) {
   Writable* st;
   JSValue ret = JS_UNDEFINED;
 
-  if(!(st = JS_GetOpaque2(ctx, this_val, js_writable_class_id)))
+  if(!(st = JS_GetOpaque2(ctx, this_val, JS_CLASS_WRITABLE_STREAM)))
     return JS_EXCEPTION;
 
   switch(magic) {
@@ -1320,7 +1310,7 @@ js_writable_controller(JSContext* ctx, JSValueConst this_val, int argc, JSValueC
   Writable* st;
   JSValue ret = JS_UNDEFINED;
 
-  if(!(st = js_writable_data2(ctx, this_val)))
+  if(!(st = JS_GetOpaque2(ctx, this_val, JS_CLASS_WRITABLE_STREAM_CONTROLLER)))
     return JS_EXCEPTION;
 
   switch(magic) {
@@ -1355,6 +1345,10 @@ const JSCFunctionListEntry js_writable_proto_funcs[] = {
     JS_CFUNC_DEF("[Symbol.iterator]", 0, js_writable_iterator),
 };
 
+JSClassDef js_writable_controller_class = {
+    .class_name = "WritableStreamDefaultController",
+};
+
 const JSCFunctionListEntry js_writable_controller_funcs[] = {
     JS_CFUNC_MAGIC_DEF("error", 0, js_writable_controller, WRITABLE_ERROR),
     JS_PROP_STRING_DEF("[Symbol.toStringTag]", "WritableStreamDefaultController", JS_PROP_CONFIGURABLE),
@@ -1375,7 +1369,7 @@ transform_new(JSContext* ctx) {
     st->readable = readable_new(ctx);
     st->writable = writable_new(ctx);
 
-    st->controller = JS_NewObjectProtoClass(ctx, transform_controller, js_transform_class_id);
+    st->controller = JS_NewObjectClass(ctx, JS_CLASS_TRANSFORM_STREAM_CONTROLLER);
     JS_SetOpaque(st->controller, transform_dup(st));
   }
 
@@ -1404,9 +1398,12 @@ js_transform_constructor(JSContext* ctx, JSValueConst new_target, int argc, JSVa
 
   proto = JS_GetPropertyStr(ctx, new_target, "prototype");
   if(JS_IsException(proto))
-    proto = JS_DupValue(ctx, transform_proto);
-
-  obj = JS_NewObjectProtoClass(ctx, proto, js_transform_class_id);
+  {
+    obj = JS_NewObjectClass(ctx, JS_CLASS_TRANSFORM_STREAM);
+  } else {
+    obj = JS_NewObjectProtoClass(ctx, proto, JS_CLASS_TRANSFORM_STREAM);
+    JS_FreeValue(ctx, proto);
+  }
   if(JS_IsException(obj))
     goto fail;
 
@@ -1465,7 +1462,7 @@ js_transform_controller(JSContext* ctx, JSValueConst this_val, int argc, JSValue
   Transform* st;
   JSValue ret = JS_UNDEFINED;
 
-  if(!(st = js_transform_data2(ctx, this_val)))
+  if(!(st = JS_GetOpaque2(ctx, this_val, JS_CLASS_TRANSFORM_STREAM_CONTROLLER)))
     return JS_EXCEPTION;
 
   switch(magic) {
@@ -1513,7 +1510,7 @@ void
 js_transform_finalizer(JSRuntime* rt, JSValue val) {
   Transform* st;
 
-  if((st = JS_GetOpaque(val, js_transform_class_id))) {
+  if((st = JS_GetOpaque(val, JS_CLASS_TRANSFORM_STREAM))) {
     if(--st->ref_count == 0) {
       writable_free(st->writable, rt);
       readable_free(st->readable, rt);
@@ -1540,6 +1537,9 @@ const JSCFunctionListEntry js_transform_proto_funcs[] = {
     JS_PROP_STRING_DEF("[Symbol.toStringTag]", "TransformStream", JS_PROP_CONFIGURABLE),
 };
 
+JSClassDef js_transform_controller_class = {
+    .class_name = "TransformStreamDefaultController",
+};
 const JSCFunctionListEntry js_transform_controller_funcs[] = {
     JS_CFUNC_MAGIC_DEF("terminate", 0, js_transform_controller, TRANSFORM_TERMINATE),
     JS_CFUNC_MAGIC_DEF("enqueue", 1, js_transform_controller, TRANSFORM_ENQUEUE),
@@ -1550,109 +1550,45 @@ const JSCFunctionListEntry js_transform_controller_funcs[] = {
 
 int
 js_stream_init(JSContext* ctx) {
-  JSClassID js_readable_class_id = 0, js_writable_class_id = 0,
-            js_reader_class_id = 0, js_writer_class_id = 0,
-            js_transform_class_id = 0;
-  JSValue readable_proto = {{0}, JS_TAG_UNDEFINED},
-          readable_controller = {{0}, JS_TAG_UNDEFINED},
-          readable_ctor = {{0}, JS_TAG_UNDEFINED},
-          writable_proto = {{0}, JS_TAG_UNDEFINED},
-          writable_controller = {{0}, JS_TAG_UNDEFINED},
-          writable_ctor = {{0}, JS_TAG_UNDEFINED},
-          transform_proto = {{0}, JS_TAG_UNDEFINED},
-          transform_controller = {{0}, JS_TAG_UNDEFINED},
-          transform_ctor = {{0}, JS_TAG_UNDEFINED},
-          reader_proto = {{0}, JS_TAG_UNDEFINED},
-          reader_ctor = {{0}, JS_TAG_UNDEFINED},
-          writer_proto = {{0}, JS_TAG_UNDEFINED},
-          writer_ctor = {{0}, JS_TAG_UNDEFINED};
-
-  JS_NewClassID(&js_reader_class_id);
-  JS_NewClass(JS_GetRuntime(ctx), js_reader_class_id, &js_reader_class);
-
-  reader_proto = JS_NewObject(ctx);
-  JS_SetPropertyFunctionList(ctx, reader_proto, js_reader_proto_funcs, countof(js_reader_proto_funcs));
-  JS_SetClassProto(ctx, js_reader_class_id, DUP(reader_proto));
-
-  reader_ctor = JS_NewCFunction2(ctx, js_reader_constructor, "StreamReader", 1, JS_CFUNC_constructor, 0);
-
-  JS_SetConstructor(ctx, reader_ctor, reader_proto);
-
-  JS_NewClassID(&js_readable_class_id);
-  JS_NewClass(JS_GetRuntime(ctx), js_readable_class_id, &js_readable_class);
-
-  readable_proto = JS_NewObject(ctx);
-  JS_SetPropertyFunctionList(ctx, readable_proto, js_readable_proto_funcs, countof(js_readable_proto_funcs));
-  JS_SetClassProto(ctx, js_readable_class_id, DUP(readable_proto));
-
-  readable_ctor = JS_NewCFunction2(ctx, js_readable_constructor, "ReadableStream", 1, JS_CFUNC_constructor, 0);
-
-  JS_SetConstructor(ctx, readable_ctor, readable_proto);
-
-  readable_controller = JS_NewObject(ctx);
-  JS_SetPropertyFunctionList(ctx, readable_controller, js_readable_controller_funcs, countof(js_readable_controller_funcs));
-  JS_SetClassProto(ctx, js_readable_class_id, DUP(readable_controller)));
-
-  JS_NewClassID(&js_writer_class_id);
-  JS_NewClass(JS_GetRuntime(ctx), js_writer_class_id, &js_writer_class);
-
-  writer_proto = JS_NewObject(ctx);
-  JS_SetPropertyFunctionList(ctx, writer_proto, js_writer_proto_funcs, countof(js_writer_proto_funcs));
-  JS_SetClassProto(ctx, js_writer_class_id, DUP(writer_proto));
-
-  writer_ctor = JS_NewCFunction2(ctx, js_writer_constructor, "StreamWriter", 1, JS_CFUNC_constructor, 0);
-
-  JS_SetConstructor(ctx, writer_ctor, writer_proto);
-
-  JS_NewClassID(&js_writable_class_id);
-  JS_NewClass(JS_GetRuntime(ctx), js_writable_class_id, &js_writable_class);
-
-  writable_proto = JS_NewObject(ctx);
-  JS_SetPropertyFunctionList(ctx, writable_proto, js_writable_proto_funcs, countof(js_writable_proto_funcs));
-  JS_SetClassProto(ctx, js_writable_class_id, DUP(writable_proto));
-
-  writable_ctor = JS_NewCFunction2(ctx, js_writable_constructor, "WritableStream", 1, JS_CFUNC_constructor, 0);
-
-  JS_SetConstructor(ctx, writable_ctor, writable_proto);
-
-  writable_controller = JS_NewObject(ctx);
-  JS_SetPropertyFunctionList(ctx, writable_controller, js_writable_controller_funcs, countof(js_writable_controller_funcs));
-  JS_SetClassProto(ctx, js_writable_class_id, writable_controller);
-
-  JS_NewClassID(&js_transform_class_id);
-  JS_NewClass(JS_GetRuntime(ctx), js_transform_class_id, &js_transform_class);
-
-  transform_proto = JS_NewObject(ctx);
-  JS_SetPropertyFunctionList(ctx, transform_proto, js_transform_proto_funcs, countof(js_transform_proto_funcs));
-  JS_SetClassProto(ctx, js_transform_class_id, transform_proto);
-
-  transform_ctor = JS_NewCFunction2(ctx, js_transform_constructor, "TransformStream", 1, JS_CFUNC_constructor, 0);
-
-  JS_SetConstructor(ctx, transform_ctor, transform_proto);
-
-  transform_controller = JS_NewObject(ctx);
-  JS_SetPropertyFunctionList(ctx, transform_controller, js_transform_controller_funcs, countof(js_transform_controller_funcs));
-  JS_SetClassProto(ctx, js_transform_class_id, transform_controller);
-
-  {
-    // TODO: free
-    StreamDef* def = js_mallocz(ctx, sizeof(*def));
-  }
-  // JS_SetPropertyFunctionList(ctx, stream_ctor, js_stream_static_funcs, countof(js_stream_static_funcs));
-
-  {
-    JSValue global_obj = JS_GetGlobalObject(ctx);
-
-    JS_SetPropertyStr(ctx, global_obj, "StreamReader", DUP(reader_ctor));
-    JS_SetPropertyStr(ctx, global_obj, "StreamWriter", DUP(writer_ctor));
-    JS_SetPropertyStr(ctx, global_obj, "ReadableStream", DUP(readable_ctor));
-    JS_SetPropertyStr(ctx, global_obj, "ReadableStreamDefaultController", DUP(readable_controller));
-    JS_SetPropertyStr(ctx, global_obj, "WritableStream", DUP(writable_ctor));
-    JS_SetPropertyStr(ctx, global_obj, "WritableStreamDefaultController", DUP(writable_controller));
-    JS_SetPropertyStr(ctx, global_obj, "TransformStream", DUP(transform_ctor));
-
-    JS_FreeValue(ctx, global_obj);
-  }
-
+  JS_NewGlobalClass(ctx, "StreamReader", JS_CLASS_STREAM_READER,
+                      &js_reader_class, js_reader_constructor,
+                      1,
+                      js_reader_proto_funcs, countof(js_reader_proto_funcs),
+                      NULL, 0);
+  JS_NewGlobalClass(ctx, "ReadableStream", JS_CLASS_READABLE_STREAM,
+                      &js_readable_class, js_readable_constructor,
+                      1,
+                      js_readable_proto_funcs, countof(js_readable_proto_funcs),
+                      NULL, 0);
+  JS_NewGlobalClass(ctx, "ReadableStreamDefaultController", JS_CLASS_READABLE_STREAM_CONTROLLER,
+                      &js_readable_controller_class, NULL,
+                      1,
+                      js_readable_controller_funcs, countof(js_readable_controller_funcs),
+                      NULL, 0);
+  JS_NewGlobalClass(ctx, "StreamWriter", JS_CLASS_STREAM_WRITER,
+                      &js_writer_class, js_writer_constructor,
+                      1,
+                      js_writer_proto_funcs, countof(js_writer_proto_funcs),
+                      NULL, 0);
+  JS_NewGlobalClass(ctx, "WritableStream", JS_CLASS_WRITABLE_STREAM,
+                      &js_writable_class, js_writable_constructor,
+                      1,
+                      js_writable_proto_funcs, countof(js_writable_proto_funcs),
+                      NULL, 0);
+  JS_NewGlobalClass(ctx, "WritableStreamDefaultController", JS_CLASS_WRITABLE_STREAM_CONTROLLER,
+                      &js_writable_controller_class, NULL,
+                      1,
+                      js_writable_controller_funcs, countof(js_writable_controller_funcs),
+                      NULL, 0);
+  JS_NewGlobalClass(ctx, "TransformStream", JS_CLASS_TRANSFORM_STREAM,
+                      &js_transform_class, js_transform_constructor,
+                      0,
+                      js_transform_proto_funcs, countof(js_transform_proto_funcs),
+                      NULL, 0);
+  JS_NewGlobalClass(ctx, "TransformStreamDefaultController", JS_CLASS_TRANSFORM_STREAM_CONTROLLER,
+                      &js_transform_controller_class, NULL,
+                      0,
+                      js_transform_controller_funcs, countof(js_transform_controller_funcs),
+                      NULL, 0);
   return 0;
 }

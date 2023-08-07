@@ -2,6 +2,7 @@ CFLAGS="-O3" "-ffunction-sections" "-fdata-sections" "-fPIC" "--target=wasm32-un
 CC=clang
 
 SRC= \
+	ext/quickjs-stream.c \
 	ext/quickjs-blob.c \
 	ext/quickjs-ext.c \
     cutils.c \

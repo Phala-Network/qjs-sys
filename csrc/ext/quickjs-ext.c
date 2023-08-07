@@ -3,10 +3,10 @@
 int JS_NewGlobalClass(JSContext *ctx, const char *name, int class_id,
                       JSClassDef *class_def, JSCFunction *constructor,
                       int constructor_n_args,
-                      const JSCFunctionListEntry *class_funcs,
-                      int class_funcs_count,
                       const JSCFunctionListEntry *proto_funcs,
-                      int proto_funcs_count) {
+                      int proto_funcs_count,
+                      const JSCFunctionListEntry *class_funcs,
+                      int class_funcs_count) {
     JSValue proto, func_obj;
 
     JS_NewClass(JS_GetRuntime(ctx), class_id, class_def);

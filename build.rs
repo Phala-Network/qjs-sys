@@ -33,7 +33,7 @@ fn main() {
         "csrc/ext/utils.c",
         "csrc/ext/js-utils.c",
         "csrc/ext/buffer-utils.c",
-        // "csrc/ext/quickjs-stream.c",
+        "csrc/ext/quickjs-stream.c",
         "csrc/ext/quickjs-blob.c",
         "csrc/ext/quickjs-ext.c",
     ];
