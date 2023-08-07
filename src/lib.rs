@@ -119,13 +119,6 @@ pub fn eval(scripts: &[JsCode], args: &[String]) -> Result<Output, String> {
     }
 }
 
-pub fn ctx_init(ctx: *mut c::JSContext) {
-    unsafe {
-        c::js_env_add_helpers(ctx);
-        c::js_stream_init(ctx);
-    };
-}
-
 pub fn ctx_eval(ctx: *mut c::JSContext, script: JsCode) -> Result<Output, String> {
     struct IO {
         output: Option<Output>,
