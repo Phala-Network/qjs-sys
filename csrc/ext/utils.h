@@ -887,7 +887,7 @@ js_is_basic_array(JSContext* ctx, JSValueConst value) {
 static inline BOOL
 js_is_typedarray(JSContext* ctx, JSValueConst value) {
   JSValue ctor = js_typedarray_constructor(ctx);
-  BOOL ret = JS_IsInstanceOf(ctx, value, js_typedarray_constructor(ctx));
+  BOOL ret = JS_IsInstanceOf(ctx, value, ctor);
   JS_FreeValue(ctx, ctor);
   return ret;
 }
