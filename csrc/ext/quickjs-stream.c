@@ -154,6 +154,13 @@ reader_new(JSContext* ctx, Readable* st) {
   return rd;
 }
 
+static void
+reader_free_rt(Reader* rd, JSRuntime* rt) {
+  promise_free(rt, &rd->events[READER_CLOSED]);
+  promise_free(rt, &rd->events[READER_CANCELLED]);
+  js_free_rt(rt, rd);
+}
+
 static BOOL
 reader_release_lock(Reader* rd, JSContext* ctx) {
   BOOL ret = FALSE;
@@ -623,7 +630,7 @@ js_reader_finalizer(JSRuntime* rt, JSValue val) {
   Reader* rd;
 
   if((rd = js_reader_data(val))) {
-    js_free_rt(rt, rd);
+    reader_free_rt(rd, rt);
   }
 
   // JS_FreeValueRT(rt, val);
