@@ -17,6 +17,54 @@ static BOOL reader_passthrough(Reader* rd, JSValueConst result, JSContext* ctx);
 static int readable_unlock(Readable* st, Reader* rd);
 static int writable_unlock(Writable* st, Writer* wr);
 
+static void *js_get_opaque_or2(JSValueConst value, JSClassID id1, JSClassID id2) {
+  void* ret = JS_GetOpaque(value, id1);
+  if (!ret) {
+    ret = JS_GetOpaque(value, id2);
+  }
+  return ret;
+}
+
+static void *js_get_opaque_or2_exp(JSContext *ctx, JSValueConst value, JSClassID id1, JSClassID id2) {
+  void* ret = JS_GetOpaque(value, id1);
+  if (!ret) {
+    ret = JS_GetOpaque2(ctx, value, id2);
+  }
+  return ret;
+}
+
+
+static Reader *js_reader_data(JSValueConst value) {
+  return JS_GetOpaque(value, JS_CLASS_STREAM_READER);
+}
+static Reader *js_reader_data2(JSContext *ctx, JSValueConst value) {
+  return JS_GetOpaque2(ctx, value, JS_CLASS_STREAM_READER);
+}
+static Writer *js_writer_data(JSValueConst value) {
+  return JS_GetOpaque(value, JS_CLASS_STREAM_WRITER);
+}
+static Writer *js_writer_data2(JSContext *ctx, JSValueConst value) {
+  return JS_GetOpaque2(ctx, value, JS_CLASS_STREAM_WRITER);
+}
+static Readable *js_readable_data(JSValueConst value) {
+  return js_get_opaque_or2(value, JS_CLASS_READABLE_STREAM, JS_CLASS_READABLE_STREAM_CONTROLLER);
+}
+static Readable *js_readable_data2(JSContext *ctx, JSValueConst value) {
+  return js_get_opaque_or2_exp(ctx, value, JS_CLASS_READABLE_STREAM, JS_CLASS_READABLE_STREAM_CONTROLLER);
+}
+static Writable *js_writable_data(JSValueConst value) {
+  return js_get_opaque_or2(value, JS_CLASS_WRITABLE_STREAM, JS_CLASS_WRITABLE_STREAM_CONTROLLER);
+}
+static Writable *js_writable_data2(JSContext *ctx, JSValueConst value) {
+  return js_get_opaque_or2_exp(ctx, value, JS_CLASS_WRITABLE_STREAM, JS_CLASS_WRITABLE_STREAM_CONTROLLER);
+}
+static Transform *js_transform_data(JSValueConst value) {
+  return js_get_opaque_or2(value, JS_CLASS_TRANSFORM_STREAM, JS_CLASS_TRANSFORM_STREAM_CONTROLLER);
+}
+static Transform *js_transform_data2(JSContext *ctx, JSValueConst value) {
+  return js_get_opaque_or2_exp(ctx, value, JS_CLASS_TRANSFORM_STREAM, JS_CLASS_TRANSFORM_STREAM_CONTROLLER);
+}
+
 static void
 chunk_unref(JSRuntime* rt, void* opaque, void* ptr) {
   Chunk* ch = opaque;
@@ -574,7 +622,7 @@ void
 js_reader_finalizer(JSRuntime* rt, JSValue val) {
   Reader* rd;
 
-  if((rd = JS_GetOpaque(val, JS_CLASS_STREAM_READER))) {
+  if((rd = js_reader_data(val))) {
     js_free_rt(rt, rd);
   }
 
@@ -828,8 +876,15 @@ const JSCFunctionListEntry js_readable_proto_funcs[] = {
     //    JS_CFUNC_DEF("[Symbol.iterator]", 0, js_readable_iterator),
 };
 
+static void js_readable_controller_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func) {
+  if(js_readable_data(val))
+      JS_MarkValue(rt, val, mark_func);
+}
+
 JSClassDef js_readable_controller_class = {
     .class_name = "ReadableStreamDefaultController",
+    .finalizer = js_readable_finalizer,
+    .gc_mark = js_readable_controller_mark,
 };
 
 const JSCFunctionListEntry js_readable_controller_funcs[] = {
@@ -1156,7 +1211,7 @@ void
 js_writer_finalizer(JSRuntime* rt, JSValue val) {
   Writer* wr;
 
-  if((wr = JS_GetOpaque(val, JS_CLASS_STREAM_WRITER))) {
+  if((wr = js_writer_data(val))) {
     js_free_rt(rt, wr);
   }
 }
@@ -1253,7 +1308,7 @@ js_writable_method(JSContext* ctx, JSValueConst this_val, int argc, JSValueConst
   Writable* st;
   JSValue ret = JS_UNDEFINED;
 
-  if(!(st = JS_GetOpaque2(ctx, this_val, JS_CLASS_WRITABLE_STREAM)))
+  if(!(st = js_writable_data2(ctx, this_val)))
     return JS_EXCEPTION;
 
   switch(magic) {
@@ -1287,7 +1342,7 @@ js_writable_get(JSContext* ctx, JSValueConst this_val, int magic) {
   Writable* st;
   JSValue ret = JS_UNDEFINED;
 
-  if(!(st = JS_GetOpaque2(ctx, this_val, JS_CLASS_WRITABLE_STREAM)))
+  if(!(st = js_writable_data2(ctx, this_val)))
     return JS_EXCEPTION;
 
   switch(magic) {
@@ -1313,7 +1368,7 @@ js_writable_controller(JSContext* ctx, JSValueConst this_val, int argc, JSValueC
   Writable* st;
   JSValue ret = JS_UNDEFINED;
 
-  if(!(st = JS_GetOpaque2(ctx, this_val, JS_CLASS_WRITABLE_STREAM_CONTROLLER)))
+  if(!(st = js_writable_data2(ctx, this_val)))
     return JS_EXCEPTION;
 
   switch(magic) {
@@ -1348,8 +1403,15 @@ const JSCFunctionListEntry js_writable_proto_funcs[] = {
     JS_CFUNC_DEF("[Symbol.iterator]", 0, js_writable_iterator),
 };
 
+static void js_writable_controller_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func) {
+  if(js_writable_data(val))
+      JS_MarkValue(rt, val, mark_func);
+}
+
 JSClassDef js_writable_controller_class = {
     .class_name = "WritableStreamDefaultController",
+    .finalizer = js_writable_finalizer,
+    .gc_mark = js_writable_controller_mark,
 };
 
 const JSCFunctionListEntry js_writable_controller_funcs[] = {
@@ -1465,7 +1527,7 @@ js_transform_controller(JSContext* ctx, JSValueConst this_val, int argc, JSValue
   Transform* st;
   JSValue ret = JS_UNDEFINED;
 
-  if(!(st = JS_GetOpaque2(ctx, this_val, JS_CLASS_TRANSFORM_STREAM_CONTROLLER)))
+  if(!(st = js_transform_data2(ctx, this_val)))
     return JS_EXCEPTION;
 
   switch(magic) {
@@ -1513,7 +1575,7 @@ void
 js_transform_finalizer(JSRuntime* rt, JSValue val) {
   Transform* st;
 
-  if((st = JS_GetOpaque(val, JS_CLASS_TRANSFORM_STREAM))) {
+  if((st = js_transform_data(val))) {
     if(--st->ref_count == 0) {
       writable_free(st->writable, rt);
       readable_free(st->readable, rt);
@@ -1540,8 +1602,15 @@ const JSCFunctionListEntry js_transform_proto_funcs[] = {
     JS_PROP_STRING_DEF("[Symbol.toStringTag]", "TransformStream", JS_PROP_CONFIGURABLE),
 };
 
+static void js_transform_controller_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func) {
+  if(js_transform_data(val))
+      JS_MarkValue(rt, val, mark_func);
+}
+
 JSClassDef js_transform_controller_class = {
     .class_name = "TransformStreamDefaultController",
+    .finalizer = js_transform_finalizer,
+    .gc_mark = js_transform_controller_mark,
 };
 const JSCFunctionListEntry js_transform_controller_funcs[] = {
     JS_CFUNC_MAGIC_DEF("terminate", 0, js_transform_controller, TRANSFORM_TERMINATE),
