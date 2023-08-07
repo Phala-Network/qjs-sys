@@ -203,6 +203,8 @@ reader_close(Reader* rd, JSContext* ctx) {
   // printf("reader_close (2) promise=%i\n", js_is_promise(ctx, ret));
 
   rd->stream->closed = TRUE;
+  JS_FreeValue(ctx, rd->stream->controller);
+  rd->stream->controller = JS_NULL;
 
   reader_update(rd, ctx);
 
@@ -883,15 +885,9 @@ const JSCFunctionListEntry js_readable_proto_funcs[] = {
     //    JS_CFUNC_DEF("[Symbol.iterator]", 0, js_readable_iterator),
 };
 
-static void js_readable_controller_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func) {
-  if(js_readable_data(val))
-      JS_MarkValue(rt, val, mark_func);
-}
-
 JSClassDef js_readable_controller_class = {
     .class_name = "ReadableStreamDefaultController",
     .finalizer = js_readable_finalizer,
-    .gc_mark = js_readable_controller_mark,
 };
 
 const JSCFunctionListEntry js_readable_controller_funcs[] = {
@@ -1051,6 +1047,8 @@ writable_close(Writable* st, JSContext* ctx) {
   static BOOL expected = FALSE;
 
   if(atomic_compare_exchange_weak(&st->closed, &expected, TRUE)) {
+    JS_FreeValue(ctx, st->controller);
+    st->controller = JS_NULL;
     if(writable_locked(st)) {
       promise_resolve(ctx, &st->writer->events[WRITER_CLOSED].funcs, JS_UNDEFINED);
       ret = writer_close(st->writer, ctx);
@@ -1410,15 +1408,9 @@ const JSCFunctionListEntry js_writable_proto_funcs[] = {
     JS_CFUNC_DEF("[Symbol.iterator]", 0, js_writable_iterator),
 };
 
-static void js_writable_controller_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func) {
-  if(js_writable_data(val))
-      JS_MarkValue(rt, val, mark_func);
-}
-
 JSClassDef js_writable_controller_class = {
     .class_name = "WritableStreamDefaultController",
     .finalizer = js_writable_finalizer,
-    .gc_mark = js_writable_controller_mark,
 };
 
 const JSCFunctionListEntry js_writable_controller_funcs[] = {
@@ -1609,15 +1601,9 @@ const JSCFunctionListEntry js_transform_proto_funcs[] = {
     JS_PROP_STRING_DEF("[Symbol.toStringTag]", "TransformStream", JS_PROP_CONFIGURABLE),
 };
 
-static void js_transform_controller_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func) {
-  if(js_transform_data(val))
-      JS_MarkValue(rt, val, mark_func);
-}
-
 JSClassDef js_transform_controller_class = {
     .class_name = "TransformStreamDefaultController",
     .finalizer = js_transform_finalizer,
-    .gc_mark = js_transform_controller_mark,
 };
 const JSCFunctionListEntry js_transform_controller_funcs[] = {
     JS_CFUNC_MAGIC_DEF("terminate", 0, js_transform_controller, TRANSFORM_TERMINATE),
