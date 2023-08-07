@@ -260,6 +260,7 @@ reader_update(Reader* rd, JSContext* ctx) {
 
     if(reader_passthrough(rd, result, ctx))
       ++ret;
+    JS_FreeValue(ctx, result);
   } else {
     while(!list_empty(&rd->list) && (ch = queue_next(&st->q))) {
       JSValue chunk, result;
@@ -267,8 +268,10 @@ reader_update(Reader* rd, JSContext* ctx) {
       chunk = chunk_arraybuffer(ch, ctx);
       result = js_iterator_result(ctx, chunk, FALSE);
       JS_FreeValue(ctx, chunk);
-      if(!reader_passthrough(rd, result, ctx))
+      if(!reader_passthrough(rd, result, ctx)) {
+        JS_FreeValue(ctx, result);
         break;
+      }
       ++ret;
 
       JS_FreeValue(ctx, result);
