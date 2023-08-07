@@ -190,6 +190,7 @@ pub fn ctx_get_exception_str(ctx: *mut c::JSContext) -> String {
         let bytes: &[u8] = core::slice::from_raw_parts(ptr as _, len as _);
         let s = String::from_utf8_lossy(bytes).into_owned();
         c::JS_FreeCString(ctx, ptr as _);
+        c::JS_FreeValue(ctx, e);
         s
     }
 }

@@ -3,15 +3,11 @@
 #include "utils.h"
 #include "buffer-utils.h"
 #include "debug.h"
-#include "quickjs-ext.h"
 
 /**
  * \addtogroup quickjs-blob
  * @{
  */
-
-JSClassID js_blob_class_id = 0;
-JSValue blob_proto = {{0}, JS_TAG_UNDEFINED}, blob_ctor = {{0}, JS_TAG_UNDEFINED};
 
 enum {
   BLOB_SIZE,
@@ -77,7 +73,7 @@ js_blob_free_func(JSRuntime* rt, void* opaque, void* ptr) {
 
 JSValue
 js_blob_wrap(JSContext* ctx, Blob* blob) {
-  JSValue obj = JS_NewObjectProtoClass(ctx, blob_proto, js_blob_class_id);
+  JSValue obj = JS_NewObjectClass(ctx, JS_CLASS_BLOB);
   JS_SetOpaque(obj, blob);
   return obj;
 }
@@ -133,7 +129,7 @@ js_blob_constructor(JSContext* ctx, JSValueConst new_target, int argc, JSValueCo
     proto = blob_proto;*/
 
   /* using new_target to get the prototype is necessary when the class is extended. */
-  obj = JS_NewObjectProtoClass(ctx, proto, js_blob_class_id);
+  obj = JS_NewObjectProtoClass(ctx, proto, JS_CLASS_BLOB);
   JS_FreeValue(ctx, proto);
 
   if(JS_IsException(obj))
@@ -262,26 +258,11 @@ js_blob_method(JSContext* ctx, JSValueConst this_val, int argc, JSValueConst arg
   return ret;
 }
 
-static JSValue
-js_blob_inspect(JSContext* ctx, JSValueConst this_val, int argc, JSValueConst argv[]) {
-  Blob* blob;
-
-  if(!(blob = js_blob_data(ctx, this_val)))
-    return JS_EXCEPTION;
-
-  JSValue obj = JS_NewObjectClass(ctx, js_blob_class_id);
-
-  JS_DefinePropertyValueStr(ctx, obj, "size", JS_NewUint32(ctx, blob->size), JS_PROP_ENUMERABLE);
-  JS_DefinePropertyValueStr(ctx, obj, "type", JS_NewString(ctx, blob->type), JS_PROP_ENUMERABLE);
-
-  return obj;
-}
-
 static void
 js_blob_finalizer(JSRuntime* rt, JSValue val) {
   Blob* blob;
 
-  if((blob = JS_GetOpaque(val, js_blob_class_id)))
+  if((blob = JS_GetOpaque(val, JS_CLASS_BLOB)))
     blob_free(rt, blob);
 }
 
@@ -300,25 +281,8 @@ static const JSCFunctionListEntry js_blob_funcs[] = {
     JS_PROP_STRING_DEF("[Symbol.toStringTag]", "Blob", JS_PROP_CONFIGURABLE),
 };
 
-int
-js_blob_init(JSContext* ctx) {
-
-  assert(js_blob_class_id == 0);
-
-  JS_NewClassID(&js_blob_class_id);
-  JS_NewClass(JS_GetRuntime(ctx), js_blob_class_id, &js_blob_class);
-
-  blob_ctor = JS_NewCFunction2(ctx, js_blob_constructor, "Blob", 1, JS_CFUNC_constructor, 0);
-  blob_proto = JS_NewObject(ctx);
-
-  JS_SetPropertyFunctionList(ctx, blob_proto, js_blob_funcs, countof(js_blob_funcs));
-
-  JS_SetClassProto(ctx, js_blob_class_id, blob_proto);
-  JS_SetConstructor(ctx, blob_ctor, blob_proto);
-
-  js_set_inspect_method(ctx, blob_proto, js_blob_inspect);
-
-  js_set_global_property(ctx, "Blob", blob_ctor);
-
-  return 0;
+int js_blob_init(JSContext *ctx) {
+    return JS_NewGlobalClass(ctx, "Blob", JS_CLASS_BLOB, &js_blob_class,
+                      js_blob_constructor, 1, NULL, 0, js_blob_funcs,
+                      countof(js_blob_funcs));
 }

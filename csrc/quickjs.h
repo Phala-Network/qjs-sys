@@ -28,6 +28,9 @@
 #include <stdint.h>
 
 #define CONFIG_VERSION "1.0"
+#define __move
+#define __ref
+#define __copy
 
 #ifdef __cplusplus
 extern "C" {
@@ -502,9 +505,9 @@ typedef struct JSClassDef {
     JSClassExoticMethods *exotic;
 } JSClassDef;
 
-JSClassID JS_NewClassID(JSClassID *pclass_id);
-int JS_NewClass(JSRuntime *rt, JSClassID class_id, const JSClassDef *class_def);
-int JS_IsRegisteredClass(JSRuntime *rt, JSClassID class_id);
+JSClassID JS_NewClassID(__ref JSClassID *pclass_id);
+int JS_NewClass(__ref JSRuntime *rt, JSClassID class_id, __ref const JSClassDef *class_def);
+int JS_IsRegisteredClass(__ref JSRuntime *rt, JSClassID class_id);
 
 /* value handling */
 
@@ -950,6 +953,9 @@ JSValue JS_NewCFunction2(JSContext *ctx, JSCFunction *func,
 JSValue JS_NewCFunctionData(JSContext *ctx, JSCFunctionData *func,
                             int length, int magic, int data_len,
                             JSValueConst *data);
+JSValueConst JS_NewGlobalCConstructor(JSContext *ctx, const char *name,
+                                             JSCFunction *func, int length,
+                                             JSValueConst proto);
 
 static inline JSValue JS_NewCFunction(JSContext *ctx, JSCFunction *func, const char *name,
                                       int length)

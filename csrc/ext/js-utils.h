@@ -19,7 +19,6 @@ typedef struct promise {
   ResolveFunctions funcs;
   JSValue value;
 } Promise;
-
 ResolveFunctions* promise_new(JSContext*, JSValueConst*);
 JSValue promise_create(JSContext*, ResolveFunctions*);
 void js_resolve_functions_free(JSContext* ctx, ResolveFunctions* funcs);

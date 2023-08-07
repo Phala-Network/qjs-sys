@@ -5,16 +5,33 @@
 #include <list.h>
 #include <assert.h>
 
+#define DUP(v) JS_DupValue(ctx, v)
+
 /**
  * \defgroup quickjs-stream quickjs-stream: Buffered stream
  * @{
  */
 
-VISIBLE JSClassID js_readable_class_id = 0, js_writable_class_id = 0, js_reader_class_id = 0, js_writer_class_id = 0, js_transform_class_id = 0;
-VISIBLE JSValue readable_proto = {{0}, JS_TAG_UNDEFINED}, readable_controller = {{0}, JS_TAG_UNDEFINED}, readable_ctor = {{0}, JS_TAG_UNDEFINED}, writable_proto = {{0}, JS_TAG_UNDEFINED},
-                writable_controller = {{0}, JS_TAG_UNDEFINED}, writable_ctor = {{0}, JS_TAG_UNDEFINED}, transform_proto = {{0}, JS_TAG_UNDEFINED}, transform_controller = {{0}, JS_TAG_UNDEFINED},
-                transform_ctor = {{0}, JS_TAG_UNDEFINED}, reader_proto = {{0}, JS_TAG_UNDEFINED}, reader_ctor = {{0}, JS_TAG_UNDEFINED}, writer_proto = {{0}, JS_TAG_UNDEFINED},
-                writer_ctor = {{0}, JS_TAG_UNDEFINED};
+typedef struct {
+    JSClassID js_readable_class_id;
+    JSClassID js_writable_class_id;
+    JSClassID js_reader_class_id;
+    JSClassID js_writer_class_id;
+    JSClassID js_transform_class_id;
+    JSValue readable_proto;
+    JSValue readable_controller;
+    JSValue readable_ctor;
+    JSValue writable_proto;
+    JSValue writable_controller;
+    JSValue writable_ctor;
+    JSValue transform_proto;
+    JSValue transform_controller;
+    JSValue transform_ctor;
+    JSValue reader_proto;
+    JSValue reader_ctor;
+    JSValue writer_proto;
+    JSValue writer_ctor;
+} StreamDef;
 
 static int reader_update(Reader* rd, JSContext* ctx);
 static BOOL reader_passthrough(Reader* rd, JSValueConst result, JSContext* ctx);
@@ -1533,13 +1550,29 @@ const JSCFunctionListEntry js_transform_controller_funcs[] = {
 
 int
 js_stream_init(JSContext* ctx) {
+  JSClassID js_readable_class_id = 0, js_writable_class_id = 0,
+            js_reader_class_id = 0, js_writer_class_id = 0,
+            js_transform_class_id = 0;
+  JSValue readable_proto = {{0}, JS_TAG_UNDEFINED},
+          readable_controller = {{0}, JS_TAG_UNDEFINED},
+          readable_ctor = {{0}, JS_TAG_UNDEFINED},
+          writable_proto = {{0}, JS_TAG_UNDEFINED},
+          writable_controller = {{0}, JS_TAG_UNDEFINED},
+          writable_ctor = {{0}, JS_TAG_UNDEFINED},
+          transform_proto = {{0}, JS_TAG_UNDEFINED},
+          transform_controller = {{0}, JS_TAG_UNDEFINED},
+          transform_ctor = {{0}, JS_TAG_UNDEFINED},
+          reader_proto = {{0}, JS_TAG_UNDEFINED},
+          reader_ctor = {{0}, JS_TAG_UNDEFINED},
+          writer_proto = {{0}, JS_TAG_UNDEFINED},
+          writer_ctor = {{0}, JS_TAG_UNDEFINED};
 
   JS_NewClassID(&js_reader_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_reader_class_id, &js_reader_class);
 
   reader_proto = JS_NewObject(ctx);
   JS_SetPropertyFunctionList(ctx, reader_proto, js_reader_proto_funcs, countof(js_reader_proto_funcs));
-  JS_SetClassProto(ctx, js_reader_class_id, reader_proto);
+  JS_SetClassProto(ctx, js_reader_class_id, DUP(reader_proto));
 
   reader_ctor = JS_NewCFunction2(ctx, js_reader_constructor, "StreamReader", 1, JS_CFUNC_constructor, 0);
 
@@ -1550,7 +1583,7 @@ js_stream_init(JSContext* ctx) {
 
   readable_proto = JS_NewObject(ctx);
   JS_SetPropertyFunctionList(ctx, readable_proto, js_readable_proto_funcs, countof(js_readable_proto_funcs));
-  JS_SetClassProto(ctx, js_readable_class_id, readable_proto);
+  JS_SetClassProto(ctx, js_readable_class_id, DUP(readable_proto));
 
   readable_ctor = JS_NewCFunction2(ctx, js_readable_constructor, "ReadableStream", 1, JS_CFUNC_constructor, 0);
 
@@ -1558,14 +1591,14 @@ js_stream_init(JSContext* ctx) {
 
   readable_controller = JS_NewObject(ctx);
   JS_SetPropertyFunctionList(ctx, readable_controller, js_readable_controller_funcs, countof(js_readable_controller_funcs));
-  JS_SetClassProto(ctx, js_readable_class_id, readable_controller);
+  JS_SetClassProto(ctx, js_readable_class_id, DUP(readable_controller)));
 
   JS_NewClassID(&js_writer_class_id);
   JS_NewClass(JS_GetRuntime(ctx), js_writer_class_id, &js_writer_class);
 
   writer_proto = JS_NewObject(ctx);
   JS_SetPropertyFunctionList(ctx, writer_proto, js_writer_proto_funcs, countof(js_writer_proto_funcs));
-  JS_SetClassProto(ctx, js_writer_class_id, writer_proto);
+  JS_SetClassProto(ctx, js_writer_class_id, DUP(writer_proto));
 
   writer_ctor = JS_NewCFunction2(ctx, js_writer_constructor, "StreamWriter", 1, JS_CFUNC_constructor, 0);
 
@@ -1576,7 +1609,7 @@ js_stream_init(JSContext* ctx) {
 
   writable_proto = JS_NewObject(ctx);
   JS_SetPropertyFunctionList(ctx, writable_proto, js_writable_proto_funcs, countof(js_writable_proto_funcs));
-  JS_SetClassProto(ctx, js_writable_class_id, writable_proto);
+  JS_SetClassProto(ctx, js_writable_class_id, DUP(writable_proto));
 
   writable_ctor = JS_NewCFunction2(ctx, js_writable_constructor, "WritableStream", 1, JS_CFUNC_constructor, 0);
 
@@ -1601,18 +1634,22 @@ js_stream_init(JSContext* ctx) {
   JS_SetPropertyFunctionList(ctx, transform_controller, js_transform_controller_funcs, countof(js_transform_controller_funcs));
   JS_SetClassProto(ctx, js_transform_class_id, transform_controller);
 
+  {
+    // TODO: free
+    StreamDef* def = js_mallocz(ctx, sizeof(*def));
+  }
   // JS_SetPropertyFunctionList(ctx, stream_ctor, js_stream_static_funcs, countof(js_stream_static_funcs));
 
   {
     JSValue global_obj = JS_GetGlobalObject(ctx);
 
-    JS_SetPropertyStr(ctx, global_obj, "StreamReader", reader_ctor);
-    JS_SetPropertyStr(ctx, global_obj, "StreamWriter", writer_ctor);
-    JS_SetPropertyStr(ctx, global_obj, "ReadableStream", readable_ctor);
-    JS_SetPropertyStr(ctx, global_obj, "ReadableStreamDefaultController", JS_DupValue(ctx, readable_controller));
-    JS_SetPropertyStr(ctx, global_obj, "WritableStream", writable_ctor);
-    JS_SetPropertyStr(ctx, global_obj, "WritableStreamDefaultController", JS_DupValue(ctx, writable_controller));
-    JS_SetPropertyStr(ctx, global_obj, "TransformStream", transform_ctor);
+    JS_SetPropertyStr(ctx, global_obj, "StreamReader", DUP(reader_ctor));
+    JS_SetPropertyStr(ctx, global_obj, "StreamWriter", DUP(writer_ctor));
+    JS_SetPropertyStr(ctx, global_obj, "ReadableStream", DUP(readable_ctor));
+    JS_SetPropertyStr(ctx, global_obj, "ReadableStreamDefaultController", DUP(readable_controller));
+    JS_SetPropertyStr(ctx, global_obj, "WritableStream", DUP(writable_ctor));
+    JS_SetPropertyStr(ctx, global_obj, "WritableStreamDefaultController", DUP(writable_controller));
+    JS_SetPropertyStr(ctx, global_obj, "TransformStream", DUP(transform_ctor));
 
     JS_FreeValue(ctx, global_obj);
   }

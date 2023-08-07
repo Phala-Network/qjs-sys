@@ -101,6 +101,7 @@ promise_zero(Promise* pr) {
   js_resolve_functions_zero(&pr->funcs);
 }
 
+
 BOOL
 promise_pending(ResolveFunctions* funcs) {
   return !js_resolve_functions_is_null(funcs);

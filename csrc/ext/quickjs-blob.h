@@ -4,6 +4,7 @@
 #include "utils.h"
 #include "vector.h"
 #include "buffer-utils.h"
+#include "quickjs-ext.h"
 
 /**
  * \defgroup quickjs-blob quickjs-blob: Blob
@@ -20,9 +21,6 @@ typedef union blob {
   };
   Vector vec;
 } Blob;
-
-extern VISIBLE JSClassID js_blob_class_id;
-extern VISIBLE JSValue blob_proto, blob_ctor;
 
 Blob* blob_new(JSContext*, const void* x, size_t len, const char* type);
 ssize_t blob_write(JSContext*, Blob* blob, const void* x, size_t len);
@@ -44,7 +42,7 @@ blob_size(Blob* blob) {
 
 static inline Blob*
 js_blob_data(JSContext* ctx, JSValueConst value) {
-  return JS_GetOpaque(value, js_blob_class_id);
+  return JS_GetOpaque(value, JS_CLASS_BLOB);
 }
 
 /**

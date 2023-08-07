@@ -3,7 +3,7 @@ CC=clang
 
 SRC= \
 	ext/quickjs-blob.c \
-	ext/quickjs-stream.c \
+	ext/quickjs-ext.c \
     cutils.c \
 	libregexp.c \
 	libunicode.c \
