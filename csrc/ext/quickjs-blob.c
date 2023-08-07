@@ -3,6 +3,7 @@
 #include "utils.h"
 #include "buffer-utils.h"
 #include "debug.h"
+#include "quickjs-ext.h"
 
 /**
  * \addtogroup quickjs-blob
@@ -300,7 +301,7 @@ static const JSCFunctionListEntry js_blob_funcs[] = {
 };
 
 int
-js_blob_init(JSContext* ctx, JSModuleDef* m) {
+js_blob_init(JSContext* ctx) {
 
   assert(js_blob_class_id == 0);
 
@@ -317,30 +318,7 @@ js_blob_init(JSContext* ctx, JSModuleDef* m) {
 
   js_set_inspect_method(ctx, blob_proto, js_blob_inspect);
 
-  if(m) {
-    JS_SetModuleExport(ctx, m, "Blob", blob_ctor);
-  }
+  js_set_global_property(ctx, "Blob", blob_ctor);
 
   return 0;
 }
-
-#ifdef JS_BLOB_MODULE
-#define JS_INIT_MODULE js_init_module
-#else
-#define JS_INIT_MODULE js_init_module_blob
-#endif
-
-VISIBLE JSModuleDef*
-JS_INIT_MODULE(JSContext* ctx, const char* module_name) {
-  JSModuleDef* m;
-
-  if((m = JS_NewCModule(ctx, module_name, js_blob_init))) {
-    JS_AddModuleExport(ctx, m, "Blob");
-  }
-
-  return m;
-}
-
-/**
- * @}
- */

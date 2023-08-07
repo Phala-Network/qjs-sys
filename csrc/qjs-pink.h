@@ -2,6 +2,7 @@
 #define __QJS_PINK_H
 #include <stddef.h>
 #include "quickjs.h"
+#include "ext/quickjs-ext.h"
 
 typedef void (*output_str_t)(void *userdata, const char *output);
 typedef void (*output_bytes_t)(void *userdata, const char *output, int output_len);
@@ -24,7 +25,6 @@ void js_env_add_helpers(JSContext *ctx);
 int js_eval_code(JSContext *ctx, const code_t* code, callbacks_t* callbacks);
 void js_std_dump_error(JSContext *ctx);
 void js_dump_exception(JSContext *ctx, JSValueConst exception_val);
-int js_stream_init(JSContext*);
 
 #ifdef CONFIG_BIGNUM
 #include "libbf.h"
