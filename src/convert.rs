@@ -162,16 +162,18 @@ impl DecodeFromJSValue for Vec<u8> {
     fn decode(ctx: *mut c::JSContext, v: c::JSValue) -> Result<Self, &'static str> {
         unsafe {
             if c::JS_IsString(v) != 0 {
-                let cstr = c::JS_ToCString(ctx, v);
-                if cstr.is_null() {
+                let pstr = c::JS_ToCString(ctx, v);
+                if pstr.is_null() {
                     return Err("invalid string");
                 }
-                let cstr = CStr::from_ptr(cstr);
+                let cstr = CStr::from_ptr(pstr);
                 let str = cstr.to_string_lossy();
-                match hex::decode(str.strip_prefix("0x").unwrap_or(&str)) {
+                let ret = match hex::decode(str.strip_prefix("0x").unwrap_or(&str)) {
                     Ok(bytes) => Ok(bytes),
                     Err(_) => Err("failed to decode bytes in hex string"),
-                }
+                };
+                c::JS_FreeCString(ctx, pstr);
+                ret
             } else {
                 let mut size = 0;
                 let ptr = c::JS_Uint8ArrayGetBuffer(v, &mut size);
