@@ -26,6 +26,7 @@
 #define QUICKJS_H
 #include <stdio.h>
 #include <stdint.h>
+#include "list.h"
 
 #define CONFIG_VERSION "1.0"
 #define __move
@@ -1120,6 +1121,39 @@ enum {
 
     JS_CLASS_INIT_COUNT, /* last entry for predefined classes */
 };
+
+typedef enum {
+    JS_GC_OBJ_TYPE_JS_OBJECT,
+    JS_GC_OBJ_TYPE_FUNCTION_BYTECODE,
+    JS_GC_OBJ_TYPE_SHAPE,
+    JS_GC_OBJ_TYPE_VAR_REF,
+    JS_GC_OBJ_TYPE_ASYNC_FUNCTION,
+    JS_GC_OBJ_TYPE_JS_CONTEXT,
+    JS_GC_OBJ_TYPE_CUSTOM,
+} JSGCObjectTypeEnum;
+
+/* header for GC objects. GC objects are C data structures with a
+   reference count that can reference other GC objects. JS Objects are
+   a particular type of GC object. */
+struct JSGCObjectHeader {
+    int ref_count; /* must come first, 32-bit */
+    JSGCObjectTypeEnum gc_obj_type : 4;
+    uint8_t mark : 4; /* used by the GC */
+    uint8_t dummy1; /* not used by the GC */
+    uint16_t dummy2; /* not used by the GC */
+    struct list_head link;
+};
+
+typedef void (JS_CustomMarkFunc)(JSRuntime *rt, JSGCObjectHeader *p, JS_MarkFunc* mark_func);
+
+typedef struct {
+    JSGCObjectHeader header; /* must come first */
+    JS_CustomMarkFunc* mark;
+} JSGCCustomObject;
+
+void JS_AddGCObject(JSRuntime *rt, JSGCObjectHeader *h,
+                          JSGCObjectTypeEnum type);
+void JS_RemoveGCObject(JSGCObjectHeader *h);
 
 #undef js_unlikely
 #undef js_force_inline

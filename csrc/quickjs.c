@@ -270,27 +270,6 @@ typedef struct JSStackFrame {
     JSValue *cur_sp;
 } JSStackFrame;
 
-typedef enum {
-    JS_GC_OBJ_TYPE_JS_OBJECT,
-    JS_GC_OBJ_TYPE_FUNCTION_BYTECODE,
-    JS_GC_OBJ_TYPE_SHAPE,
-    JS_GC_OBJ_TYPE_VAR_REF,
-    JS_GC_OBJ_TYPE_ASYNC_FUNCTION,
-    JS_GC_OBJ_TYPE_JS_CONTEXT,
-} JSGCObjectTypeEnum;
-
-/* header for GC objects. GC objects are C data structures with a
-   reference count that can reference other GC objects. JS Objects are
-   a particular type of GC object. */
-struct JSGCObjectHeader {
-    int ref_count; /* must come first, 32-bit */
-    JSGCObjectTypeEnum gc_obj_type : 4;
-    uint8_t mark : 4; /* used by the GC */
-    uint8_t dummy1; /* not used by the GC */
-    uint16_t dummy2; /* not used by the GC */
-    struct list_head link;
-};
-
 typedef struct JSVarRef {
     union {
         JSGCObjectHeader header; /* must come first */
@@ -1173,9 +1152,6 @@ static JSValue js_c_function_data_call(JSContext *ctx, JSValueConst func_obj,
                                        JSValueConst this_val,
                                        int argc, JSValueConst *argv, int flags);
 static JSAtom js_symbol_to_atom(JSContext *ctx, JSValue val);
-static void add_gc_object(JSRuntime *rt, JSGCObjectHeader *h,
-                          JSGCObjectTypeEnum type);
-static void remove_gc_object(JSGCObjectHeader *h);
 static void js_async_function_free0(JSRuntime *rt, JSAsyncFunctionData *s);
 static JSValue js_instantiate_prototype(JSContext *ctx, JSObject *p, JSAtom atom, void *opaque);
 static JSValue js_module_ns_autoinit(JSContext *ctx, JSObject *p, JSAtom atom,
@@ -2055,7 +2031,7 @@ JSContext *JS_NewContextRaw(JSRuntime *rt)
     if (!ctx)
         return NULL;
     ctx->header.ref_count = 1;
-    add_gc_object(rt, &ctx->header, JS_GC_OBJ_TYPE_JS_CONTEXT);
+    JS_AddGCObject(rt, &ctx->header, JS_GC_OBJ_TYPE_JS_CONTEXT);
 
     ctx->class_proto = js_malloc_rt(rt, sizeof(ctx->class_proto[0]) *
                                     rt->class_count);
@@ -2267,7 +2243,7 @@ void JS_FreeContext(JSContext *ctx)
     js_free_shape_null(ctx->rt, ctx->array_shape);
 
     list_del(&ctx->link);
-    remove_gc_object(&ctx->header);
+    JS_RemoveGCObject(&ctx->header);
     js_free_rt(ctx->rt, ctx);
 }
 
@@ -4284,7 +4260,7 @@ static no_inline JSShape *js_new_shape2(JSContext *ctx, JSObject *proto,
         return NULL;
     sh = get_shape_from_alloc(sh_alloc, hash_size);
     sh->header.ref_count = 1;
-    add_gc_object(rt, &sh->header, JS_GC_OBJ_TYPE_SHAPE);
+    JS_AddGCObject(rt, &sh->header, JS_GC_OBJ_TYPE_SHAPE);
     if (proto)
         JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, proto));
     sh->proto = proto;
@@ -4328,7 +4304,7 @@ static JSShape *js_clone_shape(JSContext *ctx, JSShape *sh1)
     memcpy(sh_alloc, sh_alloc1, size);
     sh = get_shape_from_alloc(sh_alloc, hash_size);
     sh->header.ref_count = 1;
-    add_gc_object(ctx->rt, &sh->header, JS_GC_OBJ_TYPE_SHAPE);
+    JS_AddGCObject(ctx->rt, &sh->header, JS_GC_OBJ_TYPE_SHAPE);
     sh->is_hashed = FALSE;
     if (sh->proto) {
         JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, sh->proto));
@@ -4361,7 +4337,7 @@ static void js_free_shape0(JSRuntime *rt, JSShape *sh)
         JS_FreeAtomRT(rt, pr->atom);
         pr++;
     }
-    remove_gc_object(&sh->header);
+    JS_RemoveGCObject(&sh->header);
     js_free_rt(rt, get_alloc_from_shape(sh));
 }
 
@@ -4755,7 +4731,7 @@ static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID clas
         break;
     }
     p->header.ref_count = 1;
-    add_gc_object(ctx->rt, &p->header, JS_GC_OBJ_TYPE_JS_OBJECT);
+    JS_AddGCObject(ctx->rt, &p->header, JS_GC_OBJ_TYPE_JS_OBJECT);
     return JS_MKPTR(JS_TAG_OBJECT, p);
 }
 
@@ -5171,7 +5147,7 @@ static void free_var_ref(JSRuntime *rt, JSVarRef *var_ref)
         if (--var_ref->header.ref_count == 0) {
             if (var_ref->is_detached) {
                 JS_FreeValueRT(rt, var_ref->value);
-                remove_gc_object(&var_ref->header);
+                JS_RemoveGCObject(&var_ref->header);
             } else {
                 list_del(&var_ref->header.link); /* still on the stack */
             }
@@ -5365,7 +5341,7 @@ static void free_object(JSRuntime *rt, JSObject *p)
     p->u.func.var_refs = NULL;
     p->u.func.home_object = NULL;
 
-    remove_gc_object(&p->header);
+    JS_RemoveGCObject(&p->header);
     if (rt->gc_phase == JS_GC_PHASE_REMOVE_CYCLES && p->header.ref_count != 0) {
         list_add_tail(&p->header.link, &rt->gc_zero_ref_count_list);
     } else {
@@ -5487,7 +5463,7 @@ void __JS_FreeValue(JSContext *ctx, JSValue v)
 
 /* garbage collection */
 
-static void add_gc_object(JSRuntime *rt, JSGCObjectHeader *h,
+void JS_AddGCObject(JSRuntime *rt, JSGCObjectHeader *h,
                           JSGCObjectTypeEnum type)
 {
     h->mark = 0;
@@ -5495,7 +5471,7 @@ static void add_gc_object(JSRuntime *rt, JSGCObjectHeader *h,
     list_add_tail(&h->link, &rt->gc_obj_list);
 }
 
-static void remove_gc_object(JSGCObjectHeader *h)
+void JS_RemoveGCObject(JSGCObjectHeader *h)
 {
     list_del(&h->link);
 }
@@ -5602,6 +5578,13 @@ static void mark_children(JSRuntime *rt, JSGCObjectHeader *gp,
         {
             JSContext *ctx = (JSContext *)gp;
             JS_MarkContext(rt, ctx, mark_func);
+        }
+        break;
+    case JS_GC_OBJ_TYPE_CUSTOM:
+        {
+            JSGCCustomObject *p = (JSGCCustomObject *)gp;
+            if (p->mark)
+                p->mark(rt, gp, mark_func);
         }
         break;
     default:
@@ -15931,7 +15914,7 @@ static void close_var_refs(JSRuntime *rt, JSStackFrame *sf)
         var_ref->pvalue = &var_ref->value;
         /* the reference is no longer to a local variable */
         var_ref->is_detached = TRUE;
-        add_gc_object(rt, &var_ref->header, JS_GC_OBJ_TYPE_VAR_REF);
+        JS_AddGCObject(rt, &var_ref->header, JS_GC_OBJ_TYPE_VAR_REF);
     }
 }
 
@@ -15949,7 +15932,7 @@ static void close_lexical_var(JSContext *ctx, JSStackFrame *sf, int idx, int is_
             list_del(&var_ref->header.link);
             /* the reference is no longer to a local variable */
             var_ref->is_detached = TRUE;
-            add_gc_object(ctx->rt, &var_ref->header, JS_GC_OBJ_TYPE_VAR_REF);
+            JS_AddGCObject(ctx->rt, &var_ref->header, JS_GC_OBJ_TYPE_VAR_REF);
         }
     }
 }
@@ -19114,7 +19097,7 @@ static void js_async_function_free0(JSRuntime *rt, JSAsyncFunctionData *s)
     js_async_function_terminate(rt, s);
     JS_FreeValueRT(rt, s->resolving_funcs[0]);
     JS_FreeValueRT(rt, s->resolving_funcs[1]);
-    remove_gc_object(&s->header);
+    JS_RemoveGCObject(&s->header);
     js_free_rt(rt, s);
 }
 
@@ -19281,7 +19264,7 @@ static JSValue js_async_function_call(JSContext *ctx, JSValueConst func_obj,
     if (!s)
         return JS_EXCEPTION;
     s->header.ref_count = 1;
-    add_gc_object(ctx->rt, &s->header, JS_GC_OBJ_TYPE_ASYNC_FUNCTION);
+    JS_AddGCObject(ctx->rt, &s->header, JS_GC_OBJ_TYPE_ASYNC_FUNCTION);
     s->is_active = FALSE;
     s->resolving_funcs[0] = JS_UNDEFINED;
     s->resolving_funcs[1] = JS_UNDEFINED;
@@ -27828,7 +27811,7 @@ static JSVarRef *js_create_module_var(JSContext *ctx, BOOL is_lexical)
         var_ref->value = JS_UNDEFINED;
     var_ref->pvalue = &var_ref->value;
     var_ref->is_detached = TRUE;
-    add_gc_object(ctx->rt, &var_ref->header, JS_GC_OBJ_TYPE_VAR_REF);
+    JS_AddGCObject(ctx->rt, &var_ref->header, JS_GC_OBJ_TYPE_VAR_REF);
     return var_ref;
 }
 
@@ -32633,7 +32616,7 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
     b->backtrace_barrier = fd->backtrace_barrier;
     b->realm = JS_DupContext(ctx);
 
-    add_gc_object(ctx->rt, &b->header, JS_GC_OBJ_TYPE_FUNCTION_BYTECODE);
+    JS_AddGCObject(ctx->rt, &b->header, JS_GC_OBJ_TYPE_FUNCTION_BYTECODE);
     
 #if defined(DUMP_BYTECODE) && (DUMP_BYTECODE & 1)
     if (!(fd->js_mode & JS_MODE_STRIP)) {
@@ -32688,7 +32671,7 @@ static void free_function_bytecode(JSRuntime *rt, JSFunctionBytecode *b)
         js_free_rt(rt, b->debug.source);
     }
 
-    remove_gc_object(&b->header);
+    JS_RemoveGCObject(&b->header);
     if (rt->gc_phase == JS_GC_PHASE_REMOVE_CYCLES && b->header.ref_count != 0) {
         list_add_tail(&b->header.link, &rt->gc_zero_ref_count_list);
     } else {
@@ -35277,7 +35260,7 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
         b->cpool = (void *)((uint8_t*)b + cpool_offset);
     }
     
-    add_gc_object(ctx->rt, &b->header, JS_GC_OBJ_TYPE_FUNCTION_BYTECODE);
+    JS_AddGCObject(ctx->rt, &b->header, JS_GC_OBJ_TYPE_FUNCTION_BYTECODE);
             
     obj = JS_MKPTR(JS_TAG_FUNCTION_BYTECODE, b);
 
