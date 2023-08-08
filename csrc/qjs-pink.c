@@ -69,6 +69,14 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val, int argc,
 
 JSValue __host_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 
+void js_pink_env_init(JSContext *ctx) {
+    JSValue global_obj, console;
+    global_obj = JS_GetGlobalObject(ctx);
+    JS_SetPropertyStr(ctx, global_obj, "__hostCall",
+                      JS_NewCFunction(ctx, __host_call, "__hostCall", 1));
+    JS_FreeValue(ctx, global_obj);
+}
+
 void js_env_add_helpers(JSContext *ctx) {
     JSValue global_obj, console;
     global_obj = JS_GetGlobalObject(ctx);

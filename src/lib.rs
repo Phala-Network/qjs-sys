@@ -195,13 +195,24 @@ pub fn ctx_get_exception_str(ctx: *mut c::JSContext) -> String {
     }
 }
 
+pub fn ctx_to_str<T>(
+    ctx: *mut c::JSContext,
+    value: c::JSValueConst,
+    cb: impl FnOnce(&str) -> T,
+) -> T {
+    unsafe {
+        let mut len: c::size_t = 0;
+        let ptr = c::JS_ToCStringLen(ctx, &mut len, value);
+        let bytes: &[u8] = core::slice::from_raw_parts(ptr as _, len as _);
+        let s = core::str::from_utf8_unchecked(bytes);
+        let rv = cb(s);
+        c::JS_FreeCString(ctx, ptr as _);
+        rv
+    }
+}
+
 pub fn ctx_to_string(ctx: *mut c::JSContext, value: c::JSValueConst) -> String {
-    let mut len: c::size_t = 0;
-    let ptr = unsafe { c::JS_ToCStringLen(ctx, &mut len, value) };
-    let bytes: &[u8] = unsafe { core::slice::from_raw_parts(ptr as _, len as _) };
-    let s = String::from_utf8_lossy(bytes).into_owned();
-    unsafe { c::JS_FreeCString(ctx, ptr as _) };
-    s
+    ctx_to_str(ctx, value, |s| s.to_string())
 }
 
 pub fn compile(code: &str, filename: &str) -> Result<Vec<u8>, &'static str> {
