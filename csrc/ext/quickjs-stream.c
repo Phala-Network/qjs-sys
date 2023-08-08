@@ -16,6 +16,9 @@ static int reader_update(Reader* rd, JSContext* ctx);
 static BOOL reader_passthrough(Reader* rd, JSValueConst result, JSContext* ctx);
 static int readable_unlock(Readable* st, Reader* rd);
 static int writable_unlock(Writable* st, Writer* wr);
+static void readable_add_gc(JSRuntime* rt, Readable* st);
+static void writable_add_gc(JSRuntime* rt, Writable* st);
+static void transform_add_gc(JSRuntime* rt, Transform* st);
 
 static void *js_get_opaque_or2(JSValueConst value, JSClassID id1, JSClassID id2) {
   void* ret = JS_GetOpaque(value, id1);
@@ -372,6 +375,7 @@ readable_new(JSContext* ctx) {
     queue_init(&st->q);
   }
 
+  readable_add_gc(JS_GetRuntime(ctx), st);
   return st;
 }
 
@@ -493,8 +497,36 @@ readable_free(Readable* st, JSRuntime* rt) {
       JS_FreeValueRT(rt, st->on[i]);
 
     queue_clear(&st->q);
+
+    JS_RemoveGCObject(&st->gc.header);
     js_free_rt(rt, st);
   }
+}
+
+static void
+readable_mark(JSRuntime*rt, JSGCCustomObject* obj, JS_MarkFunc* mark_func) {
+  Readable* st = (Readable*)obj;
+
+  JS_MarkValue(rt, st->underlying_source, mark_func);
+  JS_MarkValue(rt, st->controller, mark_func);
+  for(size_t i = 0; i < countof(st->on); i++)
+    JS_MarkValue(rt, st->on[i], mark_func);
+}
+
+static void
+readable_add_gc(JSRuntime* rt, Readable* st) {
+  st->gc.mark = readable_mark;
+  JS_AddGCObject(rt, &st->gc.header, JS_GC_OBJ_TYPE_CUSTOM);
+}
+
+static void
+js_readable_mark(JSRuntime *rt, JSValueConst val,
+                          JS_MarkFunc *mark_func)
+{
+    Readable* st;
+    if((st = js_readable_data(val))) {
+      mark_func(rt, &st->gc.header);
+    }
 }
 
 enum {
@@ -874,6 +906,7 @@ js_readable_finalizer(JSRuntime* rt, JSValue val) {
 JSClassDef js_readable_class = {
     .class_name = "ReadableStream",
     .finalizer = js_readable_finalizer,
+    .gc_mark = js_readable_mark,
 };
 
 const JSCFunctionListEntry js_readable_proto_funcs[] = {
@@ -888,6 +921,7 @@ const JSCFunctionListEntry js_readable_proto_funcs[] = {
 JSClassDef js_readable_controller_class = {
     .class_name = "ReadableStreamDefaultController",
     .finalizer = js_readable_finalizer,
+    .gc_mark = js_readable_mark,
 };
 
 const JSCFunctionListEntry js_readable_controller_funcs[] = {
@@ -1016,6 +1050,7 @@ writable_new(JSContext* ctx) {
     st->controller = JS_NULL;
   }
 
+  writable_add_gc(JS_GetRuntime(ctx), st);
   return st;
 }
 
@@ -1091,8 +1126,35 @@ writable_free(Writable* st, JSRuntime* rt) {
       JS_FreeValueRT(rt, st->on[i]);
 
     queue_clear(&st->q);
+
+    JS_RemoveGCObject(&st->gc.header);
     js_free_rt(rt, st);
   }
+}
+
+static void
+writable_mark(JSRuntime*rt, JSGCCustomObject* obj, JS_MarkFunc* mark_func) {
+  Writable* st = (Writable*)obj;
+
+  JS_MarkValue(rt, st->underlying_sink, mark_func);
+  JS_MarkValue(rt, st->controller, mark_func);
+  for(size_t i = 0; i < countof(st->on); i++)
+    JS_MarkValue(rt, st->on[i], mark_func);
+}
+
+static void
+writable_add_gc(JSRuntime* rt, Writable* st) {
+  st->gc.mark = writable_mark;
+  JS_AddGCObject(rt, &st->gc.header, JS_GC_OBJ_TYPE_CUSTOM);
+}
+
+static void
+js_writable_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func)
+{
+    Writable* st;
+    if((st = js_writable_data(val))) {
+      mark_func(rt, &st->gc.header);
+    }
 }
 
 JSValue
@@ -1397,6 +1459,7 @@ js_writable_finalizer(JSRuntime* rt, JSValue val) {
 JSClassDef js_writable_class = {
     .class_name = "WritableStream",
     .finalizer = js_writable_finalizer,
+    .gc_mark = js_writable_mark,
 };
 
 const JSCFunctionListEntry js_writable_proto_funcs[] = {
@@ -1411,6 +1474,7 @@ const JSCFunctionListEntry js_writable_proto_funcs[] = {
 JSClassDef js_writable_controller_class = {
     .class_name = "WritableStreamDefaultController",
     .finalizer = js_writable_finalizer,
+    .gc_mark = js_writable_mark,
 };
 
 const JSCFunctionListEntry js_writable_controller_funcs[] = {
@@ -1484,6 +1548,7 @@ js_transform_constructor(JSContext* ctx, JSValueConst new_target, int argc, JSVa
     st->writable->controller = JS_DupValue(ctx, st->controller);
   }
 
+  transform_add_gc(JS_GetRuntime(ctx), st);
   JS_SetOpaque(obj, st);
 
   return obj;
@@ -1585,14 +1650,45 @@ js_transform_finalizer(JSRuntime* rt, JSValue val) {
       for(size_t i = 0; i < countof(st->on); i++)
         JS_FreeValueRT(rt, st->on[i]);
 
+      JS_RemoveGCObject(&st->gc.header);
       js_free_rt(rt, st);
     }
+  }
+}
+
+static void
+transform_mark(JSRuntime*rt, JSGCCustomObject* obj, JS_MarkFunc* mark_func) {
+  Transform* st = (Transform*)obj;
+
+  for(size_t i = 0; i < countof(st->on); i++)
+    JS_MarkValue(rt, st->on[i], mark_func);
+
+  JS_MarkValue(rt, st->underlying_transform, mark_func);
+  JS_MarkValue(rt, st->controller, mark_func);
+
+  mark_func(rt, &st->readable->gc.header);
+  mark_func(rt, &st->writable->gc.header);
+}
+
+static void
+transform_add_gc(JSRuntime* rt, Transform* st) {
+  st->gc.mark = transform_mark;
+  JS_AddGCObject(rt, &st->gc.header, JS_GC_OBJ_TYPE_CUSTOM);
+}
+
+static void
+js_transform_mark(JSRuntime* rt, JSValue val, JS_MarkFunc* mark_func) {
+  Transform* st;
+
+  if((st = js_transform_data(val))) {
+    mark_func(rt, &st->gc.header);
   }
 }
 
 JSClassDef js_transform_class = {
     .class_name = "TransformStream",
     .finalizer = js_transform_finalizer,
+    .gc_mark = js_transform_mark,
 };
 
 const JSCFunctionListEntry js_transform_proto_funcs[] = {
@@ -1604,6 +1700,7 @@ const JSCFunctionListEntry js_transform_proto_funcs[] = {
 JSClassDef js_transform_controller_class = {
     .class_name = "TransformStreamDefaultController",
     .finalizer = js_transform_finalizer,
+    .gc_mark = js_transform_mark,
 };
 const JSCFunctionListEntry js_transform_controller_funcs[] = {
     JS_CFUNC_MAGIC_DEF("terminate", 0, js_transform_controller, TRANSFORM_TERMINATE),

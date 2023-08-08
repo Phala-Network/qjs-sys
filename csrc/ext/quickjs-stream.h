@@ -75,7 +75,10 @@ typedef enum {
 } ReadableEvent;
 
 typedef struct readable_stream {
-  int ref_count;
+  union {
+    JSGCCustomObject gc;
+    int ref_count;
+  };
   Queue q;
   _Atomic(BOOL) closed;
   _Atomic(char*) reason;
@@ -92,7 +95,10 @@ typedef enum {
 } WritableEvent;
 
 typedef struct writable_stream {
-  int ref_count;
+  union {
+    JSGCCustomObject gc;
+    int ref_count;
+  };
   Queue q;
   _Atomic(BOOL) closed;
   _Atomic(char*) reason;
@@ -108,7 +114,10 @@ typedef enum {
 } TransformEvent;
 
 typedef struct transform_stream {
-  int ref_count;
+  union {
+    JSGCCustomObject gc;
+    int ref_count;
+  };
   Readable* readable;
   Writable* writable;
   JSValue on[3];
