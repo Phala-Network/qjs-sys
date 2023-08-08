@@ -96,10 +96,10 @@
 /* dump objects freed by the garbage collector */
 //#define DUMP_GC_FREE
 /* dump objects leaking when freeing the runtime */
-#define DUMP_LEAKS  1
+//#define DUMP_LEAKS  1
 /* dump memory usage before running the garbage collector */
 //#define DUMP_MEM
-#define DUMP_OBJECTS    /* dump objects in JS_FreeContext */
+//#define DUMP_OBJECTS    /* dump objects in JS_FreeContext */
 //#define DUMP_ATOMS      /* dump atoms in JS_FreeContext */
 //#define DUMP_SHAPES     /* dump shapes in JS_FreeContext */
 //#define DUMP_MODULE_RESOLVE
@@ -1888,9 +1888,9 @@ void JS_FreeRuntime(JSRuntime *rt)
         if (count != 0)
             printf("Secondary object leaks: %d\n", count);
     }
-#endif
     fflush(stdout);
-    // assert(list_empty(&rt->gc_obj_list));
+#endif
+    assert(list_empty(&rt->gc_obj_list));
 
     /* free the classes */
     for(i = 0; i < rt->class_count; i++) {
