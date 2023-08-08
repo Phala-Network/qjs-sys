@@ -754,8 +754,7 @@ JSValue
 js_readable_wrap(JSContext* ctx, Readable* st) {
   JSValue obj;
   obj = JS_NewObjectClass(ctx, JS_CLASS_READABLE_STREAM);
-  ++st->ref_count;
-  JS_SetOpaque(obj, st);
+  JS_SetOpaque(obj, readable_dup(st));
   return obj;
 }
 
@@ -914,7 +913,7 @@ const JSCFunctionListEntry js_readable_proto_funcs[] = {
     JS_CFUNC_MAGIC_DEF("getReader", 0, js_readable_method, READABLE_GET_READER),
     JS_CGETSET_MAGIC_FLAGS_DEF("closed", js_readable_get, 0, STREAM_CLOSED, JS_PROP_ENUMERABLE),
     JS_CGETSET_MAGIC_FLAGS_DEF("locked", js_readable_get, 0, STREAM_LOCKED, JS_PROP_ENUMERABLE),
-    JS_PROP_STRING_DEF("[Symbol.toStringTag]", "Readable", JS_PROP_CONFIGURABLE),
+    JS_PROP_STRING_DEF("[Symbol.toStringTag]", "ReadableStream", JS_PROP_CONFIGURABLE),
     //    JS_CFUNC_DEF("[Symbol.iterator]", 0, js_readable_iterator),
 };
 
