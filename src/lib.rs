@@ -36,6 +36,15 @@ pub enum Output {
 }
 
 pub fn eval(scripts: &[JsCode], args: &[String]) -> Result<Output, String> {
+    let output = eval2(scripts, args)?;
+    if let Output::Undefined = output {
+        return Ok(Output::String("undefined".to_string()));
+    }
+    Ok(output)
+}
+
+/// Similor to eval but returns Output::Undefined rather than Output::String("undefined")
+pub fn eval2(scripts: &[JsCode], args: &[String]) -> Result<Output, String> {
     struct IO<'a> {
         args: &'a [String],
         output: Option<Output>,
@@ -184,14 +193,16 @@ pub fn ctx_eval(ctx: *mut c::JSContext, script: JsCode) -> Result<Output, String
 
 pub fn ctx_get_exception_str(ctx: *mut c::JSContext) -> String {
     unsafe {
-        let mut len: c::size_t = 0;
         let e = c::JS_GetException(ctx);
-        let ptr = c::JS_ToCStringLen(ctx, &mut len, e);
-        let bytes: &[u8] = core::slice::from_raw_parts(ptr as _, len as _);
-        let s = String::from_utf8_lossy(bytes).into_owned();
-        c::JS_FreeCString(ctx, ptr as _);
+        let mut exc_str = ctx_to_string(ctx, e);
+        let stack = c::JS_GetPropertyStr(ctx, e, cstr::cstr!("stack").as_ptr() as _);
+        if !c::is_undefined(stack) {
+            exc_str.push_str("\n[stack]\n");
+            exc_str.push_str(&ctx_to_string(ctx, stack));
+        }
         c::JS_FreeValue(ctx, e);
-        s
+        c::JS_FreeValue(ctx, stack);
+        exc_str
     }
 }
 
@@ -203,6 +214,9 @@ pub fn ctx_to_str<T>(
     unsafe {
         let mut len: c::size_t = 0;
         let ptr = c::JS_ToCStringLen(ctx, &mut len, value);
+        if ptr.is_null() {
+            return cb("");
+        }
         let bytes: &[u8] = core::slice::from_raw_parts(ptr as _, len as _);
         let s = core::str::from_utf8_unchecked(bytes);
         let rv = cb(s);

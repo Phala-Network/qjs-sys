@@ -20,3 +20,7 @@ pub use super::inline_fns::*;
 pub fn is_exception(v: JSValue) -> bool {
     unsafe { JS_IsException(v) != 0 }
 }
+
+pub fn is_undefined(v: JSValue) -> bool {
+    unsafe { JS_IsUndefined(v) != 0 }
+}

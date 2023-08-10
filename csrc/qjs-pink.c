@@ -190,7 +190,7 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len, int is_bytecod
 
         if (!JS_IsUndefined(output)) {
             put_val(ctx, output, callbacks);
-        } else {
+        } else if (!JS_IsUndefined(val)){
             put_val(ctx, val, callbacks);
         }
         JS_FreeValue(ctx, output);
