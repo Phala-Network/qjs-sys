@@ -180,7 +180,7 @@ impl DecodeFromJSValue for Vec<u8> {
                 if ptr.is_null() {
                     return Err("not a Uint8Array");
                 }
-                let buf = core::slice::from_raw_parts(ptr, size as _);
+                let buf = core::slice::from_raw_parts(ptr, size);
                 Ok(buf.to_vec())
             }
         }
@@ -462,7 +462,7 @@ fn deserialize_bytes(
     if ptr.is_null() {
         return Err("except Uint8Array");
     }
-    let bytes = unsafe { &*core::ptr::slice_from_raw_parts(ptr, len as _) };
+    let bytes = unsafe { &*core::ptr::slice_from_raw_parts(ptr, len) };
     Ok(JsValue::Bytes(bytes.to_vec()))
 }
 

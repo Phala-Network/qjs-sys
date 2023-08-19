@@ -54051,7 +54051,7 @@ JS_BOOL JS_IsUint8Array(JSValueConst v)
     return TRUE;
 }
 
-uint8_t* JS_Uint8ArrayGetBuffer(JSValueConst v, uint32_t *size)
+uint8_t* JS_Uint8ArrayGetBuffer(JSValueConst v, size_t *size)
 {
     JSObject *p;
     if (!JS_IsUint8Array(v)) {
@@ -54065,7 +54065,7 @@ uint8_t* JS_Uint8ArrayGetBuffer(JSValueConst v, uint32_t *size)
 JSValue JS_NewUint8Array(JSContext *ctx, const uint8_t* data, uint32_t data_len)
 {
     JSValue array;
-    uint32_t actual_len = 0;
+    size_t actual_len = 0;
     uint8_t *buffer;
     char code[40];
 
