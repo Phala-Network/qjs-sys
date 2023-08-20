@@ -3,26 +3,39 @@
 #[macro_use]
 extern crate alloc;
 
-pub use qjs_sys::c;
+pub use as_bytes::{decode_as_bytes, encode_as_bytes};
 pub use error::{Error, Result};
-pub use value::Value;
+pub use qjs_sys::c;
 pub use traits::{FromJsValue, ToJsValue};
+pub use value::Value;
 
 #[macro_use]
 mod macros;
+mod as_bytes;
 mod error;
+mod impls;
 mod traits;
 mod value;
-mod impls;
 
 mod test {
     use qjsbind_derive::{FromJsValue, ToJsValue};
 
-    #[derive(Debug, FromJsValue, ToJsValue)]
+    use crate::Value;
+
+    #[derive(FromJsValue, ToJsValue)]
+    #[qjsbind(rename_all = "camelCase")]
     pub struct HttpRequest {
+        #[qjsbind(default = "default_method")]
         pub method: String,
         pub url: String,
         pub headers: Vec<(String, String)>,
+        #[qjsbind(default)]
         pub body: Vec<u8>,
+        pub foo_bar: Vec<u8>,
+        pub opaque: Value,
+    }
+
+    fn default_method() -> String {
+        "GET".to_string()
     }
 }

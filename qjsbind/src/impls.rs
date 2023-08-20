@@ -48,6 +48,29 @@ impl FromJsValue for () {
     }
 }
 
+macro_rules! impl_from_for_tuple {
+    ($($t: ident),*) => {
+        impl<$($t),*> FromJsValue for ($($t,)*)
+        where
+            $($t: FromJsValue),*
+        {
+            fn from_js_value(js_value: Value) -> Result<Self> {
+                let mut iter = iter_values(js_value)?;
+                Ok(($($t::from_js_value(iter.next().ok_or(Error::Expect("tuple"))??)?,)*))
+            }
+        }
+    };
+}
+impl_from_for_tuple!(A);
+impl_from_for_tuple!(A, B);
+impl_from_for_tuple!(A, B, C);
+impl_from_for_tuple!(A, B, C, D);
+impl_from_for_tuple!(A, B, C, D, E);
+impl_from_for_tuple!(A, B, C, D, E, F);
+impl_from_for_tuple!(A, B, C, D, E, F, G);
+impl_from_for_tuple!(A, B, C, D, E, F, G, H);
+impl_from_for_tuple!(A, B, C, D, E, F, G, H, I);
+
 impl<T: FromJsValue> FromJsValue for Option<T> {
     fn from_js_value(js_value: Value) -> Result<Self> {
         if js_value.is_null() || js_value.is_undefined() {
@@ -73,6 +96,16 @@ impl<T: FromJsValue> FromJsValue for Vec<T> {
         }
         Ok(vec)
     }
+}
+
+fn iter_values<V: FromJsValue>(js_value: Value) -> Result<impl Iterator<Item = Result<V>>> {
+    let mut iter = js_value
+        .values()
+        .or(Err(Error::Expect("array-like object")))?;
+    Ok(core::iter::from_fn(move || -> Option<Result<V>> {
+        let value = opt_try!(iter.next()?);
+        Some(V::from_js_value(value))
+    }))
 }
 
 fn iter_fields<K, V>(js_value: Value) -> Result<impl Iterator<Item = Result<(K, V)>>>
@@ -104,6 +137,17 @@ where
 {
     fn from_js_value(js_value: Value) -> Result<Self> {
         iter_fields(js_value)?.collect()
+    }
+}
+
+impl<const N: usize, T: FromJsValue + Default> FromJsValue for [T; N] {
+    fn from_js_value(js_value: Value) -> Result<Self> {
+        let mut iter = iter_values(js_value)?;
+        let mut array: Vec<T> = vec![];
+        for _ in 0..N {
+            array.push(iter.next().ok_or(Error::ExpectLen("array", N))??);
+        }
+        Ok(array.try_into().ok().expect("BUG: array length mismatch"))
     }
 }
 
@@ -154,6 +198,32 @@ impl ToJsValue for () {
     }
 }
 
+macro_rules! impl_to_js_for_tuple {
+    ($($t: ident),*) => {
+        impl<$($t: ToJsValue),*> ToJsValue for ($($t,)*) {
+            fn to_js_value(&self, ctx: *mut c::JSContext) -> Result<Value> {
+                let js_array = Value::new_array(ctx);
+                #[allow(non_snake_case)]
+                let ($($t,)*) = self;
+                $(
+                    js_array.array_push(&$t.to_js_value(ctx)?)?;
+                )*
+                Ok(js_array)
+            }
+        }
+    };
+}
+
+impl_to_js_for_tuple!(A);
+impl_to_js_for_tuple!(A, B);
+impl_to_js_for_tuple!(A, B, C);
+impl_to_js_for_tuple!(A, B, C, D);
+impl_to_js_for_tuple!(A, B, C, D, E);
+impl_to_js_for_tuple!(A, B, C, D, E, F);
+impl_to_js_for_tuple!(A, B, C, D, E, F, G);
+impl_to_js_for_tuple!(A, B, C, D, E, F, G, H);
+impl_to_js_for_tuple!(A, B, C, D, E, F, G, H, I);
+
 impl<T: ToJsValue> ToJsValue for Option<T> {
     fn to_js_value(&self, ctx: *mut c::JSContext) -> Result<Value> {
         match self {
@@ -169,13 +239,25 @@ impl<T: ToJsValue> ToJsValue for Box<T> {
     }
 }
 
-impl<T: ToJsValue> ToJsValue for Vec<T> {
+impl<T: ToJsValue> ToJsValue for [T] {
     fn to_js_value(&self, ctx: *mut c::JSContext) -> Result<Value> {
         let js_array = Value::new_array(ctx);
         for value in self.iter() {
             js_array.array_push(&value.to_js_value(ctx)?)?;
         }
         Ok(js_array)
+    }
+}
+
+impl<T: ToJsValue> ToJsValue for Vec<T> {
+    fn to_js_value(&self, ctx: *mut c::JSContext) -> Result<Value> {
+        self.as_slice().to_js_value(ctx)
+    }
+}
+
+impl<const N: usize, T: ToJsValue> ToJsValue for [T; N] {
+    fn to_js_value(&self, ctx: *mut c::JSContext) -> Result<Value> {
+        self.as_slice().to_js_value(ctx)
     }
 }
 

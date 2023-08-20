@@ -41,9 +41,7 @@ pub enum TypeDefault {
 
 pub struct ContainerAttrs<'a> {
     ident: &'a syn::Ident,
-    rename: Option<String>,
     rename_all: Option<RenameAll>,
-    skip_serializing_optionals: bool,
 }
 
 pub fn get_meta_items(attr: &syn::Attribute) -> syn::Result<Vec<syn::NestedMeta>> {
@@ -95,9 +93,7 @@ impl<'a> ContainerAttrs<'a> {
     pub fn of(input: &'a syn::DeriveInput) -> syn::Result<ContainerAttrs<'a>> {
         let mut rv = ContainerAttrs {
             ident: &input.ident,
-            rename: None,
             rename_all: None,
-            skip_serializing_optionals: false,
         };
 
         for meta_item in input.attrs.iter().flat_map(get_meta_items).flatten() {
@@ -112,24 +108,6 @@ impl<'a> ContainerAttrs<'a> {
                         }
                         rv.rename_all = Some(RenameAll::parse(&nv.lit)?);
                     }
-                    syn::Meta::NameValue(nv) if nv.path.is_ident("rename") => {
-                        if rv.rename.is_some() {
-                            return Err(syn::Error::new_spanned(
-                                meta,
-                                "duplicate rename attribute",
-                            ));
-                        }
-                        rv.rename = Some(get_lit_str("rename", &nv.lit)?);
-                    }
-                    syn::Meta::Path(path) if path.is_ident("skip_serializing_optionals") => {
-                        if rv.skip_serializing_optionals {
-                            return Err(syn::Error::new_spanned(
-                                meta,
-                                "duplicate skip_serializing_optionals attribute",
-                            ));
-                        }
-                        rv.skip_serializing_optionals = true;
-                    }
                     _ => return Err(syn::Error::new_spanned(meta, "unsupported attribute")),
                 }
             } else {
@@ -138,13 +116,6 @@ impl<'a> ContainerAttrs<'a> {
         }
 
         Ok(rv)
-    }
-
-    pub fn container_name(&self) -> String {
-        match self.rename {
-            Some(ref name) => name.clone(),
-            None => self.ident.to_string(),
-        }
     }
 
     pub fn get_field_name(&self, field: &syn::Field) -> String {
@@ -191,59 +162,8 @@ impl<'a> ContainerAttrs<'a> {
         }
     }
 
-    pub fn skip_serializing_optionals(&self) -> bool {
-        self.skip_serializing_optionals
-    }
-
-    pub fn get_variant_name(&self, variant: &syn::Variant) -> String {
-        let name = variant.ident.to_string();
-        if let Some(rename_all) = self.rename_all {
-            match rename_all {
-                RenameAll::PascalCase => name,
-                RenameAll::LowerCase => name.to_ascii_lowercase(),
-                RenameAll::UpperCase => name.to_ascii_uppercase(),
-                RenameAll::CamelCase => name[..1].to_ascii_lowercase() + &name[1..],
-                RenameAll::SnakeCase
-                | RenameAll::ScreamingSnakeCase
-                | RenameAll::KebabCase
-                | RenameAll::ScreamingKebabCase => {
-                    let sep = if matches!(
-                        rename_all,
-                        RenameAll::SnakeCase | RenameAll::ScreamingSnakeCase
-                    ) {
-                        '_'
-                    } else {
-                        '-'
-                    };
-                    let upper = matches!(
-                        rename_all,
-                        RenameAll::ScreamingKebabCase | RenameAll::ScreamingSnakeCase
-                    );
-                    let mut rv = String::new();
-                    for (i, ch) in name.char_indices() {
-                        if i > 0 && ch.is_uppercase() {
-                            rv.push(sep);
-                        }
-                        rv.push(if upper {
-                            ch.to_ascii_uppercase()
-                        } else {
-                            ch.to_ascii_lowercase()
-                        });
-                    }
-                    rv
-                }
-            }
-        } else {
-            name
-        }
-    }
-}
-
-pub fn ensure_no_field_attrs(field: &syn::Field) -> syn::Result<()> {
-    if let Some(first) = field.attrs.iter().flat_map(get_meta_items).flatten().next() {
-        Err(syn::Error::new_spanned(first, "unsupported attribute"))
-    } else {
-        Ok(())
+    pub fn ident(&self) -> &syn::Ident {
+        self.ident
     }
 }
 
@@ -251,7 +171,6 @@ pub struct FieldAttrs<'a> {
     field: &'a syn::Field,
     rename: Option<String>,
     default: Option<TypeDefault>,
-    skip_serializing_if: Option<syn::ExprPath>,
     as_bytes: bool,
 }
 
@@ -262,7 +181,6 @@ impl<'a> FieldAttrs<'a> {
             rename: None,
             default: None,
             as_bytes: false,
-            skip_serializing_if: None,
         };
 
         for meta_item in field.attrs.iter().flat_map(get_meta_items).flatten() {
@@ -297,15 +215,14 @@ impl<'a> FieldAttrs<'a> {
                         }
                         rv.as_bytes = true;
                     }
-                    syn::Meta::NameValue(nv) if nv.path.is_ident("skip_serializing_if") => {
-                        if rv.skip_serializing_if.is_some() {
+                    syn::Meta::Path(path) if path.is_ident("default") => {
+                        if rv.default.is_some() {
                             return Err(syn::Error::new_spanned(
                                 meta,
-                                "duplicate skip_serializing_if attribute",
+                                "duplicate default attribute",
                             ));
                         }
-                        rv.skip_serializing_if =
-                            Some(parse_lit_into_expr_path("skip_serializing_if", &nv.lit)?);
+                        rv.default = Some(TypeDefault::Implicit);
                     }
                     _ => return Err(syn::Error::new_spanned(meta, "unsupported attribute")),
                 }
@@ -328,15 +245,23 @@ impl<'a> FieldAttrs<'a> {
             .unwrap_or_else(|| container_attrs.get_field_name(self.field).into())
     }
 
-    pub fn default(&self) -> Option<&TypeDefault> {
-        self.default.as_ref()
-    }
-
     pub fn as_bytes(&self) -> bool {
         self.as_bytes
     }
 
-    pub fn skip_serializing_if(&self) -> Option<&syn::ExprPath> {
-        self.skip_serializing_if.as_ref()
+    pub fn decoder_fn(&self) -> syn::Path {
+        if self.as_bytes {
+            syn::parse_quote!(decode_as_bytes)
+        } else {
+            syn::parse_quote!(FromJsValue::from_js_value)
+        }
+    }
+
+    pub fn default_fn(&self) -> Option<syn::ExprPath> {
+        match &self.default {
+            Some(TypeDefault::Implicit) => Some(syn::parse_quote!(Default::default)),
+            Some(TypeDefault::Explicit(path)) => Some(path.clone()),
+            None => None,
+        }
     }
 }

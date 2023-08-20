@@ -7,6 +7,7 @@ pub enum Error {
     Custom(String),
     Static(&'static str),
     Expect(&'static str),
+    ExpectLen(&'static str, usize),
     JsException,
 }
 
@@ -17,6 +18,7 @@ impl Display for Error {
             Error::Static(s) => f.write_str(s),
             Error::Expect(s) => write!(f, "expect {}", s),
             Error::JsException => f.write_str("js exception"),
+            Error::ExpectLen(s, l) => write!(f, "expect {} of length {}", s, l),
         }
     }
 }
