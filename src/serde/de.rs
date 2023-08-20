@@ -1,17 +1,11 @@
-use alloc::borrow::{Cow, ToOwned};
 use alloc::string::String;
-use alloc::vec::{self, Vec};
-use concat_idents::concat_idents;
-use core::fmt;
-use core::slice;
-use core::str::FromStr;
-use serde::de::{
-    self, Deserialize, DeserializeSeed, EnumAccess, Expected, IntoDeserializer, MapAccess,
-    SeqAccess, Unexpected, VariantAccess, Visitor,
-};
-use serde::forward_to_deserialize_any;
 
-use super::{c, Error, Iter, PairIter, Value};
+use serde::de::{
+    Deserialize, DeserializeSeed, EnumAccess, Expected, IntoDeserializer, MapAccess, SeqAccess,
+    Unexpected, VariantAccess, Visitor,
+};
+
+use super::{Error, Iter, PairIter, Value};
 
 macro_rules! deserialize_number {
     ($deserialize_method:ident, $visit_method:ident) => {
@@ -65,6 +59,45 @@ impl<'de> serde::Deserializer<'de> for Value {
     where
         V: Visitor<'de>,
     {
+        if self.is_null() || self.is_undefined() {
+            return visitor.visit_unit();
+        }
+        if let Some(value) = self.decode_bool() {
+            return visitor.visit_bool(value);
+        }
+        if let Some(value) = self.decode_string() {
+            return visitor.visit_string(value);
+        }
+        if let Some(value) = self.decode_u8() {
+            return visitor.visit_u8(value);
+        }
+        if let Some(value) = self.decode_u32() {
+            return visitor.visit_u32(value);
+        }
+        if let Some(value) = self.decode_number() {
+            return visitor.visit_u64(value);
+        }
+        if let Some(value) = self.decode_number() {
+            return visitor.visit_u128(value);
+        }
+        if let Some(value) = self.decode_i8() {
+            return visitor.visit_i8(value);
+        }
+        if let Some(value) = self.decode_i32() {
+            return visitor.visit_i32(value);
+        }
+        if let Some(value) = self.decode_i64() {
+            return visitor.visit_i64(value);
+        }
+        if let Some(value) = self.decode_number() {
+            return visitor.visit_i128(value);
+        }
+        if let Some(value) = self.decode_bytes() {
+            return visitor.visit_byte_buf(value);
+        }
+        if self.is_object() {
+            return visit_object(self, visitor);
+        }
         Err(self.invalid_type(&visitor))
     }
 
@@ -466,7 +499,6 @@ impl<'de> MapAccess<'de> for MapDeserializer {
         None
     }
 }
-
 
 impl Value {
     #[cold]
