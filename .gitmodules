@@ -1,3 +1,3 @@
 [submodule "wasi-libc"]
-	path = pink-libc
+	path = qjs-sys/pink-libc
 	url = https://github.com/Phala-Network/pink-libc.git
