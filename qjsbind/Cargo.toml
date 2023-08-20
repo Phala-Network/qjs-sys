@@ -1,0 +1,15 @@
+[package]
+name = "qjsbind"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+qjs-sys = { path = "../qjs-sys" }
+qjsbind-derive = { path = "../qjsbind-derive" }
+
+hex = "0.4"
+tinyvec = "1"
+
+[features]
+default = ["std"]
+std = []
