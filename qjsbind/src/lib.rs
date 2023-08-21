@@ -5,7 +5,9 @@ extern crate alloc;
 
 pub use as_bytes::{decode_as_bytes, encode_as_bytes};
 pub use error::{Error, Result};
+pub use host_function::{call_host_function, Function, HostFunction};
 pub use qjs_sys::c;
+pub use qjsbind_derive::{FromJsValue, ToJsValue};
 pub use traits::{FromJsValue, ToJsValue};
 pub use value::Value;
 
@@ -13,6 +15,7 @@ pub use value::Value;
 mod macros;
 mod as_bytes;
 mod error;
+mod host_function;
 mod impls;
 mod traits;
 mod value;

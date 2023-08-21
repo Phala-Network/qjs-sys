@@ -1,4 +1,4 @@
-use super::{c, Result, Error};
+use super::{c, Error, Result};
 
 pub struct Value {
     value: c::JSValue,
@@ -63,6 +63,10 @@ impl Value {
             ctx: unsafe { c::JS_DupContext(ctx_ref) },
             value,
         }
+    }
+
+    pub fn into_raw(self) -> c::JSValue {
+        unsafe { c::JS_DupValue(self.ctx, self.value) }
     }
 
     pub fn get_property(&self, name: &str) -> Result<Self> {
@@ -329,9 +333,7 @@ impl Value {
             if r != 0 {
                 Ok(())
             } else {
-                Err(Error::Custom(format!(
-                    "Failed to set property: {key}"
-                )))
+                Err(Error::Custom(format!("Failed to set property: {key}")))
             }
         }
     }
