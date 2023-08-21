@@ -34,7 +34,7 @@ pub fn eval(ctx: *mut c::JSContext, script: &JsCode) -> Result<Value, String> {
     }
 
     let mut userdata = IO {
-        output: Ok(Value::undefined(ctx)),
+        output: Ok(Value::undefined()),
     };
 
     let mut callbacks = c::callbacks_t {

@@ -10,9 +10,10 @@ pub use host_function::{call_host_function, Function, HostFunction};
 pub use qjs_sys as sys;
 pub use qjs_sys::c;
 pub use qjsbind_derive::{FromJsValue, ToJsValue};
-pub use traits::{FromJsValue, ToJsValue};
+pub use traits::{FromJsValue, ToJsValue, ArgList};
 pub use utils::{compile, ctx_get_exception_str, ctx_to_str, ctx_to_string, js_throw_type_error};
 pub use value::Value;
+pub use impls::AsBytes;
 
 #[macro_use]
 mod macros;

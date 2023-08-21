@@ -5,6 +5,8 @@ use alloc::{
 
 use super::{c, Error, Result};
 
+pub type Ptr<T> = Option<core::ptr::NonNull<T>>;
+
 #[repr(transparent)]
 pub struct RawValue(pub c::JSValue);
 impl Default for RawValue {
@@ -15,7 +17,13 @@ impl Default for RawValue {
 
 pub struct Value {
     value: c::JSValue,
-    ctx: *mut c::JSContext,
+    ctx: Ptr<c::JSContext>,
+}
+
+impl Default for Value {
+    fn default() -> Self {
+        Self::undefined()
+    }
 }
 
 pub struct Iter(Value);
@@ -62,16 +70,28 @@ impl From<Value> for PairIter {
 
 impl Drop for Value {
     fn drop(&mut self) {
+        let Ok(ctx) = self.context() else {
+            return;
+        };
         unsafe {
-            c::JS_FreeValue(self.ctx, self.value);
-            c::JS_FreeContext(self.ctx);
+            c::JS_FreeValue(ctx, self.value);
+            c::JS_FreeContext(ctx);
         }
     }
 }
 
 impl Clone for Value {
     fn clone(&self) -> Self {
-        Self::new_cloned(self.ctx, self.value)
+        match self.context() {
+            Ok(ctx) => Self {
+                ctx: core::ptr::NonNull::new(unsafe { c::JS_DupContext(ctx) }),
+                value: unsafe { c::JS_DupValue(ctx, self.value) },
+            },
+            Err(_) => Self {
+                ctx: self.ctx,
+                value: self.value,
+            },
+        }
     }
 }
 
@@ -81,25 +101,30 @@ impl Value {
     }
 
     pub fn new_moved(ctx_ref: *mut c::JSContext, value: c::JSValue) -> Self {
-        Self {
-            ctx: unsafe { c::JS_DupContext(ctx_ref) },
-            value,
-        }
+        let ctx = core::ptr::NonNull::new(ctx_ref);
+        if let Some(ctx) = ctx {
+            unsafe { c::JS_DupContext(ctx.as_ptr()) };
+        };
+        Self { ctx, value }
     }
 
     pub fn into_raw(self) -> c::JSValue {
-        unsafe { c::JS_DupValue(self.ctx, self.value) }
+        match self.context() {
+            Ok(ctx) => unsafe { c::JS_DupValue(ctx, self.value) },
+            Err(_) => self.value,
+        }
     }
 
-    pub fn context(&self) -> *mut c::JSContext {
-        self.ctx
+    pub fn context(&self) -> Result<*mut c::JSContext> {
+        Ok(self.ctx.ok_or(Error::Static("context is null"))?.as_ptr())
     }
 
     pub fn get_property(&self, name: &str) -> Result<Self> {
+        let ctx = self.context()?;
         let mut name_buf: tinyvec::TinyVec<[u8; 32]> = name.bytes().collect();
         name_buf.push(0);
-        let value = unsafe { c::JS_GetPropertyStr(self.ctx, self.value, name_buf.as_ptr() as _) };
-        let value = Self::new_moved(self.ctx, value);
+        let value = unsafe { c::JS_GetPropertyStr(ctx, self.value, name_buf.as_ptr() as _) };
+        let value = Self::new_moved(ctx, value);
         if value.is_exception() {
             Err(Error::JsException)
         } else {
@@ -144,17 +169,18 @@ impl Value {
     }
 
     pub fn call(&self, this: &Value, args: &[Value]) -> Result<Self> {
+        let ctx = self.context()?;
         let mut args: tinyvec::TinyVec<[_; 16]> = args.iter().map(|v| RawValue(v.value)).collect();
         let value = unsafe {
             c::JS_Call(
-                self.ctx,
+                ctx,
                 self.value,
                 this.value,
                 args.len() as _,
                 args.as_mut_ptr() as _,
             )
         };
-        let ret = Self::new_moved(self.ctx, value);
+        let ret = Self::new_moved(ctx, value);
         if ret.is_exception() {
             Err(Error::JsException)
         } else {
@@ -172,16 +198,16 @@ impl Value {
 
     pub fn entries(&self) -> Result<PairIter> {
         #[allow(non_snake_case)]
-        let Object = global(self.ctx).get_property("Object")?;
+        let Object = global(self.context()?).get_property("Object")?;
         let entries_fn = Object.get_property("entries")?;
-        let null = Value::null(self.ctx);
+        let null = Value::null();
         let arr = entries_fn.call(&null, &[self.clone()])?;
         arr.call_method_if_exists("values", &[]).map(Into::into)
     }
 
     fn to_string_utf8(&self) -> Option<Utf8Repr> {
         let mut len: c::size_t = 0;
-        let ptr = unsafe { c::JS_ToCStringLen(self.ctx, &mut len, self.value) };
+        let ptr = unsafe { c::JS_ToCStringLen(self.context().ok()?, &mut len, self.value) };
         if ptr.is_null() {
             return None;
         }
@@ -201,8 +227,11 @@ struct Utf8Repr<'a> {
 
 impl Drop for Utf8Repr<'_> {
     fn drop(&mut self) {
+        let Ok(ctx) = self.value.context() else {
+            return;
+        };
         unsafe {
-            c::JS_FreeCString(self.value.ctx, self.ptr as _);
+            c::JS_FreeCString(ctx, self.ptr as _);
         }
     }
 }
@@ -244,16 +273,28 @@ impl Value {
         unsafe { c::JS_IsObject(self.value) != 0 }
     }
     pub fn is_function(&self) -> bool {
-        unsafe { c::JS_IsFunction(self.ctx, self.value) != 0 }
+        let Ok(ctx) = self.context() else {
+            return false;
+        };
+        unsafe { c::JS_IsFunction(ctx, self.value) != 0 }
     }
     pub fn is_constructor(&self) -> bool {
-        unsafe { c::JS_IsConstructor(self.ctx, self.value) != 0 }
+        let Ok(ctx) = self.context() else {
+            return false;
+        };
+        unsafe { c::JS_IsConstructor(ctx, self.value) != 0 }
     }
     pub fn is_array(&self) -> bool {
-        unsafe { c::JS_IsArray(self.ctx, self.value) != 0 }
+        let Ok(ctx) = self.context() else {
+            return false;
+        };
+        unsafe { c::JS_IsArray(ctx, self.value) != 0 }
     }
     pub fn is_error(&self) -> bool {
-        unsafe { c::JS_IsError(self.ctx, self.value) != 0 }
+        let Ok(ctx) = self.context() else {
+            return false;
+        };
+        unsafe { c::JS_IsError(ctx, self.value) != 0 }
     }
     pub fn is_uint8_array(&self) -> bool {
         unsafe { c::JS_IsUint8Array(self.value) != 0 }
@@ -261,11 +302,17 @@ impl Value {
 }
 
 impl Value {
-    pub fn undefined(ctx: *mut c::JSContext) -> Self {
-        Self::new_moved(ctx, c::JS_UNDEFINED)
+    pub const fn undefined() -> Self {
+        Self {
+            ctx: None,
+            value: c::JS_UNDEFINED,
+        }
     }
-    pub fn null(ctx: *mut c::JSContext) -> Self {
-        Self::new_moved(ctx, c::JS_NULL)
+    pub const fn null() -> Self {
+        Self {
+            ctx: None,
+            value: c::JS_NULL,
+        }
     }
     pub fn from_bool(ctx: *mut c::JSContext, val: bool) -> Self {
         unsafe { Self::new_moved(ctx, c::JS_NewBool(ctx, val as _)) }
@@ -340,15 +387,11 @@ impl Value {
 
 impl Value {
     pub fn set_property(&self, key: &str, value: &Value) -> Result<(), Error> {
+        let ctx = self.context()?;
         unsafe {
-            let key = c::JS_NewAtomLen(self.ctx, key.as_ptr() as _, key.len() as _);
-            let r = c::JS_SetProperty(
-                self.ctx,
-                self.value,
-                key,
-                c::JS_DupValue(self.ctx, value.value),
-            );
-            c::JS_FreeAtom(self.ctx, key);
+            let key = c::JS_NewAtomLen(ctx, key.as_ptr() as _, key.len() as _);
+            let r = c::JS_SetProperty(ctx, self.value, key, c::JS_DupValue(ctx, value.value));
+            c::JS_FreeAtom(ctx, key);
             if r != 0 {
                 Ok(())
             } else {
@@ -367,7 +410,7 @@ impl Value {
 impl Value {
     pub fn decode_bool(&self) -> Result<bool> {
         if self.is_bool() {
-            Ok(unsafe { c::JS_ToBool(self.ctx, self.value) != 0 })
+            Ok(unsafe { c::JS_ToBool(self.context()?, self.value) != 0 })
         } else {
             Err(Error::Expect("bool"))
         }
@@ -405,7 +448,7 @@ impl Value {
         if self.is_number() || self.is_big_int() {
             let mut v = 0;
             unsafe {
-                let r = c::JS_ToInt64Ext(self.ctx, &mut v, self.value);
+                let r = c::JS_ToInt64Ext(self.context()?, &mut v, self.value);
                 if r == 0 {
                     return Ok(v);
                 }
@@ -439,9 +482,10 @@ impl Value {
     pub fn decode_bytes(&self) -> Result<Vec<u8>> {
         if self.is_uint8_array() || self.is_uint8_array() {
             let mut len: c::size_t = 0;
+            let ctx = self.context()?;
             let ptr = unsafe {
                 if self.is_uint8_array() {
-                    c::JS_GetArrayBuffer(self.ctx, &mut len, self.value)
+                    c::JS_GetArrayBuffer(ctx, &mut len, self.value)
                 } else {
                     c::JS_Uint8ArrayGetBuffer(self.value, &mut len)
                 }

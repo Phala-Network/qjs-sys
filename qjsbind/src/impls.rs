@@ -4,8 +4,9 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use tinyvec::TinyVec;
 
-use super::{c, Error, FromJsValue, Result, ToJsValue, Value};
+use super::{c, ArgList, Error, FromJsValue, Result, ToJsValue, Value};
 
 impl FromJsValue for Value {
     fn from_js_value(js_value: Value) -> Result<Self> {
@@ -193,8 +194,8 @@ impl ToJsValue for String {
 }
 
 impl ToJsValue for () {
-    fn to_js_value(&self, ctx: *mut c::JSContext) -> Result<Value> {
-        Ok(Value::null(ctx))
+    fn to_js_value(&self, _ctx: *mut c::JSContext) -> Result<Value> {
+        Ok(Value::null())
     }
 }
 
@@ -228,7 +229,7 @@ impl<T: ToJsValue> ToJsValue for Option<T> {
     fn to_js_value(&self, ctx: *mut c::JSContext) -> Result<Value> {
         match self {
             Some(value) => value.to_js_value(ctx),
-            None => Ok(Value::null(ctx)),
+            None => Ok(Value::null()),
         }
     }
 }
@@ -270,3 +271,58 @@ impl<V: ToJsValue> ToJsValue for BTreeMap<String, V> {
         Ok(js_object)
     }
 }
+
+pub struct AsBytes<T>(pub T);
+
+impl<T: AsRef<[u8]>> ToJsValue for AsBytes<T> {
+    fn to_js_value(&self, ctx: *mut c::JSContext) -> Result<Value> {
+        self.0.as_ref().to_js_value(ctx)
+    }
+}
+
+impl<T> FromJsValue for AsBytes<T>
+where
+    Vec<u8>: Into<T>,
+{
+    fn from_js_value(value: Value) -> Result<Self> {
+        let bytes = Vec::<u8>::from_js_value(value)?;
+        Ok(AsBytes(bytes.into()))
+    }
+}
+
+macro_rules! impl_arglist_for {
+    (($($t: ident),*)) => {
+        impl<$($t: FromJsValue + ToJsValue),*> ArgList for ($($t,)*) {
+            fn from_args(argv: &[Value]) -> Result<Self> {
+                #[allow(unused_mut)]
+                #[allow(unused_variables)]
+                let mut iter = argv.iter();
+                Ok(($(
+                    $t::from_js_value(iter.next().cloned().unwrap_or_default())?,
+                )*))
+            }
+            fn to_args(&self, ctx: *mut c::JSContext) -> Result<TinyVec<[Value; 8]>> {
+                #[allow(unused_mut)]
+                let mut args = TinyVec::new();
+                #[allow(non_snake_case)]
+                let ($($t,)*) = self;
+                #[allow(unused_variables)]
+                let ctx = ctx;
+                $(
+                    args.push($t.to_js_value(ctx)?);
+                )*
+                Ok(args)
+            }
+        }
+    };
+}
+
+impl_arglist_for!(());
+impl_arglist_for!((A));
+impl_arglist_for!((A, B));
+impl_arglist_for!((A, B, C));
+impl_arglist_for!((A, B, C, D));
+impl_arglist_for!((A, B, C, D, E));
+impl_arglist_for!((A, B, C, D, E, F));
+impl_arglist_for!((A, B, C, D, E, F, G));
+impl_arglist_for!((A, B, C, D, E, F, G, H));

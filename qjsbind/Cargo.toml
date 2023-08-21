@@ -15,3 +15,4 @@ scopeguard = "1"
 [features]
 default = ["std"]
 std = []
+with-polyfills = ["qjs-sys/with-polyfills"]

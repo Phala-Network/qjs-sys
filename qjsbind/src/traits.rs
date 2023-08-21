@@ -8,3 +8,10 @@ pub trait FromJsValue {
 pub trait ToJsValue {
     fn to_js_value(&self, ctx: *mut c::JSContext) -> Result<Value>;
 }
+
+pub trait ArgList {
+    fn from_args(argv: &[Value]) -> Result<Self>
+    where
+        Self: Sized;
+    fn to_args(&self, ctx: *mut c::JSContext) -> Result<tinyvec::TinyVec<[Value; 8]>>;
+}
