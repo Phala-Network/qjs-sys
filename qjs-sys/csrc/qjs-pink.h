@@ -4,14 +4,14 @@
 #include "quickjs.h"
 #include "ext/quickjs-ext.h"
 
-typedef void (*output_str_t)(void *userdata, const char *output);
-typedef void (*output_bytes_t)(void *userdata, const char *output, int output_len);
+typedef void (*output_t)(JSContext *ctx, void *userdata, JSValueConst output);
+typedef void (*output_error_t)(JSContext *ctx, void *userdata, const char* err);
 typedef int (*input_handler_t)(void *userdata, int i, const char *input, int input_len);
 typedef int (*read_args_t)(void *userdata, void *engine_userdata, input_handler_t handler);
 typedef struct {
     void *userdata;
-    output_str_t output_str;
-    output_bytes_t output_bytes;
+    output_t output;
+    output_error_t output_err;
     read_args_t read_args;
 } callbacks_t;
 typedef struct {
@@ -20,7 +20,6 @@ typedef struct {
     int is_bytecode;
 } code_t;
 
-int js_eval(code_t *codes, size_t n_codes, callbacks_t *callbacks);
 void js_pink_env_init(JSContext *ctx);
 int js_eval_code(JSContext *ctx, const code_t* code, callbacks_t* callbacks);
 void js_std_dump_error(JSContext *ctx);

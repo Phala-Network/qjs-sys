@@ -1,5 +1,4 @@
-use crate::{c, FromJsValue, ToJsValue, Value};
-use qjs_sys as qjs;
+use crate::{c, utils::js_throw_type_error, FromJsValue, ToJsValue, Value};
 
 pub trait HostFunction {
     fn call(&self, ctx: *mut c::JSContext, args: &[c::JSValue]) -> c::JSValue;
@@ -40,13 +39,13 @@ where
             Ok(v) => v.into_raw(),
             Err(err) => {
                 let msg = format!("failed to convert to JSValue: {err:?}");
-                qjs::throw_type_error(ctx, &msg);
+                js_throw_type_error(ctx, &msg);
                 c::JS_EXCEPTION
             }
         },
         Err(err) => {
             let msg = format!("{err:?}");
-            qjs::throw_type_error(ctx, &msg);
+            js_throw_type_error(ctx, &msg);
             c::JS_EXCEPTION
         }
     }
@@ -87,7 +86,7 @@ macro_rules! impl_host_fn {
                             core::any::type_name::<Srv>(),
                             e
                         );
-                        qjs::throw_type_error(ctx, &msg);
+                        js_throw_type_error(ctx, &msg);
                         return c::JS_EXCEPTION;
                     }
                 };
@@ -101,7 +100,7 @@ macro_rules! impl_host_fn {
                         Ok(arg) => arg,
                         Err(err) => {
                             let msg = format!("failed to convert JSValue to {}: {:?}", core::any::type_name::<$arg>(), err);
-                            qjs::throw_type_error(ctx, &msg);
+                            js_throw_type_error(ctx, &msg);
                             return c::JS_EXCEPTION;
                         }
                     };

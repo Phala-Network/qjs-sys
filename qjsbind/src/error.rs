@@ -1,3 +1,4 @@
+use alloc::string::String;
 use core::fmt::Display;
 
 pub type Result<T, E = Error> = core::result::Result<T, E>;

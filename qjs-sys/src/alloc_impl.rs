@@ -1,11 +1,15 @@
 use super::c;
 
+use alloc::{ffi::CString, vec::Vec};
 use core::{
     ffi::c_int,
     mem::{forget, size_of},
 };
 
-use alloc::vec::Vec;
+pub fn throw_type_error(ctx: *mut c::JSContext, msg: &str) -> c::JSValue {
+    let cmsg = CString::new(msg).unwrap_or_default();
+    unsafe { c::JS_ThrowTypeError(ctx, cmsg.as_ptr()) }
+}
 
 #[no_mangle]
 extern "C" fn __pink_malloc(size: usize) -> *mut ::core::ffi::c_void {
@@ -66,11 +70,7 @@ fn recover(ptr: *mut ::core::ffi::c_void) -> Option<Vec<usize>> {
 }
 
 extern "Rust" {
-    fn __pink_host_call(
-        id: u32,
-        ctx: *mut c::JSContext,
-        args: &[c::JSValueConst],
-    ) -> c::JSValue;
+    fn __pink_host_call(id: u32, ctx: *mut c::JSContext, args: &[c::JSValueConst]) -> c::JSValue;
 }
 
 #[no_mangle]
@@ -81,13 +81,13 @@ extern "C" fn __host_call(
     argv: *const c::JSValueConst,
 ) -> c::JSValue {
     if argc < 1 {
-        crate::throw_type_error(ctx, "host call without id");
+        throw_type_error(ctx, "host call without id");
         return c::JS_EXCEPTION;
     }
     let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
     let mut id = 0;
     if unsafe { c::JS_ToUint32(ctx, &mut id, args[0]) } != 0 {
-        crate::throw_type_error(ctx, "invalid host call id");
+        throw_type_error(ctx, "invalid host call id");
         return c::JS_EXCEPTION;
     }
 
@@ -96,7 +96,7 @@ extern "C" fn __host_call(
 
 #[cfg(feature = "with-polyfills")]
 mod polyfills {
-    use core::ffi::{c_uchar, c_int};
+    use core::ffi::{c_int, c_uchar};
 
     use super::c;
 

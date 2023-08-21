@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use super::{c, Result, Value};
 
 pub fn encode_as_bytes<T: AsRef<[u8]>>(ctx: *mut c::JSContext, data: &T) -> Result<Value> {

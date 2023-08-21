@@ -1,4 +1,17 @@
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
+
 use super::{c, Error, Result};
+
+#[repr(transparent)]
+pub struct RawValue(pub c::JSValue);
+impl Default for RawValue {
+    fn default() -> Self {
+        Self(c::JS_UNDEFINED)
+    }
+}
 
 pub struct Value {
     value: c::JSValue,
@@ -18,6 +31,15 @@ impl Iterator for Iter {
 impl From<Value> for Iter {
     fn from(value: Value) -> Self {
         Self(value)
+    }
+}
+
+impl core::fmt::Display for Value {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self.to_string_utf8() {
+            Some(s) => s.as_str().fmt(f),
+            None => write!(f, "<JS value>"),
+        }
     }
 }
 
@@ -69,6 +91,10 @@ impl Value {
         unsafe { c::JS_DupValue(self.ctx, self.value) }
     }
 
+    pub fn context(&self) -> *mut c::JSContext {
+        self.ctx
+    }
+
     pub fn get_property(&self, name: &str) -> Result<Self> {
         let mut name_buf: tinyvec::TinyVec<[u8; 32]> = name.bytes().collect();
         name_buf.push(0);
@@ -118,14 +144,7 @@ impl Value {
     }
 
     pub fn call(&self, this: &Value, args: &[Value]) -> Result<Self> {
-        #[repr(transparent)]
-        struct V(c::JSValue);
-        impl Default for V {
-            fn default() -> Self {
-                Self(c::JS_UNDEFINED)
-            }
-        }
-        let mut args: tinyvec::TinyVec<[_; 16]> = args.iter().map(|v| V(v.value)).collect();
+        let mut args: tinyvec::TinyVec<[_; 16]> = args.iter().map(|v| RawValue(v.value)).collect();
         let value = unsafe {
             c::JS_Call(
                 self.ctx,

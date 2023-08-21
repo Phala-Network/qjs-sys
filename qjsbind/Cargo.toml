@@ -8,7 +8,9 @@ qjs-sys = { path = "../qjs-sys" }
 qjsbind-derive = { path = "../qjsbind-derive" }
 
 hex = "0.4"
+cstr = "0.2"
 tinyvec = "1"
+scopeguard = "1"
 
 [features]
 default = ["std"]
