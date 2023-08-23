@@ -40,6 +40,9 @@ pub trait ToArgs {
     fn to_raw_args(&self, ctx: *mut c::JSContext) -> Result<OwnedRawArgs> {
         let args = self.to_args(ctx)?;
         let raw_args = args.iter().map(|v| RawValue(*v.raw_value())).collect();
-        Ok(OwnedRawArgs { _args: args, raw_args })
+        Ok(OwnedRawArgs {
+            _args: args,
+            raw_args,
+        })
     }
 }
