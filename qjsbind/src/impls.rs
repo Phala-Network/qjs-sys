@@ -276,7 +276,7 @@ pub struct AsBytes<T>(pub T);
 
 impl<T: AsRef<[u8]>> ToJsValue for AsBytes<T> {
     fn to_js_value(&self, ctx: *mut c::JSContext) -> Result<Value> {
-        self.0.as_ref().to_js_value(ctx)
+        Ok(Value::from_bytes(ctx, self.0.as_ref()))
     }
 }
 
@@ -285,8 +285,7 @@ where
     Vec<u8>: Into<T>,
 {
     fn from_js_value(value: Value) -> Result<Self> {
-        let bytes = Vec::<u8>::from_js_value(value)?;
-        Ok(AsBytes(bytes.into()))
+        Ok(AsBytes(value.decode_bytes()?.into()))
     }
 }
 
