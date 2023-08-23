@@ -6,14 +6,14 @@ extern crate alloc;
 pub use as_bytes::{decode_as_bytes, encode_as_bytes};
 pub use error::{Error, Result};
 pub use eval::{eval, JsCode};
-pub use host_function::{call_host_function, Function, HostFunction, host_fn_stub};
+pub use host_function::{call_host_function, host_fn_stub, Function, HostFunction};
 pub use impls::AsBytes;
 pub use qjs_sys as sys;
 pub use qjs_sys::c;
-pub use qjsbind_derive::{FromJsValue, ToJsValue, host_call};
-pub use traits::{FromArgs, FromJsValue, ToArgs, ToJsValue};
+pub use qjsbind_derive::{host_call, FromJsValue, ToJsValue};
+pub use traits::{FromArgs, FromJsValue, OwnedRawArgs, ToArgs, ToJsValue};
 pub use utils::{compile, ctx_get_exception_str, ctx_to_str, ctx_to_string, js_throw_type_error};
-pub use value::{Value, get_global};
+pub use value::{get_global, Value};
 
 #[macro_use]
 mod macros;
