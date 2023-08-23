@@ -1,49 +1,52 @@
+use core::ptr::NonNull;
+
 use alloc::ffi::CString;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use crate::c;
 
-pub fn js_throw_type_error(ctx: *mut c::JSContext, msg: &str) -> c::JSValue {
+pub fn js_throw_type_error(ctx: NonNull<c::JSContext>, msg: &str) -> c::JSValue {
     let cmsg = CString::new(msg).unwrap_or_default();
-    unsafe { c::JS_ThrowTypeError(ctx, cmsg.as_ptr()) }
+    unsafe { c::JS_ThrowTypeError(ctx.as_ptr(), cmsg.as_ptr()) }
 }
 
-pub fn ctx_get_exception_str(ctx: *mut c::JSContext) -> String {
+pub fn ctx_get_exception_str(ctx: NonNull<c::JSContext>) -> String {
+    let ctx_ptr = ctx.as_ptr();
     unsafe {
-        let e = c::JS_GetException(ctx);
+        let e = c::JS_GetException(ctx_ptr);
         let mut exc_str = ctx_to_string(ctx, e);
-        let stack = c::JS_GetPropertyStr(ctx, e, cstr::cstr!("stack").as_ptr() as _);
+        let stack = c::JS_GetPropertyStr(ctx_ptr, e, cstr::cstr!("stack").as_ptr() as _);
         if !c::is_undefined(stack) {
             exc_str.push_str("\n[stack]\n");
             exc_str.push_str(&ctx_to_string(ctx, stack));
         }
-        c::JS_FreeValue(ctx, e);
-        c::JS_FreeValue(ctx, stack);
+        c::JS_FreeValue(ctx_ptr, e);
+        c::JS_FreeValue(ctx_ptr, stack);
         exc_str
     }
 }
 
 pub fn ctx_to_str<T>(
-    ctx: *mut c::JSContext,
+    ctx: NonNull<c::JSContext>,
     value: c::JSValueConst,
     cb: impl FnOnce(&str) -> T,
 ) -> T {
     unsafe {
         let mut len: c::size_t = 0;
-        let ptr = c::JS_ToCStringLen(ctx, &mut len, value);
+        let ptr = c::JS_ToCStringLen(ctx.as_ptr(), &mut len, value);
         if ptr.is_null() {
             return cb("");
         }
         let bytes: &[u8] = core::slice::from_raw_parts(ptr as _, len as _);
         let s = core::str::from_utf8_unchecked(bytes);
         let rv = cb(s);
-        c::JS_FreeCString(ctx, ptr as _);
+        c::JS_FreeCString(ctx.as_ptr(), ptr as _);
         rv
     }
 }
 
-pub fn ctx_to_string(ctx: *mut c::JSContext, value: c::JSValueConst) -> String {
+pub fn ctx_to_string(ctx: NonNull<c::JSContext>, value: c::JSValueConst) -> String {
     ctx_to_str(ctx, value, |s| s.to_string())
 }
 

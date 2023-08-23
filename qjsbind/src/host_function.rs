@@ -1,9 +1,10 @@
-use crate::{c, utils::js_throw_type_error, FromJsValue, ToJsValue, Value};
+use crate::{c, traits::ToNonNull, utils::js_throw_type_error, FromJsValue, ToJsValue, Value};
+use core::ptr::NonNull;
 
 pub trait HostFunction {
     fn call(
         &self,
-        ctx: *mut c::JSContext,
+        ctx: NonNull<c::JSContext>,
         this_val: c::JSValueConst,
         args: &[c::JSValue],
     ) -> c::JSValue;
@@ -25,7 +26,12 @@ where
     Function<Ctx, Args, Ret, F>: HostFunction,
 {
     let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
-    Function::new(func).call(ctx, this_val, args)
+    Function::new(func).call(
+        ctx.to_non_null()
+            .expect("calling host function with null context"),
+        this_val,
+        args,
+    )
 }
 
 impl<Ctx, Args, Ret, F> Function<Ctx, Args, Ret, F> {
@@ -46,7 +52,7 @@ impl<Ctx, Args, Ret, F: Default> Default for Function<Ctx, Args, Ret, F> {
     }
 }
 
-fn convert_result<V, E>(ctx: *mut c::JSContext, recult: Result<V, E>) -> c::JSValue
+fn convert_result<V, E>(ctx: NonNull<c::JSContext>, recult: Result<V, E>) -> c::JSValue
 where
     V: ToJsValue,
     E: core::fmt::Debug,
@@ -73,12 +79,12 @@ macro_rules! impl_host_fn {
         impl<HF, Srv, $($arg,)* Ret> HostFunction for Function<Srv, ($($arg,)*), Ret, HF>
         where
             HF: Fn(Srv, Value, $($arg,)*) -> Ret,
-            Srv: TryFrom<*mut c::JSContext>,
+            Srv: TryFrom<NonNull<c::JSContext>>,
             Srv::Error: core::fmt::Debug,
             $($arg: FromJsValue,)*
             Ret: ToJsValue,
         {
-            fn call(&self, ctx: *mut c::JSContext, this_val: c::JSValueConst, args: &[c::JSValue]) -> c::JSValue {
+            fn call(&self, ctx: NonNull<c::JSContext>, this_val: c::JSValueConst, args: &[c::JSValue]) -> c::JSValue {
                 #[allow(non_snake_case)]
                 Function::new(|srv: Srv, this_value, $($arg: $arg,)*| -> Result<Ret, ()> {
                     Ok((self.f)(srv, this_value, $($arg,)*))
@@ -88,13 +94,13 @@ macro_rules! impl_host_fn {
         impl<HF, Srv, $($arg,)* Ret, Err> HostFunction for Function<Srv, ($($arg,)*), Result<Ret, Err>, HF>
         where
             HF: Fn(Srv, Value, $($arg,)*) -> Result<Ret, Err>,
-            Srv: TryFrom<*mut c::JSContext>,
+            Srv: TryFrom<NonNull<c::JSContext>>,
             Srv::Error: core::fmt::Debug,
             Err: core::fmt::Debug,
             $($arg: FromJsValue,)*
             Ret: ToJsValue,
         {
-            fn call(&self, ctx: *mut c::JSContext, this_val: c::JSValueConst, args: &[c::JSValue]) -> c::JSValue {
+            fn call(&self, ctx: NonNull<c::JSContext>, this_val: c::JSValueConst, args: &[c::JSValue]) -> c::JSValue {
                 let this_value = Value::new_cloned(ctx, this_val);
                 let srv = match Srv::try_from(ctx) {
                     Ok(ctx) => ctx,
@@ -147,11 +153,15 @@ pub extern "C" fn host_fn_stub<Src, F>(
     argv: *const c::JSValueConst,
 ) -> c::JSValue
 where
-    Src: TryFrom<*mut c::JSContext>,
+    Src: TryFrom<NonNull<c::JSContext>>,
     Src::Error: core::fmt::Debug,
     F: HostFunction + Default,
 {
     let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
     let func = F::default();
-    func.call(ctx, this_val, args)
+    func.call(
+        ctx.to_non_null().expect("host call with null context"),
+        this_val,
+        args,
+    )
 }

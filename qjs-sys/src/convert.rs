@@ -27,10 +27,10 @@ pub enum JsValue {
 }
 
 pub trait DecodeFromJSValue {
-    fn decode(ctx: *mut c::JSContext, v: c::JSValue) -> Result<Self, &'static str>
+    fn decode(ctx: NonNull<c::JSContext>, v: c::JSValue) -> Result<Self, &'static str>
     where
         Self: Sized;
-    fn decode_into(ctx: *mut c::JSContext, v: c::JSValue) -> Result<Self, &'static str>
+    fn decode_into(ctx: NonNull<c::JSContext>, v: c::JSValue) -> Result<Self, &'static str>
     where
         Self: Sized,
     {
@@ -42,7 +42,7 @@ pub trait DecodeFromJSValue {
 }
 
 pub fn js_object_get_field<T: DecodeFromJSValue>(
-    ctx: *mut c::JSContext,
+    ctx: NonNull<c::JSContext>,
     v: c::JSValue,
     field: &str,
 ) -> Result<T, String> {
@@ -51,7 +51,7 @@ pub fn js_object_get_field<T: DecodeFromJSValue>(
 }
 
 pub fn js_object_get_option_field<T: DecodeFromJSValue>(
-    ctx: *mut c::JSContext,
+    ctx: NonNull<c::JSContext>,
     v: c::JSValue,
     field: &str,
 ) -> Result<Option<T>, String> {
@@ -67,7 +67,7 @@ pub fn js_object_get_option_field<T: DecodeFromJSValue>(
 }
 
 pub fn js_array_for_each<F: FnMut(c::JSValue) -> Result<(), String>>(
-    ctx: *mut c::JSContext,
+    ctx: NonNull<c::JSContext>,
     v: c::JSValue,
     mut f: F,
 ) -> Result<(), String> {
@@ -85,7 +85,7 @@ pub fn js_array_for_each<F: FnMut(c::JSValue) -> Result<(), String>>(
 }
 
 pub fn js_object_get_field_or_default<T: DecodeFromJSValue + Default>(
-    ctx: *mut c::JSContext,
+    ctx: NonNull<c::JSContext>,
     v: c::JSValue,
     field: &str,
 ) -> Result<T, String> {

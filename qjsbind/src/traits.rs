@@ -1,3 +1,5 @@
+use core::ptr::NonNull;
+
 use super::{c, Result, Value};
 use crate::value::RawValue;
 use tinyvec::TinyVec;
@@ -25,7 +27,7 @@ pub trait FromJsValue {
         Self: Sized;
 }
 pub trait ToJsValue {
-    fn to_js_value(&self, ctx: *mut c::JSContext) -> Result<Value>;
+    fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value>;
 }
 
 pub trait FromArgs {
@@ -35,14 +37,26 @@ pub trait FromArgs {
 }
 
 pub trait ToArgs {
-    fn to_args(&self, ctx: *mut c::JSContext) -> Result<TinyVec<[Value; 8]>>;
+    fn to_args(&self, ctx: NonNull<c::JSContext>) -> Result<TinyVec<[Value; 8]>>;
 
-    fn to_raw_args(&self, ctx: *mut c::JSContext) -> Result<OwnedRawArgs> {
+    fn to_raw_args(&self, ctx: NonNull<c::JSContext>) -> Result<OwnedRawArgs> {
         let args = self.to_args(ctx)?;
         let raw_args = args.iter().map(|v| RawValue(*v.raw_value())).collect();
         Ok(OwnedRawArgs {
             _args: args,
             raw_args,
         })
+    }
+}
+
+pub trait ToNonNull {
+    type Target;
+    fn to_non_null(self) -> Option<core::ptr::NonNull<Self::Target>>;
+}
+
+impl<T> ToNonNull for *mut T {
+    type Target = T;
+    fn to_non_null(self) -> Option<core::ptr::NonNull<Self::Target>> {
+        core::ptr::NonNull::new(self)
     }
 }

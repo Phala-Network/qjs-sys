@@ -1,7 +1,8 @@
-use core::ffi::CStr;
+use core::{ffi::CStr, ptr::NonNull};
 
 use alloc::string::String;
 
+use crate::traits::ToNonNull;
 use crate::{c, Value};
 
 pub enum JsCode<'a> {
@@ -9,7 +10,7 @@ pub enum JsCode<'a> {
     Bytecode(&'a [u8]),
 }
 
-pub fn eval(ctx: *mut c::JSContext, script: &JsCode) -> Result<Value, String> {
+pub fn eval(ctx: NonNull<c::JSContext>, script: &JsCode) -> Result<Value, String> {
     struct IO {
         output: Result<Value, String>,
     }
@@ -20,7 +21,10 @@ pub fn eval(ctx: *mut c::JSContext, script: &JsCode) -> Result<Value, String> {
         output: c::JSValueConst,
     ) {
         let io = unsafe { &mut *(userdata as *mut IO) };
-        io.output = Ok(Value::new_cloned(ctx, output));
+        io.output = Ok(Value::new_cloned(
+            ctx.to_non_null().expect("output with null contect"),
+            output,
+        ));
     }
 
     unsafe extern "C" fn output_err(
@@ -57,7 +61,7 @@ pub fn eval(ctx: *mut c::JSContext, script: &JsCode) -> Result<Value, String> {
         },
     };
 
-    let ret = unsafe { c::js_eval_code(ctx, &code, &mut callbacks) };
+    let ret = unsafe { c::js_eval_code(ctx.as_ptr(), &code, &mut callbacks) };
     if ret == 0 {
         userdata.output
     } else {

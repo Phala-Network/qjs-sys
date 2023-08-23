@@ -1,8 +1,10 @@
+use core::ptr::NonNull;
+
 use alloc::vec::Vec;
 
 use super::{c, Result, Value};
 
-pub fn encode_as_bytes<T: AsRef<[u8]>>(ctx: *mut c::JSContext, data: &T) -> Result<Value> {
+pub fn encode_as_bytes<T: AsRef<[u8]>>(ctx: NonNull<c::JSContext>, data: &T) -> Result<Value> {
     Ok(Value::from_bytes(ctx, data.as_ref()))
 }
 

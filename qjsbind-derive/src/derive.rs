@@ -46,7 +46,7 @@ fn derive_newtype_struct(input: &syn::DeriveInput, from_js: bool) -> syn::Result
             const _: () = {
                 use #crate_qjsbind::{c, Value, ToJsValue, Result};
                 impl #impl_generics ToJsValue for #ident #ty_generics #bounded_where_clause {
-                    fn to_js_value(&self, ctx: *mut c::JSContext) -> Result<Value> {
+                    fn to_js_value(&self, ctx: core::ptr::NonNull<c::JSContext>) -> Result<Value> {
                         self.0.to_js_value(ctx)
                     }
                 }
@@ -114,7 +114,7 @@ fn derive_struct(
             const _: () = {
                 use #crate_qjsbind::{c, Value, ToJsValue, Result};
                 impl #impl_generics ToJsValue for #ident #ty_generics #bounded_where_clause {
-                    fn to_js_value(&self, ctx: *mut c::JSContext) -> Result<Value> {
+                    fn to_js_value(&self, ctx: core::ptr::NonNull<c::JSContext>) -> Result<Value> {
                         let obj = Value::new_object(ctx);
                         #(for field in &attrs) {
                             #(if field.as_bytes()) {
