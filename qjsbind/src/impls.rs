@@ -6,7 +6,7 @@ use alloc::{
 };
 use tinyvec::TinyVec;
 
-use super::{c, ArgList, Error, FromJsValue, Result, ToJsValue, Value};
+use super::{c, Error, FromArgs, FromJsValue, Result, ToArgs, ToJsValue, Value};
 
 impl FromJsValue for Value {
     fn from_js_value(js_value: Value) -> Result<Self> {
@@ -292,7 +292,7 @@ where
 
 macro_rules! impl_arglist_for {
     (($($t: ident),*)) => {
-        impl<$($t: FromJsValue + ToJsValue),*> ArgList for ($($t,)*) {
+        impl<$($t: FromJsValue),*> FromArgs for ($($t,)*) {
             fn from_args(argv: &[Value]) -> Result<Self> {
                 #[allow(unused_mut)]
                 #[allow(unused_variables)]
@@ -301,6 +301,8 @@ macro_rules! impl_arglist_for {
                     $t::from_js_value(iter.next().cloned().unwrap_or_default())?,
                 )*))
             }
+        }
+        impl<$($t: ToJsValue),*> ToArgs for ($($t,)*) {
             fn to_args(&self, ctx: *mut c::JSContext) -> Result<TinyVec<[Value; 8]>> {
                 #[allow(unused_mut)]
                 let mut args = TinyVec::new();

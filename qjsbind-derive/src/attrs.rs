@@ -249,9 +249,9 @@ impl<'a> FieldAttrs<'a> {
         self.as_bytes
     }
 
-    pub fn decoder_fn(&self) -> syn::Path {
+    pub fn decoder_fn(&self, crate_qjsbind: &syn::Ident) -> syn::Path {
         if self.as_bytes {
-            syn::parse_quote!(decode_as_bytes)
+            syn::parse_quote!(#crate_qjsbind::decode_as_bytes)
         } else {
             syn::parse_quote!(FromJsValue::from_js_value)
         }

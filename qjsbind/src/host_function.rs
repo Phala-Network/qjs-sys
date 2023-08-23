@@ -1,7 +1,12 @@
 use crate::{c, utils::js_throw_type_error, FromJsValue, ToJsValue, Value};
 
 pub trait HostFunction {
-    fn call(&self, ctx: *mut c::JSContext, args: &[c::JSValue]) -> c::JSValue;
+    fn call(
+        &self,
+        ctx: *mut c::JSContext,
+        this_val: c::JSValueConst,
+        args: &[c::JSValue],
+    ) -> c::JSValue;
 }
 
 pub struct Function<Ctx, Args, Ret, F> {
@@ -12,18 +17,30 @@ pub struct Function<Ctx, Args, Ret, F> {
 pub fn call_host_function<Ctx, Args, Ret, F>(
     func: F,
     ctx: *mut c::JSContext,
-    args: &[c::JSValue],
+    this_val: c::JSValueConst,
+    argc: core::ffi::c_int,
+    argv: *const c::JSValue,
 ) -> c::JSValue
 where
     Function<Ctx, Args, Ret, F>: HostFunction,
 {
-    Function::new(func).call(ctx, args)
+    let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
+    Function::new(func).call(ctx, this_val, args)
 }
 
 impl<Ctx, Args, Ret, F> Function<Ctx, Args, Ret, F> {
     pub fn new(f: F) -> Self {
         Self {
             f,
+            _phantom: core::marker::PhantomData,
+        }
+    }
+}
+
+impl<Ctx, Args, Ret, F: Default> Default for Function<Ctx, Args, Ret, F> {
+    fn default() -> Self {
+        Self {
+            f: Default::default(),
             _phantom: core::marker::PhantomData,
         }
     }
@@ -55,29 +72,30 @@ macro_rules! impl_host_fn {
     (($($arg:ident),*)) => {
         impl<HF, Srv, $($arg,)* Ret> HostFunction for Function<Srv, ($($arg,)*), Ret, HF>
         where
-            HF: Fn(Srv, $($arg,)*) -> Ret,
+            HF: Fn(Srv, Value, $($arg,)*) -> Ret,
             Srv: TryFrom<*mut c::JSContext>,
             Srv::Error: core::fmt::Debug,
             $($arg: FromJsValue,)*
             Ret: ToJsValue,
         {
-            fn call(&self, ctx: *mut c::JSContext, args: &[c::JSValue]) -> c::JSValue {
+            fn call(&self, ctx: *mut c::JSContext, this_val: c::JSValueConst, args: &[c::JSValue]) -> c::JSValue {
                 #[allow(non_snake_case)]
-                Function::new(|srv: Srv, $($arg: $arg,)*| -> Result<Ret, ()> {
-                    Ok((self.f)(srv, $($arg,)*))
-                }).call(ctx, args)
+                Function::new(|srv: Srv, this_value, $($arg: $arg,)*| -> Result<Ret, ()> {
+                    Ok((self.f)(srv, this_value, $($arg,)*))
+                }).call(ctx, this_val, args)
             }
         }
         impl<HF, Srv, $($arg,)* Ret, Err> HostFunction for Function<Srv, ($($arg,)*), Result<Ret, Err>, HF>
         where
-            HF: Fn(Srv, $($arg,)*) -> Result<Ret, Err>,
+            HF: Fn(Srv, Value, $($arg,)*) -> Result<Ret, Err>,
             Srv: TryFrom<*mut c::JSContext>,
             Srv::Error: core::fmt::Debug,
             Err: core::fmt::Debug,
             $($arg: FromJsValue,)*
             Ret: ToJsValue,
         {
-            fn call(&self, ctx: *mut c::JSContext, args: &[c::JSValue]) -> c::JSValue {
+            fn call(&self, ctx: *mut c::JSContext, this_val: c::JSValueConst, args: &[c::JSValue]) -> c::JSValue {
+                let this_value = Value::new_cloned(ctx, this_val);
                 let srv = match Srv::try_from(ctx) {
                     Ok(ctx) => ctx,
                     Err(e) => {
@@ -105,7 +123,7 @@ macro_rules! impl_host_fn {
                         }
                     };
                 )*
-                let ret = (self.f)(srv, $($arg,)*);
+                let ret = (self.f)(srv, this_value, $($arg,)*);
                 convert_result(ctx, ret)
             }
         }
@@ -121,3 +139,19 @@ impl_host_fn!((A, B, C, D, E));
 impl_host_fn!((A, B, C, D, E, F));
 impl_host_fn!((A, B, C, D, E, F, G));
 impl_host_fn!((A, B, C, D, E, F, G, H));
+
+pub extern "C" fn host_fn_stub<Src, F>(
+    ctx: *mut c::JSContext,
+    this_val: c::JSValueConst,
+    argc: core::ffi::c_int,
+    argv: *const c::JSValueConst,
+) -> c::JSValue
+where
+    Src: TryFrom<*mut c::JSContext>,
+    Src::Error: core::fmt::Debug,
+    F: HostFunction + Default,
+{
+    let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
+    let func = F::default();
+    func.call(ctx, this_val, args)
+}

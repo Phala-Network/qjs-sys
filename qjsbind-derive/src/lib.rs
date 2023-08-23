@@ -4,6 +4,7 @@ use syn::parse_macro_input;
 mod attrs;
 mod bound;
 mod derive;
+mod host_fn;
 
 #[proc_macro_derive(ToJsValue, attributes(qjsbind))]
 pub fn derive_serialize(input: TokenStream) -> TokenStream {
@@ -19,6 +20,11 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     derive::derive(&mut input, true)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
+}
+
+#[proc_macro_attribute]
+pub fn host_call(_: TokenStream, input: TokenStream) -> TokenStream {
+    host_fn::patch(syn::parse_macro_input!(input)).into()
 }
 
 fn find_crate_name(origin: &str) -> syn::Result<syn::Ident> {

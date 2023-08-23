@@ -7,6 +7,13 @@ use super::{c, Error, Result};
 
 pub type Ptr<T> = Option<core::ptr::NonNull<T>>;
 
+type JsCFunction = unsafe extern "C" fn(
+    ctx: *mut c::JSContext,
+    this_val: c::JSValueConst,
+    argc: core::ffi::c_int,
+    argv: *mut c::JSValue,
+) -> c::JSValue;
+
 #[repr(transparent)]
 pub struct RawValue(pub c::JSValue);
 impl Default for RawValue {
@@ -113,6 +120,10 @@ impl Value {
             Ok(ctx) => unsafe { c::JS_DupValue(ctx, self.value) },
             Err(_) => self.value,
         }
+    }
+
+    pub fn raw_value(&self) -> &c::JSValue {
+        &self.value
     }
 
     pub fn context(&self) -> Result<*mut c::JSContext> {
@@ -398,6 +409,19 @@ impl Value {
                 Err(Error::Custom(format!("Failed to set property: {key}")))
             }
         }
+    }
+    pub fn set_property_fn(&self, key: &str, f: JsCFunction) -> Result<(), Error> {
+        let ctx = self.context()?;
+        unsafe {
+            let c_name = alloc::ffi::CString::new(key).or(Err(Error::Expect("function name")))?;
+            c::JS_SetPropertyStr(
+                ctx,
+                self.value,
+                c_name.as_ptr(),
+                c::JS_NewCFunction(ctx, Some(f), c_name.as_ptr(), 0),
+            );
+        }
+        Ok(())
     }
     pub fn array_push(&self, value: &Value) -> Result<()> {
         _ = self

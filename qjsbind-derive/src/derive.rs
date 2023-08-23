@@ -91,12 +91,12 @@ fn derive_struct(
                                                     if field_value.is_undefined() || field_value.is_null() {
                                                         #f()
                                                     } else {
-                                                        #{field.decoder_fn()}(field_value)?
+                                                        #{field.decoder_fn(&crate_qjsbind)}(field_value)?
                                                     }
                                                 }
                                             }
                                             None => quote! {
-                                                #{field.decoder_fn()}(field_value)?
+                                                #{field.decoder_fn(&crate_qjsbind)}(field_value)?
                                             },
                                         }
                                     }
