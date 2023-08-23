@@ -13,7 +13,7 @@ pub use qjs_sys::c;
 pub use qjsbind_derive::{FromJsValue, ToJsValue, host_call};
 pub use traits::{FromArgs, FromJsValue, ToArgs, ToJsValue};
 pub use utils::{compile, ctx_get_exception_str, ctx_to_str, ctx_to_string, js_throw_type_error};
-pub use value::Value;
+pub use value::{Value, get_global};
 
 #[macro_use]
 mod macros;

@@ -209,7 +209,7 @@ impl Value {
 
     pub fn entries(&self) -> Result<PairIter> {
         #[allow(non_snake_case)]
-        let Object = global(self.context()?).get_property("Object")?;
+        let Object = get_global(self.context()?).get_property("Object")?;
         let entries_fn = Object.get_property("entries")?;
         let null = Value::null();
         let arr = entries_fn.call(&null, &[self.clone()])?;
@@ -369,7 +369,7 @@ impl Value {
     }
     pub fn bigint_from_str(ctx: *mut c::JSContext, val: &str) -> Result<Self> {
         let val = Self::from_str(ctx, val);
-        global(ctx).call_method("BigInt", &[val])
+        get_global(ctx).call_method("BigInt", &[val])
     }
     pub fn biguint(ctx: *mut c::JSContext, val: u64) -> Self {
         unsafe { Self::new_moved(ctx, c::JS_NewBigUint64(ctx, val)) }
@@ -547,6 +547,6 @@ impl Value {
     }
 }
 
-pub fn global(context: *mut c::JSContext) -> Value {
+pub fn get_global(context: *mut c::JSContext) -> Value {
     Value::new_moved(context, unsafe { c::JS_GetGlobalObject(context) })
 }
