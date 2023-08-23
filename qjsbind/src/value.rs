@@ -283,6 +283,9 @@ impl Value {
     pub fn is_object(&self) -> bool {
         unsafe { c::JS_IsObject(self.value) != 0 }
     }
+    pub fn is_generic_object(&self) -> bool {
+        unsafe { c::JS_IsGenericObject(self.value) != 0 }
+    }
     pub fn is_function(&self) -> bool {
         let Ok(ctx) = self.context() else {
             return false;

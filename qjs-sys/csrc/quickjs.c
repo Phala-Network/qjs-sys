@@ -54083,3 +54083,15 @@ JSValue JS_NewUint8Array(JSContext *ctx, const uint8_t* data, uint32_t data_len)
     memcpy(buffer, data, data_len);
     return array;
 }
+
+JS_BOOL JS_IsGenericObject(JSValueConst v)
+{
+    JSObject *p;
+    if (JS_VALUE_GET_TAG(v) != JS_TAG_OBJECT)
+        return FALSE;
+    p = JS_VALUE_GET_OBJ(v);
+    if (p->class_id != JS_CLASS_OBJECT) {
+        return FALSE;
+    }
+    return TRUE;
+}

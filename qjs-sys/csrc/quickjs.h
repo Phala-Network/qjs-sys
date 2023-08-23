@@ -1054,6 +1054,7 @@ int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
 JS_BOOL JS_IsUint8Array(JSValueConst v);
 uint8_t* JS_Uint8ArrayGetBuffer(JSValueConst v, size_t *size);
 JSValue JS_NewUint8Array(JSContext *ctx, const uint8_t* data, uint32_t data_len);
+JS_BOOL JS_IsGenericObject(JSValueConst v);
 
 enum {
     /* classid tag        */    /* union usage   | properties */
