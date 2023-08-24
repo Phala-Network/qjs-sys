@@ -1,15 +1,5 @@
-use super::c;
-
-use alloc::{ffi::CString, vec::Vec};
-use core::{
-    ffi::c_int,
-    mem::{forget, size_of},
-};
-
-pub fn throw_type_error(ctx: *mut c::JSContext, msg: &str) -> c::JSValue {
-    let cmsg = CString::new(msg).unwrap_or_default();
-    unsafe { c::JS_ThrowTypeError(ctx, cmsg.as_ptr()) }
-}
+use alloc::vec::Vec;
+use core::mem::{forget, size_of};
 
 #[no_mangle]
 extern "C" fn __pink_malloc(size: usize) -> *mut ::core::ffi::c_void {
@@ -69,25 +59,34 @@ fn recover(ptr: *mut ::core::ffi::c_void) -> Option<Vec<usize>> {
     }
 }
 
+#[cfg(feature = "classic-host-call")]
 extern "Rust" {
     fn __pink_host_call(id: u32, ctx: *mut c::JSContext, args: &[c::JSValueConst]) -> c::JSValue;
 }
 
+#[cfg(feature = "classic-host-call")]
+use {super::c, alloc::ffi::CString};
+#[cfg(feature = "classic-host-call")]
 #[no_mangle]
 extern "C" fn __host_call(
     ctx: *mut c::JSContext,
     _this_val: c::JSValueConst,
-    argc: c_int,
+    argc: core::ffi::c_int,
     argv: *const c::JSValueConst,
 ) -> c::JSValue {
+    pub fn throw(ctx: *mut c::JSContext, msg: &str) -> c::JSValue {
+        let cmsg = CString::new(msg).unwrap_or_default();
+        unsafe { c::JS_ThrowTypeError(ctx, cmsg.as_ptr()) }
+    }
+
     if argc < 1 {
-        throw_type_error(ctx, "host call without id");
+        throw(ctx, "host call without id");
         return c::JS_EXCEPTION;
     }
     let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
     let mut id = 0;
     if unsafe { c::JS_ToUint32(ctx, &mut id, args[0]) } != 0 {
-        throw_type_error(ctx, "invalid host call id");
+        throw(ctx, "invalid host call id");
         return c::JS_EXCEPTION;
     }
 
@@ -98,17 +97,19 @@ extern "C" fn __host_call(
 mod polyfills {
     use core::ffi::{c_int, c_uchar};
 
-    use super::c;
-
     #[no_mangle]
     extern "C" fn __pink_getrandom(_pbuf: *mut u8, _nbytes: u8) {}
+
+    #[cfg(feature = "classic-host-call")]
+    use super::c;
+    #[cfg(feature = "classic-host-call")]
     #[no_mangle]
     fn __pink_host_call(
         _id: u32,
         _ctx: *mut c::JSContext,
         _args: &[c::JSValueConst],
-    ) -> c::JSValue {
-        c::JS_EXCEPTION
+    ) -> super::c::JSValue {
+        super::c::JS_EXCEPTION
     }
     #[no_mangle]
     extern "C" fn __pink_clock_time_get(_id: u32, _precision: u64, _retptr0: *mut u64) -> u16 {

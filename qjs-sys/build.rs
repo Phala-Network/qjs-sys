@@ -58,6 +58,8 @@ fn main() {
         cc.flag("-fsanitize=address");
         println!("cargo:rustc-link-lib=asan");
     }
+    #[cfg(feature = "classic-host-call")]
+    cc.define("WITH_CLASSIC_HOST_CALL", None);
 
     if is_wasm32 {
         cc.include("pink-libc/sysroot/include");

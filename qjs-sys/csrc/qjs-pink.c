@@ -71,8 +71,10 @@ JSValue __host_call(JSContext *ctx, JSValueConst this_val, int argc,
 void js_pink_env_init(JSContext *ctx) {
     JSValue global_obj, console;
     global_obj = JS_GetGlobalObject(ctx);
+#if defined(WITH_CLASSIC_HOST_CALL)
     JS_SetPropertyStr(ctx, global_obj, "__hostCall",
                       JS_NewCFunction(ctx, __host_call, "__hostCall", 1));
+#endif
     JS_FreeValue(ctx, global_obj);
 }
 
@@ -87,8 +89,10 @@ void js_env_add_helpers(JSContext *ctx) {
     JS_SetPropertyStr(ctx, global_obj, "console", console);
     JS_SetPropertyStr(ctx, global_obj, "print",
                       JS_NewCFunction(ctx, js_print, "print", 1));
+    #if defined(WITH_CLASSIC_HOST_CALL)
     JS_SetPropertyStr(ctx, global_obj, "__hostCall",
                       JS_NewCFunction(ctx, __host_call, "__hostCall", 1));
+    #endif
     JS_FreeValue(ctx, global_obj);
 }
 

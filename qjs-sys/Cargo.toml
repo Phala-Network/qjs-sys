@@ -27,3 +27,4 @@ bindgen = "0.63"
 [features]
 with-polyfills = []
 sanitize-address = []
+classic-host-call = []
