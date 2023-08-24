@@ -66,5 +66,5 @@ void JS_OpaqueObjectDataForget(JSContext *ctx, JSValueConst obj) {
         return;
     }
     JS_SetOpaque(obj, 0);
-    opaque_free(JS_GetRuntime(ctx), opaque);
+    js_free_rt(JS_GetRuntime(ctx), opaque);
 }

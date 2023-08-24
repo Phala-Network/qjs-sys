@@ -46,10 +46,12 @@ fn main() {
         "-D__pink__=1",
         "-Icsrc",
         "-Werror",
+        "-Wno-unknown-warning-option",
         "-Wno-attributes",
         "-Wno-unused-parameter",
         "-Wno-sign-compare",
         "-Wno-unused-function",
+        "-Wno-shift-op-parentheses",
     ];
     let mut cc = cc::Build::new();
     for file in cfiles.iter() {
@@ -82,7 +84,6 @@ fn main() {
     for flag in c_flags {
         builder = builder.clang_arg(flag);
     }
-    builder = builder.clang_arg("-Wno-unknown-warning-option");
     if is_wasm32 {
         builder = builder
             .clang_arg("-fvisibility=default")
