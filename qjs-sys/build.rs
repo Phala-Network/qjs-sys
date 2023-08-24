@@ -34,6 +34,7 @@ fn main() {
         "csrc/ext/utils.c",
         "csrc/ext/js-utils.c",
         "csrc/ext/buffer-utils.c",
+        #[cfg(feature = "stream")]
         "csrc/ext/quickjs-stream.c",
         "csrc/ext/quickjs-blob.c",
         "csrc/ext/quickjs-ext.c",
@@ -44,7 +45,11 @@ fn main() {
         "-D_GNU_SOURCE",
         "-D__pink__=1",
         "-Icsrc",
-        "-w",
+        "-Werror",
+        "-Wno-attributes",
+        "-Wno-unused-parameter",
+        "-Wno-sign-compare",
+        "-Wno-unused-function",
     ];
     let mut cc = cc::Build::new();
     for file in cfiles.iter() {
@@ -77,6 +82,7 @@ fn main() {
     for flag in c_flags {
         builder = builder.clang_arg(flag);
     }
+    builder = builder.clang_arg("-Wno-unknown-warning-option");
     if is_wasm32 {
         builder = builder
             .clang_arg("-fvisibility=default")

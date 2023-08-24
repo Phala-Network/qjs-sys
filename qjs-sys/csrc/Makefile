@@ -1,10 +1,8 @@
-CFLAGS="-O3" "-ffunction-sections" "-fdata-sections" "-fPIC" "--target=wasm32-unknown-unknown" "-I" "../pink-libc/sysroot/include" "-funsigned-char" "-DCONFIG_BIGNUM" "-D_GNU_SOURCE" "-D__pink__=1" "-w" -I.
+CFLAGS="-O3" "-ffunction-sections" "-fdata-sections" "-fPIC" "--target=wasm32-unknown-unknown" "-I" "../pink-libc/sysroot/include" "-funsigned-char" "-DCONFIG_BIGNUM" "-D_GNU_SOURCE" "-D__pink__=1" "-Werror" "-Wno-unknown-attributes" -I.
 CC=clang
 
 SRC= \
-	ext/quickjs-stream.c \
-	ext/quickjs-blob.c \
-	ext/quickjs-ext.c \
+	quickjs-opaque.c \
     cutils.c \
 	libregexp.c \
 	libunicode.c \

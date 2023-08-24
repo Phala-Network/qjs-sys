@@ -46,5 +46,22 @@ pub fn opaque_object_get_data<T: 'static>(value: &Value) -> Option<&T> {
         return None;
     };
     let ptr = unsafe { c::JS_OpaqueObjectDataGet(ctx.as_ptr(), *value, type_id::<T>() as _) };
+    if ptr.is_null() {
+        return None;
+    }
     Some(unsafe { &*(ptr as *const T) })
+}
+
+pub fn opaque_object_take_data<T: 'static>(value: &Value) -> Option<Box<T>> {
+    let Value::Other { value, ctx } = value  else {
+        return None;
+    };
+    unsafe {
+        let ptr = c::JS_OpaqueObjectDataGet(ctx.as_ptr(), *value, type_id::<T>() as _);
+        if ptr.is_null() {
+            return None;
+        }
+        c::JS_OpaqueObjectDataForget(ctx.as_ptr(), *value);
+        Some(Box::from_raw(ptr as *mut T))
+    }
 }

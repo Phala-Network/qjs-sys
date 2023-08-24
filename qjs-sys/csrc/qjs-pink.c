@@ -69,7 +69,7 @@ JSValue __host_call(JSContext *ctx, JSValueConst this_val, int argc,
                     JSValueConst *argv);
 
 void js_pink_env_init(JSContext *ctx) {
-    JSValue global_obj, console;
+    JSValue global_obj;
     global_obj = JS_GetGlobalObject(ctx);
 #if defined(WITH_CLASSIC_HOST_CALL)
     JS_SetPropertyStr(ctx, global_obj, "__hostCall",

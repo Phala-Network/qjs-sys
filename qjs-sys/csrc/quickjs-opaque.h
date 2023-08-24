@@ -8,5 +8,6 @@ int js_opaque_class_init(JSContext *ctx);
 JSValue JS_OpaqueObjectNew(JSContext *ctx, void *data, opaque_free_fn free_func,
                            int tag);
 void *JS_OpaqueObjectDataGet(JSContext *ctx, JSValueConst obj, int tag);
+void JS_OpaqueObjectDataForget(JSContext *ctx, JSValueConst obj);
 
 #endif

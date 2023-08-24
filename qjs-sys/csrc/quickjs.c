@@ -40,6 +40,11 @@
 #include <malloc_np.h>
 #endif
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-function-type"
+#pragma GCC diagnostic ignored "-Wimplicit-fallthrough="
+#pragma GCC diagnostic ignored "-Wcast-function-type"
+
 #include "cutils.h"
 #include "list.h"
 #include "quickjs.h"
@@ -54095,3 +54100,5 @@ JS_BOOL JS_IsGenericObject(JSValueConst v)
     }
     return TRUE;
 }
+
+#pragma GCC diagnostic pop

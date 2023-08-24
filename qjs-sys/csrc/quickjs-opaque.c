@@ -41,6 +41,7 @@ static JSClassDef js_opaque_class = {
 int js_opaque_class_init(JSContext *ctx) {
     JS_NewClass(JS_GetRuntime(ctx), JS_CLASS_OPAQUE, &js_opaque_class);
     JS_SetClassProto(ctx, JS_CLASS_OPAQUE, JS_NewObject(ctx));
+    return 0;
 }
 
 JSValue JS_OpaqueObjectNew(JSContext *ctx, void *data, opaque_free_fn free_func,
@@ -57,4 +58,13 @@ void *JS_OpaqueObjectDataGet(JSContext *ctx, JSValueConst obj, int tag) {
         return 0;
     }
     return opaque->data;
+}
+
+void JS_OpaqueObjectDataForget(JSContext *ctx, JSValueConst obj) {
+    OpaqueData *opaque = JS_GetOpaque(obj, JS_CLASS_OPAQUE);
+    if (!opaque) {
+        return;
+    }
+    JS_SetOpaque(obj, 0);
+    opaque_free(JS_GetRuntime(ctx), opaque);
 }

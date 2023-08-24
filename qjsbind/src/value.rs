@@ -4,7 +4,7 @@ use alloc::{
 };
 use core::ptr::NonNull;
 
-use crate::opaque_value::{new_opaque_object, opaque_object_get_data};
+use crate::opaque_value::{new_opaque_object, opaque_object_get_data, opaque_object_take_data};
 
 use super::{c, Error, Result};
 
@@ -134,6 +134,10 @@ impl Value {
 
     pub fn opaque_object_data<T: 'static>(&self) -> Option<&T> {
         opaque_object_get_data(self)
+    }
+
+    pub fn opaque_object_take_data<T: 'static>(&self) -> Option<T> {
+        Some(*opaque_object_take_data(self)?)
     }
 
     pub fn into_raw(self) -> c::JSValue {

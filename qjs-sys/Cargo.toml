@@ -28,3 +28,4 @@ bindgen = "0.63"
 with-polyfills = []
 sanitize-address = []
 classic-host-call = []
+stream = []
