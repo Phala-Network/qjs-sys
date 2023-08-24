@@ -383,12 +383,21 @@ impl Value {
         unsafe { Self::new_moved(ctx, c::JS_NewInt32(ctx.as_ptr(), val)) }
     }
     pub fn from_u32(ctx: NonNull<c::JSContext>, val: u32) -> Self {
+        if val <= i32::MAX as u32 {
+            return Self::from_i32(ctx, val as _);
+        }
         Self::from_u128(ctx, val as _)
     }
     pub fn from_i64(ctx: NonNull<c::JSContext>, val: i64) -> Self {
+        if val <= i32::MAX.into() {
+            return Self::from_i32(ctx, val as _);
+        }
         Self::bigint(ctx, val)
     }
     pub fn from_u64(ctx: NonNull<c::JSContext>, val: u64) -> Self {
+        if val <= i32::MAX as u64 {
+            return Self::from_i32(ctx, val as _);
+        }
         Self::biguint(ctx, val)
     }
     pub fn from_i128(ctx: NonNull<c::JSContext>, val: i128) -> Self {
@@ -553,13 +562,13 @@ impl Value {
             let ctx = self.context()?;
             let ptr = unsafe {
                 if self.is_uint8_array() {
-                    c::JS_GetArrayBuffer(ctx.as_ptr(), &mut len, *self.raw_value())
-                } else {
                     c::JS_Uint8ArrayGetBuffer(*self.raw_value(), &mut len)
+                } else {
+                    c::JS_GetArrayBuffer(ctx.as_ptr(), &mut len, *self.raw_value())
                 }
             };
             if ptr.is_null() {
-                return Err(Error::Expect("bytes"));
+                return Err(Error::Static("invalid bytes"));
             }
             let mut v = Vec::with_capacity(len);
             unsafe {
@@ -576,14 +585,14 @@ impl Value {
             }
             Ok(v)
         } else if self.is_string() {
-            let s = self.to_string_utf8().ok_or(Error::Expect("invalid utf8"))?;
+            let s = self.to_string_utf8().ok_or(Error::Expect("string"))?;
             let s = s.as_str();
             if !(s.starts_with("0x") || s.starts_with("0X")) {
                 return Err(Error::Expect("hex starts with 0x"));
             }
             hex::decode(&s[2..]).or(Err(Error::Expect("invalid hex")))
         } else {
-            Err(Error::Expect("bytes"))
+            Err(Error::Expect("bytes-like value"))
         }
     }
     pub fn parse<T: core::str::FromStr>(&self) -> Option<T> {
