@@ -16,3 +16,4 @@ scopeguard = "1"
 default = ["std"]
 std = []
 with-polyfills = ["qjs-sys/with-polyfills"]
+sanitize-address = ["qjs-sys/sanitize-address"]

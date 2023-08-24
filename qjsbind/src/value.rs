@@ -4,6 +4,8 @@ use alloc::{
 };
 use core::ptr::NonNull;
 
+use crate::opaque_value::{new_opaque_object, opaque_object_get_data};
+
 use super::{c, Error, Result};
 
 type JsCFunction = unsafe extern "C" fn(
@@ -29,6 +31,20 @@ pub enum Value {
         value: c::JSValue,
         ctx: NonNull<c::JSContext>,
     },
+}
+
+impl core::fmt::Debug for Value {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if self.is_exception() {
+            write!(f, "<JS exception>")
+        } else if self.is_undefined() {
+            write!(f, "<JS undefined>")
+        } else if self.is_null() {
+            write!(f, "<JS null>")
+        } else {
+            write!(f, "<JS value>")
+        }
+    }
 }
 
 impl Default for Value {
@@ -110,6 +126,14 @@ impl Value {
     pub fn new_moved(ctx: NonNull<c::JSContext>, value: c::JSValue) -> Self {
         unsafe { c::JS_DupContext(ctx.as_ptr()) };
         Self::Other { ctx, value }
+    }
+
+    pub fn new_opaque_object<T: 'static>(ctx: NonNull<c::JSContext>, value: T) -> Self {
+        new_opaque_object(ctx, value)
+    }
+
+    pub fn opaque_object_data<T: 'static>(&self) -> Option<&T> {
+        opaque_object_get_data(self)
     }
 
     pub fn into_raw(self) -> c::JSValue {

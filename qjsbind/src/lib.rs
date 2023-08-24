@@ -25,6 +25,7 @@ mod impls;
 mod traits;
 mod utils;
 mod value;
+mod opaque_value;
 
 mod test {
     use alloc::{

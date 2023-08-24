@@ -2,6 +2,7 @@
 #define __QJS_PINK_H
 #include <stddef.h>
 #include "quickjs.h"
+#include "quickjs-opaque.h"
 #include "ext/quickjs-ext.h"
 
 typedef void (*output_t)(JSContext *ctx, void *userdata, JSValueConst output);

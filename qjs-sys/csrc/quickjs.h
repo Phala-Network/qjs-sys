@@ -1119,6 +1119,7 @@ enum {
     JS_CLASS_ASYNC_FROM_SYNC_ITERATOR,  /* u.async_from_sync_iterator_data */
     JS_CLASS_ASYNC_GENERATOR_FUNCTION,  /* u.func */
     JS_CLASS_ASYNC_GENERATOR,   /* u.async_generator_data */
+    JS_CLASS_OPAQUE,            /* Opaque object that can be used to auto release resource on desctroy */
 
     JS_CLASS_INIT_COUNT, /* last entry for predefined classes */
 };

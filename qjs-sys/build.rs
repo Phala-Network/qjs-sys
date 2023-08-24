@@ -29,6 +29,7 @@ fn main() {
         "csrc/quickjs.c",
         "csrc/qjs-pink.c",
         "csrc/libbf.c",
+        "csrc/quickjs-opaque.c",
         "csrc/ext/queue.c",
         "csrc/ext/utils.c",
         "csrc/ext/js-utils.c",
