@@ -59,7 +59,7 @@ where
 {
     match recult {
         Ok(v) => match v.to_js_value(ctx) {
-            Ok(v) => v.into_raw(),
+            Ok(v) => v.leak(),
             Err(err) => {
                 let msg = format!("failed to convert to JSValue: {err:?}");
                 js_throw_type_error(ctx, &msg);

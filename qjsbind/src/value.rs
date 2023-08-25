@@ -140,7 +140,7 @@ impl Value {
         Some(*opaque_object_take_data(self)?)
     }
 
-    pub fn into_raw(self) -> c::JSValue {
+    pub fn leak(self) -> c::JSValue {
         let value = *self.raw_value();
         match self.context() {
             Ok(ctx) => unsafe { c::JS_DupValue(ctx.as_ptr(), value) },
