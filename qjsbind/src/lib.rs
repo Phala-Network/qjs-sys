@@ -14,6 +14,8 @@ pub use qjsbind_derive::{host_call, FromJsValue, ToJsValue};
 pub use traits::{FromArgs, FromJsValue, OwnedRawArgs, ToArgs, ToJsValue, ToNonNull};
 pub use utils::{compile, ctx_get_exception_str, ctx_to_str, ctx_to_string, js_throw_type_error};
 pub use value::{get_global, Value};
+pub use js_string::JsString;
+pub use js_u8array::JsUint8Array;
 
 #[macro_use]
 mod macros;
@@ -26,6 +28,8 @@ mod traits;
 mod utils;
 mod value;
 mod opaque_value;
+mod js_string;
+mod js_u8array;
 
 mod test {
     use alloc::{
