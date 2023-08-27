@@ -57,7 +57,7 @@ impl FromJsValue for JsString {
 }
 
 impl ToJsValue for JsString {
-    fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, _ctx: NonNull<c::JSContext>) -> Result<Value> {
         Ok(self.value.clone())
     }
 }

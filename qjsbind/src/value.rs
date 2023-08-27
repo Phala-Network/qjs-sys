@@ -463,18 +463,31 @@ impl Value {
             }
         }
     }
-    pub fn set_property_fn(&self, key: &str, f: JsCFunction) -> Result<(), Error> {
+    pub fn define_property_fn(&self, key: &str, f: JsCFunction) -> Result<(), Error> {
         let ctx = self.context()?;
+        let f = unsafe {
+            c::JS_NewCFunctionLen(ctx.as_ptr(), Some(f), key.as_ptr() as _, key.len() as _, 0)
+        };
+        self.define_property_value(key, Value::new_moved(ctx, f))
+    }
+    pub fn define_property_value(&self, key: &str, f: Value) -> Result<(), Error> {
         unsafe {
-            let c_name = alloc::ffi::CString::new(key).or(Err(Error::Expect("function name")))?;
-            c::JS_SetPropertyStr(
-                ctx.as_ptr(),
+            let ctx = self.context()?.as_ptr();
+            let name = c::JS_NewAtomLen(ctx, key.as_ptr() as _, key.len() as _);
+            let r = c::JS_DefinePropertyValue(
+                ctx,
                 *self.raw_value(),
-                c_name.as_ptr(),
-                c::JS_NewCFunction(ctx.as_ptr(), Some(f), c_name.as_ptr(), 0),
+                name,
+                f.leak(),
+                c::JS_PROP_C_W_E as _,
             );
+            c::JS_FreeAtom(ctx, name);
+            if r != 0 {
+                Ok(())
+            } else {
+                Err(Error::Custom(format!("Failed to define property: {key}")))
+            }
         }
-        Ok(())
     }
     pub fn array_push(&self, value: &Value) -> Result<()> {
         _ = self
