@@ -1,6 +1,6 @@
 use core::{ffi::CStr, ptr::NonNull};
 
-use alloc::string::String;
+use alloc::string::{String, ToString};
 
 use crate::traits::ToNonNull;
 use crate::{c, Value};

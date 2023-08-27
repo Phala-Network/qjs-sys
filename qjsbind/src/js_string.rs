@@ -1,4 +1,5 @@
 use core::{ffi::CStr, ptr::NonNull};
+use alloc::string::{String, ToString};
 
 use crate::{c, Error, FromJsValue, Result, ToJsValue, Value};
 

@@ -1,4 +1,5 @@
 use core::ptr::NonNull;
+use alloc::vec::Vec;
 
 use crate::{c, Error, FromJsValue, Result, ToJsValue, Value};
 
