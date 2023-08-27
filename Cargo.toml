@@ -1,2 +1,2 @@
 [workspace]
-members = ["qjs-sys", "qjsbind", "qjsbind-derive"]
+members = ["qjs-sys", "qjsbind", "qjsbind-derive", "qjs-extensions"]
