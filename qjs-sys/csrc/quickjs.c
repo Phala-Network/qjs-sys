@@ -1164,6 +1164,11 @@ static JSValue js_module_ns_autoinit(JSContext *ctx, JSObject *p, JSAtom atom,
 static JSValue JS_InstantiateFunctionListItem2(JSContext *ctx, JSObject *p,
                                                JSAtom atom, void *opaque);
 void JS_SetUncatchableError(JSContext *ctx, JSValueConst val, BOOL flag);
+static JSValue JS_NewCFunction4(JSContext *ctx, JSCFunction *func,
+                                const char *name,
+                                int name_length,
+                                int length, JSCFunctionEnum cproto, int magic,
+                                JSValueConst proto_val);
 
 static const JSClassExoticMethods js_arguments_exotic_methods;
 static const JSClassExoticMethods js_string_exotic_methods;
@@ -4938,6 +4943,15 @@ static JSValue JS_NewCFunction3(JSContext *ctx, JSCFunction *func,
                                 int length, JSCFunctionEnum cproto, int magic,
                                 JSValueConst proto_val)
 {
+    return JS_NewCFunction4(ctx, func, name, name?strlen(name):0, length, cproto, magic, proto_val);
+}
+
+static JSValue JS_NewCFunction4(JSContext *ctx, JSCFunction *func,
+                                const char *name,
+                                int name_length,
+                                int length, JSCFunctionEnum cproto, int magic,
+                                JSValueConst proto_val)
+{
     JSValue func_obj;
     JSObject *p;
     JSAtom name_atom;
@@ -4955,9 +4969,11 @@ static JSValue JS_NewCFunction3(JSContext *ctx, JSCFunction *func,
                          cproto == JS_CFUNC_constructor_magic ||
                          cproto == JS_CFUNC_constructor_or_func ||
                          cproto == JS_CFUNC_constructor_or_func_magic);
-    if (!name)
+    if (!name) {
         name = "";
-    name_atom = JS_NewAtom(ctx, name);
+        name_length = 0;
+    }
+    name_atom = JS_NewAtomLen(ctx, name, name_length);
     js_function_set_properties(ctx, func_obj, name_atom, length);
     JS_FreeAtom(ctx, name_atom);
     return func_obj;
@@ -4969,6 +4985,14 @@ JSValue JS_NewCFunction2(JSContext *ctx, JSCFunction *func,
                          int length, JSCFunctionEnum cproto, int magic)
 {
     return JS_NewCFunction3(ctx, func, name, length, cproto, magic,
+                            ctx->function_proto);
+}
+JSValue JS_NewCFunction2Len(JSContext *ctx, JSCFunction *func,
+                         const char *name,
+                         int name_length,
+                         int length, JSCFunctionEnum cproto, int magic)
+{
+    return JS_NewCFunction4(ctx, func, name, name_length, length, cproto, magic,
                             ctx->function_proto);
 }
 

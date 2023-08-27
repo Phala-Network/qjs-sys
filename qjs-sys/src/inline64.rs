@@ -5,20 +5,58 @@
     non_snake_case,
     non_upper_case_globals,
     unused_assignments,
-    unused_mut,
-    unused_variables
+    unused_mut
 )]
+#![allow(unused_variables)]
 use crate::c::*;
 use crate::libc;
-
-pub type size_t = usize;
+extern "C" {
+    fn __JS_FreeValue(ctx: *mut JSContext, v: JSValue);
+    fn __JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue);
+    fn JS_ToInt32(ctx: *mut JSContext, pres: *mut int32_t, val: JSValue) -> libc::c_int;
+    fn JS_ToCStringLen2(
+        ctx: *mut JSContext,
+        plen: *mut size_t,
+        val1: JSValue,
+        cesu8: libc::c_int,
+    ) -> *const libc::c_char;
+    fn JS_GetPropertyInternal(
+        ctx: *mut JSContext,
+        obj: JSValue,
+        prop: JSAtom,
+        receiver: JSValue,
+        throw_ref_error: libc::c_int,
+    ) -> JSValue;
+    fn JS_SetPropertyInternal(
+        ctx: *mut JSContext,
+        this_obj: JSValue,
+        prop: JSAtom,
+        val: JSValue,
+        flags: libc::c_int,
+    ) -> libc::c_int;
+    fn JS_NewCFunction2(
+        ctx: *mut JSContext,
+        func: Option<JSCFunction>,
+        name: *const libc::c_char,
+        length: libc::c_int,
+        cproto: JSCFunctionEnum,
+        magic: libc::c_int,
+    ) -> JSValue;
+    fn JS_NewCFunction2Len(
+        ctx: *mut JSContext,
+        func: Option<JSCFunction>,
+        name: *const libc::c_char,
+        name_length: libc::c_int,
+        length: libc::c_int,
+        cproto: JSCFunctionEnum,
+        magic: libc::c_int,
+    ) -> JSValue;
+}
 pub type __int32_t = libc::c_int;
 pub type __uint32_t = libc::c_uint;
 pub type __int64_t = libc::c_long;
 pub type __uint64_t = libc::c_ulong;
-pub type __off_t = libc::c_long;
-pub type __off64_t = libc::c_long;
-pub type __ssize_t = libc::c_long;
+pub type size_t = usize;
 pub type int32_t = __int32_t;
 pub type int64_t = __int64_t;
 pub type uint32_t = __uint32_t;
@@ -43,6 +81,24 @@ pub const JS_TAG_BIG_FLOAT: C2RustUnnamed = -9;
 pub const JS_TAG_BIG_INT: C2RustUnnamed = -10;
 pub const JS_TAG_BIG_DECIMAL: C2RustUnnamed = -11;
 pub const JS_TAG_FIRST: C2RustUnnamed = -11;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct JSRefCountHeader {
+    pub ref_count: libc::c_int,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union JSValueUnion_ {
+    pub int32: int32_t,
+    pub float64: libc::c_double,
+    pub ptr: *mut libc::c_void,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct JSValue_ {
+    pub u: JSValueUnion,
+    pub tag: int64_t,
+}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union C2RustUnnamed_0 {
@@ -78,13 +134,19 @@ pub const JS_CFUNC_constructor_magic: JSCFunctionEnum = 3;
 pub const JS_CFUNC_constructor: JSCFunctionEnum = 2;
 pub const JS_CFUNC_generic_magic: JSCFunctionEnum = 1;
 pub const JS_CFUNC_generic: JSCFunctionEnum = 0;
-pub const NULL: libc::c_int = 0 as libc::c_int;
-pub const JS_PROP_THROW: libc::c_int = (1 as libc::c_int) << 14 as libc::c_int;
+pub const NAN: libc::c_float = ::core::f32::NAN;
+pub const JS_FLOAT64_NAN: libc::c_float = ::core::f32::NAN;
+pub const JS_NAN: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            float64: JS_FLOAT64_NAN as libc::c_double,
+        },
+        tag: JS_TAG_FLOAT64 as libc::c_int as int64_t,
+    };
+    init
+};
 #[inline]
-pub unsafe extern "C" fn __JS_NewFloat64(
-    mut ctx: *mut JSContext,
-    mut d: libc::c_double,
-) -> JSValue {
+pub unsafe extern "C" fn JS_MakeFloat64(mut d: libc::c_double) -> JSValue {
     let mut v: JSValue = JSValue {
         u: JSValueUnion { int32: 0 },
         tag: 0,
@@ -96,13 +158,91 @@ pub unsafe extern "C" fn __JS_NewFloat64(
 #[inline]
 pub unsafe extern "C" fn JS_VALUE_IS_NAN(mut v: JSValue) -> libc::c_int {
     let mut u: C2RustUnnamed_0 = C2RustUnnamed_0 { d: 0. };
+    let mut current_block_0: u64;
     if v.tag != JS_TAG_FLOAT64 as libc::c_int as libc::c_long {
-        return 0 as libc::c_int;
+        current_block_0 = 792017965103506125;
+    } else {
+        current_block_0 = 10771263883588581193;
+    }
+    match current_block_0 {
+        10771263883588581193 => {}
+        _ => return 0 as libc::c_int,
     }
     u.d = v.u.float64;
     return (u.u64_0 & 0x7fffffffffffffff as libc::c_long as libc::c_ulong
         > 0x7ff0000000000000 as libc::c_long as libc::c_ulong) as libc::c_int;
 }
+#[inline]
+pub unsafe extern "C" fn __JS_NewFloat64(
+    mut ctx: *mut JSContext,
+    mut d: libc::c_double,
+) -> JSValue {
+    return JS_MakeFloat64(d);
+}
+pub const JS_NULL: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            int32: 0 as libc::c_int,
+        },
+        tag: JS_TAG_NULL as libc::c_int as int64_t,
+    };
+    init
+};
+pub const JS_UNDEFINED: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            int32: 0 as libc::c_int,
+        },
+        tag: JS_TAG_UNDEFINED as libc::c_int as int64_t,
+    };
+    init
+};
+pub const JS_FALSE: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            int32: 0 as libc::c_int,
+        },
+        tag: JS_TAG_BOOL as libc::c_int as int64_t,
+    };
+    init
+};
+pub const JS_TRUE: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            int32: 1 as libc::c_int,
+        },
+        tag: JS_TAG_BOOL as libc::c_int as int64_t,
+    };
+    init
+};
+pub const JS_EXCEPTION: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            int32: 0 as libc::c_int,
+        },
+        tag: JS_TAG_EXCEPTION as libc::c_int as int64_t,
+    };
+    init
+};
+pub const JS_UNINITIALIZED: JSValue = {
+    let mut init = JSValue {
+        u: JSValueUnion {
+            int32: 0 as libc::c_int,
+        },
+        tag: JS_TAG_UNINITIALIZED as libc::c_int as int64_t,
+    };
+    init
+};
+pub const JS_PROP_CONFIGURABLE: libc::c_int = (1 as libc::c_int) << 0 as libc::c_int;
+pub const JS_PROP_WRITABLE: libc::c_int = (1 as libc::c_int) << 1 as libc::c_int;
+pub const JS_PROP_ENUMERABLE: libc::c_int = (1 as libc::c_int) << 2 as libc::c_int;
+pub const JS_PROP_LENGTH: libc::c_int = (1 as libc::c_int) << 3 as libc::c_int;
+pub const JS_PROP_TMASK: libc::c_int = (3 as libc::c_int) << 4 as libc::c_int;
+pub const JS_PROP_NORMAL: libc::c_int = (0 as libc::c_int) << 4 as libc::c_int;
+pub const JS_PROP_GETSET: libc::c_int = (1 as libc::c_int) << 4 as libc::c_int;
+pub const JS_PROP_VARREF: libc::c_int = (2 as libc::c_int) << 4 as libc::c_int;
+pub const JS_PROP_AUTOINIT: libc::c_int = (3 as libc::c_int) << 4 as libc::c_int;
+pub const JS_PROP_THROW: libc::c_int = (1 as libc::c_int) << 14 as libc::c_int;
 #[inline(always)]
 pub unsafe extern "C" fn JS_NewBool(mut ctx: *mut JSContext, mut val: libc::c_int) -> JSValue {
     return {
@@ -141,10 +281,19 @@ pub unsafe extern "C" fn JS_NewInt64(mut ctx: *mut JSContext, mut val: int64_t) 
         u: JSValueUnion { int32: 0 },
         tag: 0,
     };
+    let mut current_block_3: u64;
     if val == val as int32_t as libc::c_long {
-        v = JS_NewInt32(ctx, val as int32_t);
+        current_block_3 = 792017965103506125;
     } else {
-        v = __JS_NewFloat64(ctx, val as libc::c_double);
+        current_block_3 = 9386390421034826751;
+    }
+    match current_block_3 {
+        9386390421034826751 => {
+            v = __JS_NewFloat64(ctx, val as libc::c_double);
+        }
+        _ => {
+            v = JS_NewInt32(ctx, val as int32_t);
+        }
     }
     return v;
 }
@@ -154,10 +303,19 @@ pub unsafe extern "C" fn JS_NewUint32(mut ctx: *mut JSContext, mut val: uint32_t
         u: JSValueUnion { int32: 0 },
         tag: 0,
     };
+    let mut current_block_3: u64;
     if val <= 0x7fffffff as libc::c_int as libc::c_uint {
-        v = JS_NewInt32(ctx, val as int32_t);
+        current_block_3 = 792017965103506125;
     } else {
-        v = __JS_NewFloat64(ctx, val as libc::c_double);
+        current_block_3 = 9386390421034826751;
+    }
+    match current_block_3 {
+        9386390421034826751 => {
+            v = __JS_NewFloat64(ctx, val as libc::c_double);
+        }
+        _ => {
+            v = JS_NewInt32(ctx, val as int32_t);
+        }
     }
     return v;
 }
@@ -173,16 +331,25 @@ pub unsafe extern "C" fn JS_NewFloat64(mut ctx: *mut JSContext, mut d: libc::c_d
     u.d = d;
     val = d as int32_t;
     t.d = val as libc::c_double;
+    let mut current_block_6: u64;
     if u.u == t.u {
-        v = {
-            let mut init = JSValue {
-                u: JSValueUnion { int32: val },
-                tag: JS_TAG_INT as libc::c_int as int64_t,
-            };
-            init
-        };
+        current_block_6 = 12675440807659640239;
     } else {
-        v = __JS_NewFloat64(ctx, d);
+        current_block_6 = 16658872821858055392;
+    }
+    match current_block_6 {
+        16658872821858055392 => {
+            v = __JS_NewFloat64(ctx, d);
+        }
+        _ => {
+            v = {
+                let mut init = JSValue {
+                    u: JSValueUnion { int32: val },
+                    tag: JS_TAG_INT as libc::c_int as int64_t,
+                };
+                init
+            };
+        }
     }
     return v;
 }
@@ -243,20 +410,92 @@ pub unsafe extern "C" fn JS_IsObject(mut v: JSValue) -> libc::c_int {
     return (v.tag as int32_t == JS_TAG_OBJECT as libc::c_int) as libc::c_int;
 }
 #[inline]
-pub unsafe extern "C" fn JS_DupValue(mut ctx: *mut JSContext, mut v: JSValue) -> JSValue {
+pub unsafe extern "C" fn JS_FreeValue(mut ctx: *mut JSContext, mut v: JSValue) {
+    let mut current_block_3: u64;
     if v.tag as int32_t as libc::c_uint >= JS_TAG_FIRST as libc::c_int as libc::c_uint {
-        let mut p: *mut JSRefCountHeader = v.u.ptr as *mut JSRefCountHeader;
-        let ref mut fresh12 = (*p).ref_count;
-        *fresh12 += 1;
+        current_block_3 = 18088007599891946824;
+    } else {
+        current_block_3 = 17778012151635330486;
+    }
+    match current_block_3 {
+        18088007599891946824 => {
+            let mut p: *mut JSRefCountHeader = v.u.ptr as *mut JSRefCountHeader;
+            let mut current_block_1: u64;
+            (*p).ref_count -= 1;
+            if (*p).ref_count <= 0 as libc::c_int {
+                current_block_1 = 10771263883588581193;
+            } else {
+                current_block_1 = 14155750587950065367;
+            }
+            match current_block_1 {
+                10771263883588581193 => {
+                    __JS_FreeValue(ctx, v);
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    };
+}
+#[inline]
+pub unsafe extern "C" fn JS_FreeValueRT(mut rt: *mut JSRuntime, mut v: JSValue) {
+    let mut current_block_3: u64;
+    if v.tag as int32_t as libc::c_uint >= JS_TAG_FIRST as libc::c_int as libc::c_uint {
+        current_block_3 = 18088007599891946824;
+    } else {
+        current_block_3 = 17778012151635330486;
+    }
+    match current_block_3 {
+        18088007599891946824 => {
+            let mut p: *mut JSRefCountHeader = v.u.ptr as *mut JSRefCountHeader;
+            let mut current_block_1: u64;
+            (*p).ref_count -= 1;
+            if (*p).ref_count <= 0 as libc::c_int {
+                current_block_1 = 10771263883588581193;
+            } else {
+                current_block_1 = 14155750587950065367;
+            }
+            match current_block_1 {
+                10771263883588581193 => {
+                    __JS_FreeValueRT(rt, v);
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    };
+}
+#[inline]
+pub unsafe extern "C" fn JS_DupValue(mut ctx: *mut JSContext, mut v: JSValue) -> JSValue {
+    let mut current_block_1: u64;
+    if v.tag as int32_t as libc::c_uint >= JS_TAG_FIRST as libc::c_int as libc::c_uint {
+        current_block_1 = 18088007599891946824;
+    } else {
+        current_block_1 = 8258075665625361029;
+    }
+    match current_block_1 {
+        18088007599891946824 => {
+            let mut p: *mut JSRefCountHeader = v.u.ptr as *mut JSRefCountHeader;
+            (*p).ref_count += 1;
+        }
+        _ => {}
     }
     return v;
 }
 #[inline]
 pub unsafe extern "C" fn JS_DupValueRT(mut rt: *mut JSRuntime, mut v: JSValue) -> JSValue {
+    let mut current_block_1: u64;
     if v.tag as int32_t as libc::c_uint >= JS_TAG_FIRST as libc::c_int as libc::c_uint {
-        let mut p: *mut JSRefCountHeader = v.u.ptr as *mut JSRefCountHeader;
-        let ref mut fresh13 = (*p).ref_count;
-        *fresh13 += 1;
+        current_block_1 = 18088007599891946824;
+    } else {
+        current_block_1 = 8258075665625361029;
+    }
+    match current_block_1 {
+        18088007599891946824 => {
+            let mut p: *mut JSRefCountHeader = v.u.ptr as *mut JSRefCountHeader;
+            (*p).ref_count += 1;
+        }
+        _ => {}
     }
     return v;
 }
@@ -283,17 +522,6 @@ pub unsafe extern "C" fn JS_ToCString(
 ) -> *const libc::c_char {
     return JS_ToCStringLen2(ctx, NULL as *mut size_t, val1, 0 as libc::c_int);
 }
-#[inline]
-pub unsafe extern "C" fn JS_FreeValue(mut ctx: *mut JSContext, mut v: JSValue) {
-    if v.tag as int32_t as libc::c_uint >= JS_TAG_FIRST as libc::c_int as libc::c_uint {
-        let mut p: *mut JSRefCountHeader = v.u.ptr as *mut JSRefCountHeader;
-        let ref mut fresh14 = (*p).ref_count;
-        *fresh14 -= 1;
-        if *fresh14 <= 0 as libc::c_int {
-            __JS_FreeValue(ctx, v);
-        }
-    }
-}
 #[inline(always)]
 pub unsafe extern "C" fn JS_GetProperty(
     mut ctx: *mut JSContext,
@@ -312,15 +540,32 @@ pub unsafe extern "C" fn JS_SetProperty(
     return JS_SetPropertyInternal(ctx, this_obj, prop, val, JS_PROP_THROW);
 }
 #[inline]
-pub unsafe extern "C" fn JS_FreeValueRT(mut rt: *mut JSRuntime, mut v: JSValue) {
-    if v.tag as int32_t as libc::c_uint >= JS_TAG_FIRST as libc::c_int as libc::c_uint {
-        let mut p: *mut JSRefCountHeader = v.u.ptr as *mut JSRefCountHeader;
-        let ref mut fresh15 = (*p).ref_count;
-        *fresh15 -= 1;
-        if *fresh15 <= 0 as libc::c_int {
-            __JS_FreeValueRT(rt, v);
-        }
-    }
+pub unsafe extern "C" fn JS_NewCFunctionLen(
+    mut ctx: *mut JSContext,
+    mut func: Option<JSCFunction>,
+    mut name: *const libc::c_char,
+    mut name_length: libc::c_int,
+    mut length: libc::c_int,
+) -> JSValue {
+    return JS_NewCFunction2Len(
+        ctx,
+        func,
+        name,
+        name_length,
+        length,
+        JS_CFUNC_generic,
+        0 as libc::c_int,
+    );
+}
+pub const NULL: libc::c_int = 0 as libc::c_int;
+#[inline]
+pub unsafe extern "C" fn JS_NewCFunction(
+    mut ctx: *mut JSContext,
+    mut func: Option<JSCFunction>,
+    mut name: *const libc::c_char,
+    mut length: libc::c_int,
+) -> JSValue {
+    return JS_NewCFunction2(ctx, func, name, length, JS_CFUNC_generic, 0 as libc::c_int);
 }
 #[inline]
 pub unsafe extern "C" fn JS_NewCFunctionMagic(
@@ -341,38 +586,27 @@ pub unsafe extern "C" fn JS_NewCFunctionMagic(
     );
 }
 #[inline]
-pub unsafe extern "C" fn JS_NewCFunction(
-    mut ctx: *mut JSContext,
-    mut func: Option<JSCFunction>,
-    mut name: *const libc::c_char,
-    mut length: libc::c_int,
-) -> JSValue {
-    return JS_NewCFunction2(ctx, func, name, length, JS_CFUNC_generic, 0 as libc::c_int);
-}
-
-#[inline]
-pub fn JS_GetTag(mut v: JSValue) -> int32_t {
-    return v.tag as int32_t;
+pub unsafe extern "C" fn JS_GetTag(mut v: JSValue) -> int64_t {
+    return v.tag as int32_t as int64_t;
 }
 #[inline]
-pub fn JS_GetInt(mut v: JSValue) -> int32_t {
-    return unsafe { v.u.int32 };
+pub unsafe extern "C" fn JS_GetInt(mut v: JSValue) -> int32_t {
+    return v.u.int32;
 }
 #[inline]
-pub fn JS_GetBool(mut v: JSValue) -> int32_t {
-    return unsafe { v.u.int32 };
+pub unsafe extern "C" fn JS_GetBool(mut v: JSValue) -> int32_t {
+    return v.u.int32;
 }
 #[inline]
-pub fn JS_GetFloat64(mut v: JSValue) -> libc::c_double {
-    return unsafe { v.u.float64 };
+pub unsafe extern "C" fn JS_GetFloat64(mut v: JSValue) -> libc::c_double {
+    return v.u.float64;
 }
 #[inline]
-pub fn JS_GetPtr(mut v: JSValue) -> *mut libc::c_void {
-    return unsafe { v.u.ptr };
+pub unsafe extern "C" fn JS_GetPtr(mut v: JSValue) -> *mut libc::c_void {
+    return v.u.ptr;
 }
-
 #[inline]
-pub const fn JS_MakeValue(mut tag: int32_t, mut val: int32_t) -> JSValue {
+pub unsafe extern "C" fn JS_MakeValue(mut tag: int32_t, mut val: int32_t) -> JSValue {
     return {
         let mut init = JSValue {
             u: JSValueUnion { int32: val },
@@ -381,9 +615,8 @@ pub const fn JS_MakeValue(mut tag: int32_t, mut val: int32_t) -> JSValue {
         init
     };
 }
-
 #[inline]
-pub const fn JS_MakePtr(mut tag: int32_t, mut p: uintptr_t) -> JSValue {
+pub unsafe extern "C" fn JS_MakePtr(mut tag: int32_t, mut p: uintptr_t) -> JSValue {
     return {
         let mut init = JSValue {
             u: JSValueUnion {
@@ -394,108 +627,42 @@ pub const fn JS_MakePtr(mut tag: int32_t, mut p: uintptr_t) -> JSValue {
         init
     };
 }
-
 #[inline]
-pub const fn JS_MakeNAN() -> JSValue {
+pub unsafe extern "C" fn JS_MakeNAN() -> JSValue {
     return JS_NAN;
 }
-const NAN: libc::c_float = ::core::f32::NAN;
-const JS_FLOAT64_NAN: libc::c_float = ::core::f32::NAN;
-const JS_NAN: JSValue = {
-    let mut init = JSValue {
-        u: JSValueUnion {
-            float64: JS_FLOAT64_NAN as libc::c_double,
-        },
-        tag: JS_TAG_FLOAT64 as libc::c_int as int64_t,
-    };
-    init
-};
 #[inline]
-pub const fn JS_MakeNULL() -> JSValue {
+pub unsafe extern "C" fn JS_MakeNULL() -> JSValue {
     return JS_NULL;
 }
-const JS_NULL: JSValue = {
-    let mut init = JSValue {
-        u: JSValueUnion {
-            int32: 0 as libc::c_int,
-        },
-        tag: JS_TAG_NULL as libc::c_int as int64_t,
-    };
-    init
-};
 #[inline]
-pub const fn JS_MakeUNDEFINED() -> JSValue {
+pub unsafe extern "C" fn JS_MakeUNDEFINED() -> JSValue {
     return JS_UNDEFINED;
 }
-const JS_UNDEFINED: JSValue = {
-    let mut init = JSValue {
-        u: JSValueUnion {
-            int32: 0 as libc::c_int,
-        },
-        tag: JS_TAG_UNDEFINED as libc::c_int as int64_t,
-    };
-    init
-};
 #[inline]
-pub const fn JS_MakeFALSE() -> JSValue {
+pub unsafe extern "C" fn JS_MakeFALSE() -> JSValue {
     return JS_FALSE;
 }
-const JS_FALSE: JSValue = {
-    let mut init = JSValue {
-        u: JSValueUnion {
-            int32: 0 as libc::c_int,
-        },
-        tag: JS_TAG_BOOL as libc::c_int as int64_t,
-    };
-    init
-};
 #[inline]
-pub const fn JS_MakeTRUE() -> JSValue {
+pub unsafe extern "C" fn JS_MakeTRUE() -> JSValue {
     return JS_TRUE;
 }
-const JS_TRUE: JSValue = {
-    let mut init = JSValue {
-        u: JSValueUnion {
-            int32: 1 as libc::c_int,
-        },
-        tag: JS_TAG_BOOL as libc::c_int as int64_t,
-    };
-    init
-};
 #[inline]
-pub const fn JS_MakeEXCEPTION() -> JSValue {
+pub unsafe extern "C" fn JS_MakeEXCEPTION() -> JSValue {
     return JS_EXCEPTION;
 }
-const JS_EXCEPTION: JSValue = {
-    let mut init = JSValue {
-        u: JSValueUnion {
-            int32: 0 as libc::c_int,
-        },
-        tag: JS_TAG_EXCEPTION as libc::c_int as int64_t,
-    };
-    init
-};
 #[inline]
-pub const fn JS_MakeUNINITIALIZED() -> JSValue {
+pub unsafe extern "C" fn JS_MakeUNINITIALIZED() -> JSValue {
     return JS_UNINITIALIZED;
 }
-const JS_UNINITIALIZED: JSValue = {
-    let mut init = JSValue {
-        u: JSValueUnion {
-            int32: 0 as libc::c_int,
-        },
-        tag: JS_TAG_UNINITIALIZED as libc::c_int as int64_t,
-    };
-    init
-};
-
 #[inline]
-pub const fn JS_MakeFloat64(mut d: libc::c_double) -> JSValue {
-    let mut v: JSValue = JSValue {
-        u: JSValueUnion { int32: 0 },
-        tag: 0,
-    };
-    v.tag = JS_TAG_FLOAT64 as libc::c_int as int64_t;
-    v.u.float64 = d;
-    return v;
+pub unsafe extern "C" fn _to_keep_symbols(mut flags: libc::c_int) -> libc::c_int {
+    return (flags & JS_PROP_CONFIGURABLE & JS_PROP_WRITABLE & JS_PROP_ENUMERABLE != 0
+        && JS_PROP_LENGTH
+            & JS_PROP_TMASK
+            & JS_PROP_NORMAL
+            & JS_PROP_GETSET
+            & JS_PROP_VARREF
+            & JS_PROP_AUTOINIT
+            != 0) as libc::c_int;
 }

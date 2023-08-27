@@ -77,6 +77,7 @@ fn main() {
     cc.compile("qjs");
 
     println!("cargo:rerun-if-changed=csrc/qjs-pink.h");
+    println!("cargo:rerun-if-changed=csrc/quickjs.h");
     let mut builder = bindgen::Builder::default()
         .header("csrc/qjs-pink.h")
         .use_core()

@@ -1,0 +1,38 @@
+#!/usr/bin/awk -f
+
+/#!\[feature\(extern_types\)\]/ { next }
+
+/#!\[no_std\]/ {
+    print "#![allow(unused_variables)]"
+    print "use crate::c::*;"
+    print "use crate::libc;"
+    next
+}
+
+/#\[inline/ {
+    print
+    print "pub"
+    next
+}
+
+/pub type JSRuntime;/ { next }
+/pub type JSContext;/ { next }
+/pub struct JSValue/ {
+    print "pub struct JSValue_ {"
+    next
+}
+/type JSValue/ { next }
+/pub union JSValueUnion/ {
+    print "pub union JSValueUnion_ {"
+    next
+}
+
+/pub type size_t/ {
+    print "pub type size_t = usize;"
+    next
+}
+
+{
+    print
+}
+
