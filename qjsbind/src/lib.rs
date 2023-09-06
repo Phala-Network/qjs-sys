@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
-extern crate alloc;
+pub extern crate alloc;
 
 pub use as_bytes::{
     decode_as_bytes, decode_as_bytes_maybe_hex, encode_as_bytes, AsBytes, BytesOrHex,

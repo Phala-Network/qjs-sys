@@ -123,7 +123,7 @@ macro_rules! impl_host_fn {
                     let $arg = match $arg::from_js_value(value) {
                         Ok(arg) => arg,
                         Err(err) => {
-                            let msg = format!("failed to convert JSValue to {}: {:?}", core::any::type_name::<$arg>(), err);
+                            let msg = format!("failed to convert JSValue to {}: {err:?}", core::any::type_name::<$arg>());
                             js_throw_type_error(ctx, &msg);
                             return c::JS_EXCEPTION;
                         }
