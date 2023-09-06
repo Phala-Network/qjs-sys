@@ -609,7 +609,7 @@ impl Value {
         if self.is_string() {
             let s = self.to_string_utf8().ok_or(Error::Expect("string"))?;
             let s = s.as_str();
-            if !(s.starts_with("0x") || s.starts_with("0X")) {
+            if s.starts_with("0x") || s.starts_with("0X") {
                 let s = &s[2..];
                 Ok(hex::decode(s).or(Err(Error::Expect("hex string")))?)
             } else {

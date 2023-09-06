@@ -260,9 +260,15 @@ impl<'a> FieldAttrs<'a> {
         self.as_bytes
     }
 
+    pub fn bytes_or_hex(&self) -> bool {
+        self.bytes_or_hex
+    }
+
     pub fn decoder_fn(&self, crate_qjsbind: &syn::Ident) -> syn::Path {
         if self.as_bytes {
             syn::parse_quote!(#crate_qjsbind::decode_as_bytes)
+        } else if self.bytes_or_hex {
+            syn::parse_quote!(#crate_qjsbind::decode_as_bytes_maybe_hex)
         } else {
             syn::parse_quote!(FromJsValue::from_js_value)
         }

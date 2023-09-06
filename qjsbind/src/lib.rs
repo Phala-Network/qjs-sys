@@ -3,7 +3,9 @@
 #[macro_use]
 extern crate alloc;
 
-pub use as_bytes::{decode_as_bytes, encode_as_bytes, AsBytes, BytesOrHex};
+pub use as_bytes::{
+    decode_as_bytes, decode_as_bytes_maybe_hex, encode_as_bytes, AsBytes, BytesOrHex,
+};
 pub use engine::{Context, Runtime};
 pub use error::{Error, Result};
 pub use eval::{eval, JsCode};

@@ -117,7 +117,7 @@ fn derive_struct(
                     fn to_js_value(&self, ctx: core::ptr::NonNull<c::JSContext>) -> Result<Value> {
                         let obj = Value::new_object(ctx);
                         #(for field in &attrs) {
-                            #(if field.as_bytes()) {
+                            #(if field.as_bytes() || field.bytes_or_hex()) {
                                 let field_value = #crate_qjsbind::encode_as_bytes(ctx, &self.#{&field.field().ident});
                             }
                             #(else) {
