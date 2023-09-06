@@ -20662,7 +20662,11 @@ static __exception int next_token(JSParseState *s)
  redo:
     s->token.line_num = s->line_num;
     s->token.ptr = p;
-    c = *p;
+    if (p >= s->buf_end) {
+        c = 0;
+    } else {
+        c = *p;
+    }
     switch(c) {
     case 0:
         if (p >= s->buf_end) {
