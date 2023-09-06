@@ -1,5 +1,5 @@
 use crate::{c, JsCode, Value};
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use core::ptr::NonNull;
 
 pub struct Context {
@@ -38,6 +38,21 @@ impl Context {
 
     pub fn eval(&self, code: &JsCode) -> Result<Value, String> {
         crate::eval(self.ptr, code)
+    }
+
+    pub fn throw(&self, err: impl core::fmt::Display) {
+        self.throw_str(&err.to_string());
+    }
+
+    pub fn throw_dbg(&self, err: impl core::fmt::Debug) {
+        self.throw_str(&format!("{:?}", err));
+    }
+
+    pub fn throw_str(&self, err: &str) {
+        unsafe {
+            let err = c::JS_NewStringLen(self.ptr.as_ptr(), err.as_ptr() as _, err.len());
+            c::JS_Throw(self.as_ptr(), err);
+        }
     }
 }
 
