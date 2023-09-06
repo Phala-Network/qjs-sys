@@ -274,6 +274,7 @@ impl<V: ToJsValue> ToJsValue for BTreeMap<String, V> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AsBytes<T>(pub T);
 
 impl<T: AsRef<[u8]>> ToJsValue for AsBytes<T> {
