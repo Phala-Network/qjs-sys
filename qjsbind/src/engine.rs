@@ -49,9 +49,9 @@ impl Context {
     }
 
     pub fn throw_str(&self, err: &str) {
+        let err = Value::from_str(self.ptr, err);
         unsafe {
-            let err = c::JS_NewStringLen(self.ptr.as_ptr(), err.as_ptr() as _, err.len());
-            c::JS_Throw(self.as_ptr(), err);
+            c::JS_Throw(self.as_ptr(), err.leak());
         }
     }
 }
