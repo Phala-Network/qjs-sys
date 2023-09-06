@@ -1,4 +1,5 @@
 use crate::{c, JsCode, Value};
+use alloc::string::String;
 use core::ptr::NonNull;
 
 pub struct Context {

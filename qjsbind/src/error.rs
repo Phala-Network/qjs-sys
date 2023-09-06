@@ -1,4 +1,4 @@
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use core::fmt::Display;
 
 pub type Result<T, E = Error> = core::result::Result<T, E>;
@@ -27,7 +27,7 @@ impl Display for Error {
 #[cfg(feature = "std")]
 impl std::error::Error for Error {}
 
-impl From<Error> for alloc::string::String {
+impl From<Error> for String {
     fn from(value: Error) -> Self {
         value.to_string()
     }

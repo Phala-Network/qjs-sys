@@ -7,10 +7,10 @@ edition = "2021"
 qjs-sys = { path = "../qjs-sys" }
 qjsbind-derive = { path = "../qjsbind-derive" }
 
-hex = "0.4"
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
 cstr = "0.2"
-tinyvec = "1"
-scopeguard = "1"
+tinyvec = { version = "1", default-features = false, features = ["alloc"] }
+scopeguard = { version = "1", default-features = false }
 
 [features]
 default = ["std"]

@@ -14,10 +14,10 @@ crate-type = ['rlib']
 scopeguard = { version = "1.1.0", default-features = false }
 hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
 cstr = "0.2"
-tinyvec = { version = "1", features = ["alloc"] }
+tinyvec = { version = "1", default-features = false, features = ["alloc"] }
 
 # For serde
-serde = "1"
+serde = { version = "1", default-features = false }
 concat-idents = "1"
 
 [build-dependencies]
@@ -25,6 +25,7 @@ cc = "1.0"
 bindgen = "0.63"
 
 [features]
+std = ["serde/std"]
 with-polyfills = []
 sanitize-address = []
 classic-host-call = []
