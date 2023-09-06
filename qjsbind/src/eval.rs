@@ -6,7 +6,7 @@ use crate::traits::ToNonNull;
 use crate::{c, Value};
 
 pub enum JsCode<'a> {
-    Source(&'a CStr),
+    Source(&'a str),
     Bytecode(&'a [u8]),
 }
 
@@ -51,7 +51,7 @@ pub fn eval(ctx: NonNull<c::JSContext>, script: &JsCode) -> Result<Value, String
     let code = match script {
         JsCode::Source(src) => c::code_t {
             code: src.as_ptr() as _,
-            code_len: src.to_bytes().len() as _,
+            code_len: src.as_bytes().len() as _,
             is_bytecode: 0,
         },
         JsCode::Bytecode(bytes) => c::code_t {

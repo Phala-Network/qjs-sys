@@ -16,6 +16,6 @@ hex = { version = "0.4", optional = true }
 hex_fmt = { version = "0.3", optional = true }
 
 [features]
-default = ["base64", "sha1", "sha2", "sha3", "blake2", "hex"]
+default = ["base64", "sha1", "sha2", "sha3", "blake2", "std", "hex"]
 hex = ["dep:hex", "hex_fmt"]
 std = ["qjs/std"]
