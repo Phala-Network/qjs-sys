@@ -172,6 +172,7 @@ pub struct FieldAttrs<'a> {
     rename: Option<String>,
     default: Option<TypeDefault>,
     as_bytes: bool,
+    bytes_or_hex: bool,
 }
 
 impl<'a> FieldAttrs<'a> {
@@ -181,6 +182,7 @@ impl<'a> FieldAttrs<'a> {
             rename: None,
             default: None,
             as_bytes: false,
+            bytes_or_hex: false,
         };
 
         for meta_item in field.attrs.iter().flat_map(get_meta_items).flatten() {
@@ -207,13 +209,22 @@ impl<'a> FieldAttrs<'a> {
                         )?));
                     }
                     syn::Meta::Path(path) if path.is_ident("as_bytes") => {
-                        if rv.as_bytes {
+                        if rv.bytes_or_hex || rv.as_bytes {
                             return Err(syn::Error::new_spanned(
                                 meta,
                                 "duplicate as_bytes attribute",
                             ));
                         }
                         rv.as_bytes = true;
+                    }
+                    syn::Meta::Path(path) if path.is_ident("bytes_or_hex") => {
+                        if rv.bytes_or_hex || rv.as_bytes {
+                            return Err(syn::Error::new_spanned(
+                                meta,
+                                "duplicate bytes_or_hex attribute",
+                            ));
+                        }
+                        rv.bytes_or_hex = true;
                     }
                     syn::Meta::Path(path) if path.is_ident("default") => {
                         if rv.default.is_some() {

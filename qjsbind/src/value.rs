@@ -599,13 +599,24 @@ impl Value {
             Ok(v)
         } else if self.is_string() {
             let s = self.to_string_utf8().ok_or(Error::Expect("string"))?;
-            let s = s.as_str();
-            if !(s.starts_with("0x") || s.starts_with("0X")) {
-                return Err(Error::Expect("hex starts with 0x"));
-            }
-            hex::decode(&s[2..]).or(Err(Error::Expect("invalid hex")))
+            Ok(s.as_str().as_bytes().to_vec())
         } else {
             Err(Error::Expect("bytes-like value"))
+        }
+    }
+
+    pub fn decode_bytes_maybe_hex(&self) -> Result<Vec<u8>> {
+        if self.is_string() {
+            let s = self.to_string_utf8().ok_or(Error::Expect("string"))?;
+            let s = s.as_str();
+            if !(s.starts_with("0x") || s.starts_with("0X")) {
+                let s = &s[2..];
+                Ok(hex::decode(s).or(Err(Error::Expect("hex string")))?)
+            } else {
+                Ok(s.as_bytes().to_vec())
+            }
+        } else {
+            self.decode_bytes()
         }
     }
     pub fn parse<T: core::str::FromStr>(&self) -> Option<T> {

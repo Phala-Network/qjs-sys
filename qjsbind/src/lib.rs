@@ -3,12 +3,11 @@
 #[macro_use]
 extern crate alloc;
 
-pub use as_bytes::{decode_as_bytes, encode_as_bytes};
+pub use as_bytes::{decode_as_bytes, encode_as_bytes, AsBytes, BytesOrHex};
 pub use engine::{Context, Runtime};
 pub use error::{Error, Result};
 pub use eval::{eval, JsCode};
 pub use host_function::{call_host_function, host_fn_stub, Function, HostFunction};
-pub use impls::AsBytes;
 pub use js_string::JsString;
 pub use js_u8array::JsUint8Array;
 pub use qjs_sys as sys;
