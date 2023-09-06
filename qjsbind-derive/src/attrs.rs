@@ -154,8 +154,8 @@ impl<'a> ContainerAttrs<'a> {
                     }
                     camel
                 }
-                RenameAll::KebabCase => name.replace("_", "-"),
-                RenameAll::ScreamingKebabCase => name.replace("_", "-").to_ascii_uppercase(),
+                RenameAll::KebabCase => name.replace('_', "-"),
+                RenameAll::ScreamingKebabCase => name.replace('_', "-").to_ascii_uppercase(),
             }
         } else {
             name
