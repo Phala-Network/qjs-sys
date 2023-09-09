@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use chumsky::{error::Error, prelude::*};
 
 pub type String = tinyvec_string::TinyString<[u8; 24]>;

@@ -1,5 +1,4 @@
-use alloc::sync::Arc;
-use alloc::vec::Vec;
+use alloc::{format, string::String, sync::Arc, vec::Vec};
 use core::ptr::NonNull;
 use parity_scale_codec::{Compact, Decode, Encode, Output};
 
