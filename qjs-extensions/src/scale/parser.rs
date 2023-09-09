@@ -117,6 +117,7 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Vec<ScaleType>, extra::Err<Simpl
         .ignore_then(struct_field.separated_by(just(",")).collect::<Vec<_>>())
         .then_ignore(just("}"))
         .map(|vec| ScaleType::Struct(vec));
+    let separator = text::whitespace().then(just(";").then(text::whitespace()).or_not());
     choice((
         primitive_def,
         compact_def,
@@ -126,8 +127,16 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Vec<ScaleType>, extra::Err<Simpl
         enum_def,
         struct_def,
     ))
-    .separated_by(text::newline())
+    .separated_by(separator)
     .collect::<Vec<_>>()
-    .then_ignore(text::newline().or_not())
+    .then_ignore(text::whitespace())
     .then_ignore(end())
+}
+
+#[test]
+fn test_parser() {
+    let input = "#u8;@2[3](4,5)<foo:6:7,bar::9,baz:3,quz>\n{foo:10,bar:11}()";
+    let result = parser().parse(input).into_result();
+    println!("{result:?}");
+    assert!(result.is_ok());
 }

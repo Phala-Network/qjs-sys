@@ -3,8 +3,7 @@ use alloc::vec::Vec;
 use core::ptr::NonNull;
 use parity_scale_codec::{Compact, Decode, Encode, Output};
 
-use js::{AsBytes, BytesOrHex, FromJsValue, ToJsValue};
-use qjs::{self as js, c};
+use qjs::{self as js, c, AsBytes, BytesOrHex, FromJsValue, ToJsValue};
 
 use self::parser::{EnumType, PrimitiveType, ScaleType};
 
@@ -16,6 +15,40 @@ pub fn setup(obj: &js::Value) -> js::Result<()> {
     obj.define_property_fn("scaleEncodeAll", encode_all)?;
     obj.define_property_fn("scaleDecode", decode)?;
     Ok(())
+}
+
+impl EnumType {
+    fn get_variant_by_name(&self, name: &str) -> js::Result<(&str, Option<usize>, usize)> {
+        for (ind, (variant_name, tid, scale_ind)) in self.variants.iter().enumerate() {
+            if variant_name == name {
+                return Ok((variant_name.as_str(), tid.clone(), scale_ind.unwrap_or(ind)));
+            }
+        }
+        Err(js::Error::Custom(format!("Unknown variant {}", name)))
+    }
+
+    fn get_variant_by_index(&self, tag: usize) -> js::Result<(&str, Option<usize>)> {
+        match self.variants.get(tag) {
+            Some((name, tid, ind)) => match ind {
+                Some(ind) => {
+                    if tag == *ind {
+                        return Ok((name.as_str(), tid.clone()));
+                    }
+                }
+                None => return Ok((name.as_str(), tid.clone())),
+            },
+            None => (),
+        };
+        // fallback to linear search for custom index
+        for (name, tid, ind) in self.variants.iter() {
+            if let Some(ind) = ind {
+                if tag == *ind {
+                    return Ok((name.as_str(), tid.clone()));
+                }
+            }
+        }
+        Err(js::Error::Custom(format!("Unknown variant {}", tag)))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -182,32 +215,31 @@ fn encode_value(
             }
             Ok(())
         }
-        ScaleType::Enum(EnumType { variants }) => {
-            let tag = js::JsString::from_js_value(value.get_property("tag")?)?;
-            for (ind, (variant_name, variant_type, variant_index)) in variants.iter().enumerate() {
-                let ind = variant_index.unwrap_or(ind);
-                let Ok(ind) = u8::try_from(ind) else {
-                    return Err(js::Error::Custom(format!(
-                        "Variant index {} is too large",
-                        ind
-                    )));
-                };
-                if variant_name == tag.as_str() {
+        ScaleType::Enum(def) => {
+            for entry in value.entries()? {
+                let (k, v) = entry?;
+                let key = js::JsString::from_js_value(k)?;
+                if let Some((_name, tid, ind)) = def.get_variant_by_name(key.as_str()).ok() {
+                    let Ok(ind) = u8::try_from(ind) else {
+                        return Err(js::Error::Custom(format!(
+                            "Variant index {} is too large",
+                            ind
+                        )));
+                    };
                     ind.encode_to(out);
-                    if let Some(variant_type) = variant_type {
-                        encode_value(
-                            value.get_property("data")?,
-                            *variant_type,
-                            type_registry,
-                            out,
-                        )?;
+                    if let Some(tid) = tid {
+                        encode_value(v, tid, type_registry, out)?;
                     }
                     return Ok(());
                 }
             }
             Err(js::Error::Custom(format!(
-                "Unknown variant {}",
-                tag.as_str()
+                "Enum with any variant of {}",
+                def.variants
+                    .iter()
+                    .map(|(name, _, _)| name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )))
         }
         ScaleType::Struct(fields) => {
@@ -358,12 +390,13 @@ fn decode_valude(
         }
         ScaleType::Enum(variants) => {
             let tag = u8::decode(buf).map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
-            let (variant_name, variant_type) = find_variant(&variants, tag as usize)?;
+            let (variant_name, variant_type) = variants.get_variant_by_index(tag as usize)?;
             let out = ctx.new_object();
-            out.set_property("tag", &ctx.new_string(variant_name))?;
             if let Some(variant_type) = variant_type {
                 let sub_value = decode_valude(ctx, buf, variant_type, type_registry)?;
-                out.set_property("data", &sub_value)?;
+                out.set_property(variant_name, &sub_value)?;
+            } else {
+                out.set_property(variant_name, &js::Value::Null)?;
             }
             Ok(out)
         }
@@ -376,29 +409,6 @@ fn decode_valude(
             Ok(out)
         }
     }
-}
-
-fn find_variant(t: &EnumType, tag: usize) -> js::Result<(&str, Option<usize>)> {
-    match t.variants.get(tag) {
-        Some((name, tid, ind)) => match ind {
-            Some(ind) => {
-                if tag == *ind {
-                    return Ok((name.as_str(), tid.clone()));
-                }
-            }
-            None => return Ok((name.as_str(), tid.clone())),
-        },
-        None => (),
-    };
-    // fallback to linear search for custom index
-    for (name, tid, ind) in t.variants.iter() {
-        if let Some(ind) = ind {
-            if tag == *ind {
-                return Ok((name.as_str(), tid.clone()));
-            }
-        }
-    }
-    Err(js::Error::Custom(format!("Unknown variant {}", tag)))
 }
 
 fn decode_primitive(
