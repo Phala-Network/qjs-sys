@@ -14,3 +14,5 @@ pub mod sha2;
 #[cfg(feature = "sha3")]
 pub mod sha3;
 pub mod utf8;
+#[cfg(feature = "scale")]
+pub mod scale;

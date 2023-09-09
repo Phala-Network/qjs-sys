@@ -167,6 +167,10 @@ impl Value {
         }
     }
 
+    pub fn index(&self, ind: usize) -> Result<Self> {
+        self.get_property(&ind.to_string())
+    }
+
     pub fn get_property(&self, name: &str) -> Result<Self> {
         let ctx = self.context()?;
         let mut name_buf: tinyvec::TinyVec<[u8; 32]> = name.bytes().collect();
@@ -445,6 +449,10 @@ impl Value {
 }
 
 impl Value {
+    pub fn index_set(&self, ind: usize, value: &Value) -> Result<(), Error> {
+        self.set_property(&ind.to_string(), value)
+    }
+
     pub fn set_property(&self, key: &str, value: &Value) -> Result<(), Error> {
         let ctx = self.context()?;
         unsafe {

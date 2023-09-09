@@ -36,6 +36,10 @@ impl Context {
         Value::new_array(self.ptr)
     }
 
+    pub fn new_string(&self, s: &str) -> Value {
+        Value::from_str(self.ptr, s)
+    }
+
     pub fn eval(&self, code: &JsCode) -> Result<Value, String> {
         crate::eval(self.ptr, code)
     }
@@ -59,6 +63,12 @@ impl Context {
 impl AsRef<c::JSContext> for Context {
     fn as_ref(&self) -> &c::JSContext {
         unsafe { self.ptr.as_ref() }
+    }
+}
+
+impl From<NonNull<c::JSContext>> for Context {
+    fn from(ptr: NonNull<c::JSContext>) -> Self {
+        Self::clone_from_ptr(ptr)
     }
 }
 
