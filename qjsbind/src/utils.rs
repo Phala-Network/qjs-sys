@@ -2,19 +2,14 @@ use alloc::ffi::CString;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
-use crate::c;
-use crate as js;
+use crate::{self as js, c, FromJsValue};
 
 pub fn js_throw_type_error(ctx: &js::Context, msg: &str) -> c::JSValue {
     let cmsg = CString::new(msg).unwrap_or_default();
     unsafe { c::JS_ThrowTypeError(ctx.as_ptr(), cmsg.as_ptr()) }
 }
 
-pub fn ctx_to_str<T>(
-    ctx: &js::Context,
-    value: c::JSValueConst,
-    cb: impl FnOnce(&str) -> T,
-) -> T {
+pub fn ctx_to_str<T>(ctx: &js::Context, value: c::JSValueConst, cb: impl FnOnce(&str) -> T) -> T {
     unsafe {
         let mut len: c::size_t = 0;
         let ptr = c::JS_ToCStringLen(ctx.as_ptr(), &mut len, value);
@@ -84,4 +79,89 @@ pub fn compile(code: &str, filename: &str) -> Result<Vec<u8>, &'static str> {
         let bytes = core::slice::from_raw_parts(out_buf as *const u8, out_buf_len as _).to_vec();
         Ok(bytes)
     }
+}
+
+pub fn recursive_to_string(value: &js::Value, level: u8, escape: bool, buf: &mut String) {
+    if value.is_generic_object() {
+        if level == 0 {
+            buf.push_str("{...}");
+        } else {
+            let mut first = true;
+            let Ok(entries) = value.entries() else {
+                buf.push_str("[object Object]");
+                return;
+            };
+            buf.push_str("{");
+            for r in entries {
+                let Ok((key, value)) = r else {
+                    continue;
+                };
+                if first {
+                    first = false;
+                } else {
+                    buf.push_str(", ");
+                }
+                buf.push_str(&key.to_string());
+                buf.push_str(": ");
+                recursive_to_string(&value, level - 1, true, buf);
+            }
+            buf.push_str("}");
+        }
+        return;
+    } else if value.is_array() {
+        if level == 0 {
+            buf.push_str("[...]");
+            return;
+        }
+        let mut first = true;
+        let Ok(entries) = value.entries() else {
+            buf.push_str("[object Array]");
+            return;
+        };
+        buf.push_str("[");
+        for r in entries {
+            let Ok((_, value)) = r else {
+                continue;
+            };
+            if first {
+                first = false;
+            } else {
+                buf.push_str(", ");
+            }
+            recursive_to_string(&value, level - 1, true, buf);
+        }
+        buf.push_str("]");
+        return;
+    } else if value.is_uint8_array() {
+        // print uint8 array as hex string
+        let Ok(u8a) = js::JsUint8Array::from_js_value(value.clone()) else {
+            buf.push_str("[object Uint8Array]");
+            return;
+        };
+        buf.push_str("0x");
+        buf.push_str(&hex::encode(u8a.as_bytes()));
+        return;
+    }
+    if escape && value.is_string() {
+        // print escaped string
+        buf.push('"');
+        for c in value.to_string().chars() {
+            match c {
+                '"' => buf.push_str("\\\""),
+                '\\' => buf.push_str("\\\\"),
+                '\n' => buf.push_str("\\n"),
+                '\r' => buf.push_str("\\r"),
+                '\t' => buf.push_str("\\t"),
+                '\u{0008}' => buf.push_str("\\b"),
+                '\u{000C}' => buf.push_str("\\f"),
+                '\u{000B}' => buf.push_str("\\v"),
+                '\u{0007}' => buf.push_str("\\a"),
+                '\u{0000}' => buf.push_str("\\0"),
+                _ => buf.push(c),
+            }
+        }
+        buf.push('"');
+        return;
+    }
+    buf.push_str(&value.to_string());
 }
