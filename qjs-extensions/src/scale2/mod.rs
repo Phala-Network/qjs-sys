@@ -11,12 +11,30 @@ use self::parser::{Enum, Id, PrimitiveType, String as TinyString, Type};
 
 mod parser;
 
-pub fn setup(obj: &js::Value) -> js::Result<()> {
+pub fn setup(obj: &js::Value, ctx: &js::Context) -> js::Result<()> {
     obj.define_property_fn("parseTypes", parse_types)?;
     obj.define_property_fn("appendTypes", append_types)?;
     obj.define_property_fn("encode", encode)?;
     obj.define_property_fn("encodeAll", encode_all)?;
     obj.define_property_fn("decode", decode)?;
+    obj.define_property_fn("decodeAll", decode_all)?;
+    obj.define_property_fn("codec", codec)?;
+    ctx.eval(&js::Code::Bytecode(qjsc::compiled!(
+        r#"globalThis.ScaleCodec = {
+            encode(value) {
+                const encoder = this.isArray ? this.scl.encodeAll : this.scl.encode;
+                return encoder(value, this.ty, this.registry);
+            },
+            decode(value) {
+                const decoder = this.isArray ? this.scl.decodeAll : this.scl.decode;
+                return decoder(value, this.ty, this.registry);
+            },
+        };"#
+    )))
+    .map_err(js::Error::Custom)?;
+    ctx.get_global_object()
+        .get_property("ScaleCodec")?
+        .set_property("scl", obj)?;
     Ok(())
 }
 
@@ -429,6 +447,39 @@ fn decode(
     decode_valude(&ctx, &mut value.as_bytes(), &tid, &type_registry.borrow())
 }
 
+#[js::host_call(with_context)]
+fn decode_all(
+    ctx: js::Context,
+    _this: js::Value,
+    value: js::JsUint8Array,
+    tids: Vec<Id>,
+    type_registry: TypeRegistry,
+) -> js::Result<Vec<js::Value>> {
+    let mut buf = value.as_bytes();
+    let mut out = Vec::new();
+    for tid in tids {
+        let v = decode_valude(&ctx, &mut buf, &tid, &type_registry.borrow())?;
+        out.push(v);
+    }
+    Ok(out)
+}
+
+#[js::host_call(with_context)]
+fn codec(
+    ctx: js::Context,
+    _this: js::Value,
+    tid: js::Value,
+    registry: js::Value,
+) -> js::Result<js::Value> {
+    let obj = ctx.new_object();
+    let proto = ctx.get_global_object().get_property("ScaleCodec")?;
+    obj.set_prototype(&proto)?;
+    obj.set_property("ty", &tid)?;
+    obj.set_property("registry", &registry)?;
+    obj.set_property("isArray", &js::Value::from_bool(&ctx, tid.is_array()))?;
+    Ok(obj)
+}
+
 fn decode_valude(
     ctx: &js::Context,
     buf: &mut &[u8],
@@ -617,12 +668,14 @@ fn it_works() {
         Foo = {
             a: u32,
             b: @u32,
-            // c: @(),
+            // Compat(()) is allowed
+            c: @(),
             d: str,
             e: [u8],
             f: [u8;3],
             g: [u32;3],
             bar: Bar,
+            // Anonymous type is allowed
             baz: <A|B:u32:20|C:(u32,u32)>,
         };
         Bar = <A|B:u32:20|C:(u32,u32)>;

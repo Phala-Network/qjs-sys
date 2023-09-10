@@ -478,6 +478,17 @@ impl Value {
             }
         }
     }
+    pub fn set_prototype(&self, proto: &Value) -> Result<(), Error> {
+        let ctx = self.context()?;
+        unsafe {
+            let r = c::JS_SetPrototype(ctx.as_ptr(), *self.raw_value(), *proto.raw_value());
+            if r == 1 {
+                Ok(())
+            } else {
+                Err(Error::Static("Failed to set prototype"))
+            }
+        }
+    }
     pub fn define_property_fn(&self, key: &str, f: JsCFunction) -> Result<(), Error> {
         let ctx = self.context()?;
         let f = unsafe {
