@@ -1,3 +1,4 @@
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use chumsky::{error::Error, prelude::*};
 use core::fmt;
@@ -55,10 +56,11 @@ fn lexer<'src>(
         .collect()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum Id {
     Name(String),
     Num(u32),
+    Type(Box<Type>),
 }
 
 impl From<&str> for Id {
@@ -191,84 +193,88 @@ fn type_parser<'tokens, 'src: 'tokens, E>(
 where
     E: extra::ParserExtra<'tokens, ParserInput<'tokens, 'src>>,
 {
-    use Token::*;
-    let ident = select! { Ident(ident) => String::from(ident) };
-    let tid = select! {
-        Ident(ident) => Id::Name(ident.into()),
-        Num(n) => Id::Num(n),
-    };
-    let num = select! { Num(v) => v };
-    // A list of type identifiers
-    let tids = tid
-        .separated_by(just(Op(',')))
-        .allow_trailing()
-        .collect::<Vec<_>>();
-    let compact_def = just(Op('@')).ignore_then(tid).map(|tid| Type::Compact(tid));
-    let tuple_def = just(Op('('))
-        .ignore_then(tids)
-        .then_ignore(just(Op(')')))
-        .map(|ty| Type::Tuple(ty));
-    let array_def = just(Op('['))
-        .ignore_then(tid.then_ignore(just(Op(';'))).then(num))
-        .then_ignore(just(Op(']')))
-        .map(|(ty, len)| Type::Array(ty, len));
-    let seq_def = just(Op('['))
-        .ignore_then(tid)
-        .then_ignore(just(Op(']')))
-        .map(|len| Type::Seq(len));
-    let enum_variant = ident
-        .then(just(Op(':')).ignore_then(tid.or_not()).or_not())
-        .then(just(Op(':')).ignore_then(num).or_not())
-        .map(|((name, t), i)| (name, t.flatten(), i));
-    let enum_def = just(Op('<'))
-        .ignore_then(
-            enum_variant
-                .separated_by(just(Op(',')))
-                .allow_trailing()
-                .collect::<Vec<_>>(),
-        )
-        .map(|vec| Type::Enum(Enum::new(vec)))
-        .then_ignore(just(Op('>')));
-    let struct_field = ident
-        .then(just(Op(':')).ignore_then(tid))
-        .map(|(name, tid)| (name, tid));
-    let struct_def = just(Op('{'))
-        .ignore_then(
-            struct_field
-                .separated_by(just(Op(',')))
-                .allow_trailing()
-                .collect::<Vec<_>>(),
-        )
-        .then_ignore(just(Op('}')))
-        .map(|vec| Type::Struct(vec));
-    let alias_def = tid.map(Type::Alias);
-    let primitive_types = choice((
-        just(Ident("u8")).map(|_| PrimitiveType::U8),
-        just(Ident("u16")).map(|_| PrimitiveType::U16),
-        just(Ident("u32")).map(|_| PrimitiveType::U32),
-        just(Ident("u64")).map(|_| PrimitiveType::U64),
-        just(Ident("u128")).map(|_| PrimitiveType::U128),
-        just(Ident("i8")).map(|_| PrimitiveType::I8),
-        just(Ident("i16")).map(|_| PrimitiveType::I16),
-        just(Ident("i32")).map(|_| PrimitiveType::I32),
-        just(Ident("i64")).map(|_| PrimitiveType::I64),
-        just(Ident("i128")).map(|_| PrimitiveType::I128),
-        just(Ident("bool")).map(|_| PrimitiveType::Bool),
-        just(Ident("str")).map(|_| PrimitiveType::Str),
-    ));
-    let primitive_def = just(Op('#'))
-        .ignore_then(primitive_types)
-        .map(|ty| Type::Primitive(ty));
-    choice((
-        primitive_def,
-        alias_def,
-        compact_def,
-        seq_def,
-        array_def,
-        tuple_def,
-        enum_def,
-        struct_def,
-    ))
+    recursive(|typedef| {
+        use Token::*;
+        let ident = select! { Ident(ident) => String::from(ident) };
+        let tid = select! {
+            Ident(ident) => Id::Name(ident.into()),
+            Num(n) => Id::Num(n),
+        };
+        let typ = tid.or(typedef.map(|t| Id::Type(Box::new(t))));
+        let num = select! { Num(v) => v };
+        // A list of type identifiers
+        let tids = typ
+            .clone()
+            .separated_by(just(Op(',')))
+            .allow_trailing()
+            .collect::<Vec<_>>();
+        let compact_def = just(Op('@')).ignore_then(tid).map(|tid| Type::Compact(tid));
+        let tuple_def = just(Op('('))
+            .ignore_then(tids)
+            .then_ignore(just(Op(')')))
+            .map(|ty| Type::Tuple(ty));
+        let array_def = just(Op('['))
+            .ignore_then(typ.clone().then_ignore(just(Op(';'))).then(num))
+            .then_ignore(just(Op(']')))
+            .map(|(ty, len)| Type::Array(ty, len));
+        let seq_def = just(Op('['))
+            .ignore_then(typ.clone())
+            .then_ignore(just(Op(']')))
+            .map(|len| Type::Seq(len));
+        let enum_variant = ident
+            .then(just(Op(':')).ignore_then(typ.clone().or_not()).or_not())
+            .then(just(Op(':')).ignore_then(num).or_not())
+            .map(|((name, t), i)| (name, t.flatten(), i));
+        let enum_def = just(Op('<'))
+            .ignore_then(
+                enum_variant
+                    .separated_by(just(Op(',')))
+                    .allow_trailing()
+                    .collect::<Vec<_>>(),
+            )
+            .map(|vec| Type::Enum(Enum::new(vec)))
+            .then_ignore(just(Op('>')));
+        let struct_field = ident
+            .then(just(Op(':')).ignore_then(typ.clone()))
+            .map(|(name, tid)| (name, tid));
+        let struct_def = just(Op('{'))
+            .ignore_then(
+                struct_field
+                    .separated_by(just(Op(',')))
+                    .allow_trailing()
+                    .collect::<Vec<_>>(),
+            )
+            .then_ignore(just(Op('}')))
+            .map(|vec| Type::Struct(vec));
+        let alias_def = tid.map(Type::Alias);
+        let primitive_types = choice((
+            just(Ident("u8")).map(|_| PrimitiveType::U8),
+            just(Ident("u16")).map(|_| PrimitiveType::U16),
+            just(Ident("u32")).map(|_| PrimitiveType::U32),
+            just(Ident("u64")).map(|_| PrimitiveType::U64),
+            just(Ident("u128")).map(|_| PrimitiveType::U128),
+            just(Ident("i8")).map(|_| PrimitiveType::I8),
+            just(Ident("i16")).map(|_| PrimitiveType::I16),
+            just(Ident("i32")).map(|_| PrimitiveType::I32),
+            just(Ident("i64")).map(|_| PrimitiveType::I64),
+            just(Ident("i128")).map(|_| PrimitiveType::I128),
+            just(Ident("bool")).map(|_| PrimitiveType::Bool),
+            just(Ident("str")).map(|_| PrimitiveType::Str),
+        ));
+        let primitive_def = just(Op('#'))
+            .ignore_then(primitive_types)
+            .map(|ty| Type::Primitive(ty));
+        choice((
+            primitive_def,
+            alias_def,
+            compact_def,
+            seq_def,
+            array_def,
+            tuple_def,
+            enum_def,
+            struct_def,
+        ))
+    })
 }
 
 fn parser<'tokens, 'src: 'tokens>() -> impl Parser<

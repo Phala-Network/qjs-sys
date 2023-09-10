@@ -105,7 +105,7 @@ impl Registry {
         Ok(())
     }
 
-    fn get_type_shallow(&self, tid: &Id) -> js::Result<&Type> {
+    fn get_type_shallow<'a>(&'a self, tid: &'a Id) -> js::Result<&'a Type> {
         let ind = match tid {
             Id::Name(name) => {
                 let Some(id) = self.lookup.get(name) else {
@@ -117,19 +117,20 @@ impl Registry {
                 *id
             }
             Id::Num(ind) => *ind as usize,
+            Id::Type(ty) => return Ok(&*ty),
         };
         self.types
             .get(ind)
             .ok_or(js::Error::Custom(format!("Unknown type {ind}")))
     }
-    fn get_type(&self, tid: &Id) -> js::Result<Cow<Type>> {
+    fn get_type<'a>(&'a self, tid: &'a Id) -> js::Result<Cow<'a, Type>> {
         let mut t = self.get_type_shallow(tid)?;
         while let Type::Alias(id) = t {
             t = self.get_type_shallow(id)?;
         }
         Ok(Cow::Borrowed(t))
     }
-    fn resolve_type(&self, tid: &Id) -> js::Result<Cow<Type>> {
+    fn resolve_type<'a>(&'a self, tid: &'a Id) -> js::Result<Cow<'a, Type>> {
         let result = self.get_type(tid);
         if result.is_ok() {
             return result;
