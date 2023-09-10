@@ -33,30 +33,3 @@ mod opaque_value;
 mod traits;
 mod utils;
 mod value;
-
-mod test {
-    use alloc::{
-        string::{String, ToString},
-        vec::Vec,
-    };
-    use qjsbind_derive::{FromJsValue, ToJsValue};
-
-    use crate::Value;
-
-    #[derive(FromJsValue, ToJsValue)]
-    #[qjsbind(rename_all = "camelCase")]
-    pub struct HttpRequest {
-        #[qjsbind(default = "default_method")]
-        pub method: String,
-        pub url: String,
-        pub headers: Vec<(String, String)>,
-        #[qjsbind(default)]
-        pub body: Vec<u8>,
-        pub foo_bar: Vec<u8>,
-        pub opaque: Value,
-    }
-
-    fn default_method() -> String {
-        "GET".to_string()
-    }
-}
