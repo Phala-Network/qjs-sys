@@ -19,7 +19,7 @@ chumsky = { version = "1.0.0-alpha.4", optional = true, default-features = false
 tinyvec_string = { version = "0.3.2", default-features = false, features = ["alloc"], optional = true }
 
 [features]
-default = ["base64", "sha1", "sha2", "sha3", "blake2", "std", "hex", "scale"]
+default = ["base64", "sha1", "sha2", "sha3", "blake2", "hex", "scale", "scale2"]
 hex = ["dep:hex", "hex_fmt"]
 std = [
     "qjs/std",
@@ -27,6 +27,11 @@ std = [
     "parity-scale-codec/std",
 ]
 scale = [
+    "parity-scale-codec",
+    "chumsky",
+    "tinyvec_string",
+]
+scale2 = [
     "parity-scale-codec",
     "chumsky",
     "tinyvec_string",

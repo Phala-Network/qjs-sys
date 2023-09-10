@@ -40,6 +40,7 @@ impl_from_for!(i128, decode_i128);
 impl_from_for!(u128, decode_u128);
 impl_from_for!(bool, decode_bool);
 impl_from_for!(String, decode_string);
+impl_from_for!(usize, decode_usize);
 
 impl FromJsValue for () {
     fn from_js_value(js_value: Value) -> Result<Self> {
@@ -183,6 +184,7 @@ impl_to_js_for!(f64, from_f64);
 impl_to_js_for!(i128, from_i128);
 impl_to_js_for!(u128, from_u128);
 impl_to_js_for!(bool, from_bool);
+impl_to_js_for!(usize, from_usize);
 
 impl ToJsValue for &str {
     fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {

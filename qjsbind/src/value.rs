@@ -4,7 +4,10 @@ use alloc::{
 };
 use core::ptr::NonNull;
 
-use crate::opaque_value::{new_opaque_object, opaque_object_get_data, opaque_object_take_data};
+use crate::{
+    opaque_value::{new_opaque_object, opaque_object_get_data, opaque_object_take_data},
+    FromJsValue,
+};
 
 use super::{c, Error, Result};
 
@@ -186,11 +189,14 @@ impl Value {
         }
     }
 
+    pub fn get_property_t<T: FromJsValue>(&self, name: &str) -> Result<T> {
+        let perr = |e| Error::Custom(format!("get proptety {name}: {e}"));
+        let value = self.get_property(name).map_err(perr)?;
+        T::from_js_value(value).map_err(perr)
+    }
+
     pub fn length(&self) -> Result<usize> {
-        self.get_property("length")?
-            .decode_i64()?
-            .try_into()
-            .or(Err(Error::Expect("usize")))
+        self.get_property_t("length")
     }
 
     pub fn next(&self) -> Result<Option<Self>> {
@@ -416,6 +422,9 @@ impl Value {
     pub fn from_f64(ctx: NonNull<c::JSContext>, val: f64) -> Self {
         unsafe { Self::new_moved(ctx, c::JS_NewFloat64(ctx.as_ptr(), val)) }
     }
+    pub fn from_usize(ctx: NonNull<c::JSContext>, val: usize) -> Self {
+        Self::from_u64(ctx, val as _)
+    }
     pub fn bigint(ctx: NonNull<c::JSContext>, val: i64) -> Self {
         unsafe { Self::new_moved(ctx, c::JS_NewBigInt64(ctx.as_ptr(), val)) }
     }
@@ -556,6 +565,12 @@ impl Value {
     }
     pub fn decode_u64(&self) -> Result<u64> {
         self.decode_number().or(Err(Error::Expect("u64")))
+    }
+    pub fn decode_usize(&self) -> Result<usize> {
+        self.decode_u64()
+            .or(Err(Error::Expect("usize")))?
+            .try_into()
+            .or(Err(Error::Expect("usize")))
     }
     pub fn decode_f32(&self) -> Result<f32> {
         self.decode_number().or(Err(Error::Expect("f32")))

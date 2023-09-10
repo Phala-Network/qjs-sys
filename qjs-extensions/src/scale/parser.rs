@@ -3,7 +3,7 @@ use chumsky::{error::Error, prelude::*};
 
 pub type String = tinyvec_string::TinyString<[u8; 24]>;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrimitiveType {
     U8,
     U16,
@@ -30,25 +30,32 @@ impl EnumType {
     }
 }
 
+impl PrimitiveType {
+    pub fn from_str(s: &str) -> Option<&'static PrimitiveType> {
+        let ty = match s {
+            "u8" => &PrimitiveType::U8,
+            "u16" => &PrimitiveType::U16,
+            "u32" => &PrimitiveType::U32,
+            "u64" => &PrimitiveType::U64,
+            "u128" => &PrimitiveType::U128,
+            "i8" => &PrimitiveType::I8,
+            "i16" => &PrimitiveType::I16,
+            "i32" => &PrimitiveType::I32,
+            "i64" => &PrimitiveType::I64,
+            "i128" => &PrimitiveType::I128,
+            "bool" => &PrimitiveType::Bool,
+            "str" => &PrimitiveType::Str,
+            _ => return None,
+        };
+        Some(ty)
+    }
+}
+
 impl core::str::FromStr for PrimitiveType {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "u8" => Ok(PrimitiveType::U8),
-            "u16" => Ok(PrimitiveType::U16),
-            "u32" => Ok(PrimitiveType::U32),
-            "u64" => Ok(PrimitiveType::U64),
-            "u128" => Ok(PrimitiveType::U128),
-            "i8" => Ok(PrimitiveType::I8),
-            "i16" => Ok(PrimitiveType::I16),
-            "i32" => Ok(PrimitiveType::I32),
-            "i64" => Ok(PrimitiveType::I64),
-            "i128" => Ok(PrimitiveType::I128),
-            "bool" => Ok(PrimitiveType::Bool),
-            "str" => Ok(PrimitiveType::Str),
-            _ => Err(()),
-        }
+        Self::from_str(s).cloned().ok_or(())
     }
 }
 
@@ -64,7 +71,13 @@ pub enum ScaleType {
 }
 
 pub fn parser<'a>() -> impl Parser<'a, &'a str, Vec<ScaleType>, extra::Err<Simple<'a, char>>> {
-    let number = text::int(10).map(|s: &str| s.parse::<usize>().unwrap());
+    let number = text::int(10).try_map(|s: &str, span| {
+        s.parse::<usize>().or(Err(Error::<&str>::expected_found(
+            [],
+            s.chars().next().map(Into::into),
+            span,
+        )))
+    });
     let primitive_def = just("#")
         .ignore_then(text::ident())
         .try_map(|s: &str, span| {
@@ -130,13 +143,13 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Vec<ScaleType>, extra::Err<Simpl
     ))
     .separated_by(separator)
     .collect::<Vec<_>>()
-    .then_ignore(text::whitespace())
+    .padded()
     .then_ignore(end())
 }
 
 #[test]
 fn test_parser() {
-    let input = "#u8;@2[3](4,5)<foo:6:7,bar::9,baz:3,quz>\n{foo:10,bar:11}()";
+    let input = "\n#u8;@2[3](4,5)<foo:6:7,bar::9,baz:3,quz>\n{foo:10,bar:11}()";
     let result = parser().parse(input).into_result();
     println!("{result:?}");
     assert!(result.is_ok());

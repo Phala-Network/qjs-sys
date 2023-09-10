@@ -4,15 +4,17 @@ use parity_scale_codec::{Compact, Decode, Encode, Output};
 
 use qjs::{self as js, c, AsBytes, BytesOrHex, FromJsValue, ToJsValue};
 
-use self::parser::{EnumType, PrimitiveType, ScaleType};
+use self::parser::{EnumType, ScaleType};
+
+pub(crate) use self::parser::PrimitiveType;
 
 mod parser;
 
 pub fn setup(obj: &js::Value) -> js::Result<()> {
-    obj.define_property_fn("scaleParseTypes", parse_types)?;
-    obj.define_property_fn("scaleEncode", encode)?;
-    obj.define_property_fn("scaleEncodeAll", encode_all)?;
-    obj.define_property_fn("scaleDecode", decode)?;
+    obj.define_property_fn("parseTypes", parse_types)?;
+    obj.define_property_fn("encode", encode)?;
+    obj.define_property_fn("encodeAll", encode_all)?;
+    obj.define_property_fn("decode", decode)?;
     Ok(())
 }
 
@@ -207,6 +209,13 @@ fn encode_value(
                 if let Some(result) = result {
                     return result;
                 }
+            }
+            let actual_len = value.length()?;
+            if actual_len != *len {
+                return Err(js::Error::Custom(format!(
+                    "Expected array of length {}, got {}",
+                    len, actual_len
+                )));
             }
             for ind in 0..*len {
                 let sub_value = value.index(ind)?;
