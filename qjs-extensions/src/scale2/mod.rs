@@ -136,6 +136,10 @@ impl js::FromJsValue for TypeRegistry {
         if value.is_undefined() {
             return Ok(Default::default());
         }
+        if value.is_string() {
+            let typelist = js::JsString::from_js_value(value)?;
+            return parse_types_str(typelist.as_str());
+        }
         let me = value
             .opaque_object_data::<Self>()
             .ok_or(js::Error::Expect("TypeRegistry"))?;
@@ -159,7 +163,11 @@ fn to_js_error(errs: Vec<impl core::fmt::Debug>) -> js::Error {
 
 #[js::host_call]
 fn parse_types(typelist: js::JsString) -> js::Result<TypeRegistry> {
-    let ast = parser::parse_types(typelist.as_str())?;
+    parse_types_str(typelist.as_str())
+}
+
+fn parse_types_str(typelist: &str) -> js::Result<TypeRegistry> {
+    let ast = parser::parse_types(typelist)?;
     let mut registry = Registry::default();
     registry.append(ast)?;
     Ok(registry.into())
