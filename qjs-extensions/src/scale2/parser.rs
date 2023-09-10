@@ -40,7 +40,7 @@ fn lexer<'src>(
         })
         .map(Token::Num);
     // A parser for control characters (delimiters, semicolons, etc.)
-    let op = one_of("=@:;,#()[]{}<>").map(Token::Op);
+    let op = one_of("|=@:;,#()[]{}<>").map(Token::Op);
     // A parser for identifiers and keywords
     let ident = text::ident().map(Token::Ident);
     // A single token can be one of the above
@@ -208,7 +208,7 @@ where
             .separated_by(just(Op(',')))
             .allow_trailing()
             .collect::<Vec<_>>();
-        let compact_def = just(Op('@')).ignore_then(tid).map(Type::Compact);
+        let compact_def = just(Op('@')).ignore_then(typ.clone()).map(Type::Compact);
         let tuple_def = just(Op('('))
             .ignore_then(tids)
             .then_ignore(just(Op(')')))
@@ -228,7 +228,7 @@ where
         let enum_def = just(Op('<'))
             .ignore_then(
                 enum_variant
-                    .separated_by(just(Op(',')))
+                    .separated_by(just(Op(',')).or(just(Op('|'))))
                     .allow_trailing()
                     .collect::<Vec<_>>(),
             )

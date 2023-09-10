@@ -569,3 +569,89 @@ fn decode_compact_primitive(
         _ => compactable_err(),
     }
 }
+
+#[cfg(test)]
+#[no_mangle]
+extern "C" fn __pink_getrandom() {}
+
+#[test]
+fn it_works() {
+    use parity_scale_codec::{Decode, Encode};
+
+    #[derive(Debug, PartialEq, Eq, Encode, Decode)]
+    struct Foo {
+        a: u32,
+        #[codec(compact)]
+        b: u32,
+        #[codec(compact)]
+        c: (),
+        d: String,
+        e: Vec<u8>,
+        f: [u8; 3],
+        g: [u32; 3],
+        bar: Bar,
+        baz: Bar,
+    }
+    #[derive(Debug, PartialEq, Eq, Encode, Decode)]
+    enum Bar {
+        A,
+        #[codec(index = 20)]
+        B(u32),
+        C(u32, u32),
+    }
+
+    let foo = Foo {
+        a: 1,
+        b: 2,
+        c: (),
+        d: "hello".into(),
+        e: vec![1, 2, 3],
+        f: [1, 2, 3],
+        g: [1, 2, 3],
+        bar: Bar::C(1, 2),
+        baz: Bar::B(42),
+    };
+    let encoded = foo.encode();
+
+    let typedef = r#"
+        Foo = {
+            a: u32,
+            b: @u32,
+            // c: @(),
+            d: str,
+            e: [u8],
+            f: [u8;3],
+            g: [u32;3],
+            bar: Bar,
+            baz: <A|B:u32:20|C:(u32,u32)>,
+        };
+        Bar = <A|B:u32:20|C:(u32,u32)>;
+    "#;
+    let registry = parse_types_str(typedef).unwrap();
+    let runtime = js::Runtime::new();
+    let ctx = runtime.new_context();
+    let decoded = decode_valude(
+        &ctx,
+        &mut &encoded[..],
+        &Id::Name("Foo".into()),
+        &registry.borrow(),
+    )
+    .unwrap();
+    let g = ctx.get_global_object();
+    g.set_property("input", &decoded).unwrap();
+    let json = ctx
+        .eval(&js::Code::Source("JSON.stringify(input)"))
+        .unwrap();
+    println!("decoded json: {}", json.to_string());
+    let mut js_encoded = Vec::new();
+    encode_value(
+        decoded,
+        &Id::Name("Foo".into()),
+        &registry.borrow(),
+        &mut js_encoded,
+    )
+    .unwrap();
+    assert_eq!(encoded, js_encoded);
+    let rs_decoded = Foo::decode(&mut &encoded[..]).unwrap();
+    assert_eq!(foo, rs_decoded);
+}
