@@ -1,12 +1,10 @@
-use core::ptr::NonNull;
-
 use alloc::vec::Vec;
 
-use crate::{FromJsValue, ToJsValue};
+use crate::{self as js, FromJsValue, ToJsValue};
 
-use super::{c, Error, Result, Value};
+use super::{Error, Result, Value};
 
-pub fn encode_as_bytes<T: AsRef<[u8]>>(ctx: NonNull<c::JSContext>, data: &T) -> Result<Value> {
+pub fn encode_as_bytes<T: AsRef<[u8]>>(ctx: &js::Context, data: &T) -> Result<Value> {
     Ok(Value::from_bytes(ctx, data.as_ref()))
 }
 
@@ -30,7 +28,7 @@ where
 pub struct AsBytes<T>(pub T);
 
 impl<T: AsRef<[u8]>> ToJsValue for AsBytes<T> {
-    fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         encode_as_bytes(ctx, &self.0)
     }
 }
@@ -48,7 +46,7 @@ where
 pub struct BytesOrHex<T>(pub T);
 
 impl<T: AsRef<[u8]>> ToJsValue for BytesOrHex<T> {
-    fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         encode_as_bytes(ctx, &self.0)
     }
 }

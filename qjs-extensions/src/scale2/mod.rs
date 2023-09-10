@@ -2,10 +2,9 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::{format, rc::Rc, vec::Vec};
 use core::cell::{Ref, RefCell, RefMut};
-use core::ptr::NonNull;
 use parity_scale_codec::{Compact, Decode, Encode, Output};
 
-use qjs::{self as js, c, AsBytes, BytesOrHex, FromJsValue, ToJsValue};
+use js::{self as js, AsBytes, BytesOrHex, FromJsValue, ToJsValue};
 
 use self::parser::{Enum, Id, PrimitiveType, String as TinyString, Type};
 
@@ -148,7 +147,7 @@ impl js::FromJsValue for TypeRegistry {
 }
 
 impl js::ToJsValue for TypeRegistry {
-    fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> js::Result<js::Value> {
+    fn to_js_value(&self, ctx: &js::Context) -> js::Result<js::Value> {
         Ok(js::Value::new_opaque_object(ctx, self.clone()))
     }
 }
@@ -438,7 +437,7 @@ fn decode_valude(
             if matches!(t, Type::Primitive(PrimitiveType::U8)) {
                 let value = Vec::<u8>::decode(buf)
                     .map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
-                return AsBytes(value).to_js_value(ctx.ptr());
+                return AsBytes(value).to_js_value(ctx);
             }
             let length = Compact::<u32>::decode(buf)
                 .map_err(|_| js::Error::Static("Unexpected end of buffer"))?
@@ -467,7 +466,7 @@ fn decode_valude(
                 }
                 let value = buf[..len].to_vec();
                 *buf = &buf[len..];
-                return AsBytes(value).to_js_value(ctx.ptr());
+                return AsBytes(value).to_js_value(ctx);
             }
             let out = ctx.new_array();
             for _ in 0..len {
@@ -508,7 +507,7 @@ fn decode_primitive(
         ($t: ident) => {{
             let value =
                 <$t>::decode(buf).map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
-            value.to_js_value(ctx.ptr())
+            value.to_js_value(ctx)
         }};
     }
     match t {
@@ -525,7 +524,7 @@ fn decode_primitive(
         PrimitiveType::Bool => decode_num!(bool),
         PrimitiveType::Str => String::decode(buf)
             .map_err(|_| js::Error::Static("Unexpected end of buffer"))?
-            .to_js_value(ctx.ptr()),
+            .to_js_value(ctx),
     }
 }
 
@@ -538,7 +537,7 @@ fn decode_compact_primitive(
         ($t: ident) => {{
             let value = Compact::<$t>::decode(buf)
                 .map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
-            value.0.to_js_value(ctx.ptr())
+            value.0.to_js_value(ctx)
         }};
     }
     match t {

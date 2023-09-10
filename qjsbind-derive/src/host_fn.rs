@@ -40,7 +40,7 @@ fn patch_or_err(input: TokenStream, with_context: bool) -> syn::Result<TokenStre
                 #crate_qjsbind::call_host_function(#fn_ident, ctx, this_val, argc, argv)
             }
             #(else) {
-                fn wrapper(_ctx: core::ptr::NonNull<#crate_qjsbind::c::JSContext>, _this: #crate_qjsbind::Value, #args) -> #output {
+                fn wrapper(_ctx: #crate_qjsbind::Context, _this: #crate_qjsbind::Value, #args) -> #output {
                     #fn_ident(#(#arg_names),*)
                 }
                 #crate_qjsbind::call_host_function(wrapper, ctx, this_val, argc, argv)

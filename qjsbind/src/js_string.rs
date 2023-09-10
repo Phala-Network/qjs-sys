@@ -1,7 +1,7 @@
-use core::{ffi::CStr, ptr::NonNull};
 use alloc::string::{String, ToString};
+use core::ffi::CStr;
 
-use crate::{c, Error, FromJsValue, Result, ToJsValue, Value};
+use crate::{self as js, c, Error, FromJsValue, Result, ToJsValue, Value};
 
 /// A wrapper of JS string. When passing a string from JS to Rust, using this type
 /// is more efficient than `String` because it avoids extra memory allocation and copy.
@@ -58,7 +58,7 @@ impl FromJsValue for JsString {
 }
 
 impl ToJsValue for JsString {
-    fn to_js_value(&self, _ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, _ctx: &js::Context) -> Result<Value> {
         Ok(self.value.clone())
     }
 }

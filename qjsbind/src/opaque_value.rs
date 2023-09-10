@@ -1,8 +1,9 @@
-use core::{any::TypeId, ptr::NonNull};
+use core::any::TypeId;
 
 use alloc::boxed::Box;
 use qjs_sys::c;
 
+use crate as js;
 use crate::Value;
 
 fn type_id<T: 'static>() -> u64 {
@@ -19,7 +20,7 @@ fn type_id<T: 'static>() -> u64 {
     tag
 }
 
-pub fn new_opaque_object<T: 'static>(ctx: NonNull<c::JSContext>, value: T) -> Value {
+pub fn new_opaque_object<T: 'static>(ctx: &js::Context, value: T) -> Value {
     extern "C" fn free_opaque<T>(
         _rt: *mut c::JSRuntime,
         data: *mut ::core::ffi::c_void,
@@ -42,7 +43,7 @@ pub fn new_opaque_object<T: 'static>(ctx: NonNull<c::JSContext>, value: T) -> Va
 }
 
 pub fn opaque_object_get_data<T: 'static>(value: &Value) -> Option<&T> {
-    let Value::Other { value, ctx } = value  else {
+    let Value::Other { value, ctx } = value else {
         return None;
     };
     let ptr = unsafe { c::JS_OpaqueObjectDataGet(ctx.as_ptr(), *value, type_id::<T>() as _) };
@@ -53,7 +54,7 @@ pub fn opaque_object_get_data<T: 'static>(value: &Value) -> Option<&T> {
 }
 
 pub fn opaque_object_take_data<T: 'static>(value: &Value) -> Option<Box<T>> {
-    let Value::Other { value, ctx } = value  else {
+    let Value::Other { value, ctx } = value else {
         return None;
     };
     unsafe {

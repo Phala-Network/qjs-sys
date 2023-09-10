@@ -1,23 +1,17 @@
+use core::ptr::NonNull;
+
 use crate::{c, JsCode, Value};
 use alloc::string::{String, ToString};
-use core::ptr::NonNull;
 
 pub struct Context {
     pub(crate) ptr: NonNull<c::JSContext>,
 }
 
 impl Context {
-    pub fn clone_from_ptr(ptr: NonNull<c::JSContext>) -> Self {
+    pub fn clone_from_ptr(ptr: *mut c::JSContext) -> Option<Self> {
+        let ptr = NonNull::new(ptr)?;
         unsafe { c::JS_DupContext(ptr.as_ptr()) };
-        Self::new_moved(ptr)
-    }
-
-    pub fn new_moved(ptr: NonNull<c::JSContext>) -> Self {
-        Context { ptr }
-    }
-
-    pub fn ptr(&self) -> NonNull<c::JSContext> {
-        self.ptr
+        Some(Self { ptr })
     }
 
     pub fn as_ptr(&self) -> *mut c::JSContext {
@@ -25,23 +19,23 @@ impl Context {
     }
 
     pub fn get_global_object(&self) -> Value {
-        crate::get_global(self.ptr)
+        crate::get_global(self)
     }
 
     pub fn new_object(&self) -> Value {
-        Value::new_object(self.ptr)
+        Value::new_object(self)
     }
 
     pub fn new_array(&self) -> Value {
-        Value::new_array(self.ptr)
+        Value::new_array(self)
     }
 
     pub fn new_string(&self, s: &str) -> Value {
-        Value::from_str(self.ptr, s)
+        Value::from_str(self, s)
     }
 
     pub fn eval(&self, code: &JsCode) -> Result<Value, String> {
-        crate::eval(self.ptr, code)
+        crate::eval(self, code)
     }
 
     pub fn throw(&self, err: impl core::fmt::Display) {
@@ -53,9 +47,25 @@ impl Context {
     }
 
     pub fn throw_str(&self, err: &str) {
-        let err = Value::from_str(self.ptr, err);
+        let err = self.new_string(err);
         unsafe {
             c::JS_Throw(self.as_ptr(), err.leak());
+        }
+    }
+
+    pub fn get_exception_str(&self) -> String {
+        let ctx_ptr = self.as_ptr();
+        unsafe {
+            let e = c::JS_GetException(ctx_ptr);
+            let mut exc_str = crate::ctx_to_string(self, e);
+            let stack = c::JS_GetPropertyStr(ctx_ptr, e, cstr::cstr!("stack").as_ptr() as _);
+            if !c::is_undefined(stack) {
+                exc_str.push_str("\n[stack]\n");
+                exc_str.push_str(&crate::ctx_to_string(self, stack));
+            }
+            c::JS_FreeValue(ctx_ptr, e);
+            c::JS_FreeValue(ctx_ptr, stack);
+            exc_str
         }
     }
 }
@@ -66,17 +76,10 @@ impl AsRef<c::JSContext> for Context {
     }
 }
 
-impl From<NonNull<c::JSContext>> for Context {
-    fn from(ptr: NonNull<c::JSContext>) -> Self {
-        Self::clone_from_ptr(ptr)
-    }
-}
-
 impl Clone for Context {
     fn clone(&self) -> Self {
-        let ptr = unsafe { c::JS_DupContext(self.ptr.as_ptr()) };
-        let ptr = NonNull::new(ptr).expect("Failed to clone JSContext");
-        Context { ptr }
+        unsafe { c::JS_DupContext(self.ptr.as_ptr()) };
+        Context { ptr: self.ptr }
     }
 }
 
@@ -103,6 +106,18 @@ impl Runtime {
         let ptr = unsafe { c::JS_NewContext(self.ptr.as_ptr()) };
         let ptr = NonNull::new(ptr).expect("Failed to create JSContext");
         Context { ptr }
+    }
+
+    pub fn exec_pending_jobs(&self) -> Result<i32, String> {
+        let mut ctx_ptr = core::ptr::null_mut();
+        let ret = unsafe { c::JS_ExecutePendingJob(self.ptr.as_ptr(), &mut ctx_ptr) };
+        if ret < 0 {
+            return match Context::clone_from_ptr(ctx_ptr) {
+                Some(ctx) => Err(ctx.get_exception_str()),
+                None => Err("no context".to_string()),
+            };
+        }
+        Ok(ret)
     }
 }
 

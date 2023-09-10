@@ -287,7 +287,7 @@ fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
         .then_ignore(end())
 }
 
-pub fn parse_types(src: &str) -> qjs::Result<Vec<TypeDef>> {
+pub fn parse_types(src: &str) -> js::Result<Vec<TypeDef>> {
     let tokens = lexer()
         .parse(src)
         .into_result()

@@ -2,8 +2,8 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::ptr::NonNull;
 
+use crate as js;
 use crate::{
     opaque_value::{new_opaque_object, opaque_object_get_data, opaque_object_take_data},
     FromJsValue,
@@ -30,10 +30,7 @@ pub enum Value {
     Undefined,
     Null,
     Exception,
-    Other {
-        value: c::JSValue,
-        ctx: NonNull<c::JSContext>,
-    },
+    Other { value: c::JSValue, ctx: js::Context },
 }
 
 impl core::fmt::Debug for Value {
@@ -105,7 +102,6 @@ impl Drop for Value {
         };
         unsafe {
             c::JS_FreeValue(ctx.as_ptr(), *self.raw_value());
-            c::JS_FreeContext(ctx.as_ptr());
         }
     }
 }
@@ -116,22 +112,24 @@ impl Clone for Value {
             Self::Undefined => Self::Undefined,
             Self::Null => Self::Null,
             Self::Exception => Self::Exception,
-            Self::Other { ctx, value } => Self::new_cloned(*ctx, *value),
+            Self::Other { ctx, value } => Self::new_cloned(ctx, *value),
         }
     }
 }
 
 impl Value {
-    pub fn new_cloned(ctx: NonNull<c::JSContext>, value: c::JSValue) -> Self {
+    pub fn new_cloned(ctx: &js::Context, value: c::JSValue) -> Self {
         Self::new_moved(ctx, unsafe { c::JS_DupValue(ctx.as_ptr(), value) })
     }
 
-    pub fn new_moved(ctx: NonNull<c::JSContext>, value: c::JSValue) -> Self {
-        unsafe { c::JS_DupContext(ctx.as_ptr()) };
-        Self::Other { ctx, value }
+    pub fn new_moved(ctx: &js::Context, value: c::JSValue) -> Self {
+        Self::Other {
+            ctx: ctx.clone(),
+            value,
+        }
     }
 
-    pub fn new_opaque_object<T: 'static>(ctx: NonNull<c::JSContext>, value: T) -> Self {
+    pub fn new_opaque_object<T: 'static>(ctx: &js::Context, value: T) -> Self {
         new_opaque_object(ctx, value)
     }
 
@@ -161,12 +159,12 @@ impl Value {
     }
 
     #[track_caller]
-    pub fn context(&self) -> Result<NonNull<c::JSContext>> {
+    pub fn context(&self) -> Result<&js::Context> {
         match self {
             Self::Undefined => Err(Error::Static("no context for undefined")),
             Self::Null => Err(Error::Static("no context for null")),
             Self::Exception => Err(Error::Static("no context for exception")),
-            Self::Other { ctx, .. } => Ok(*ctx),
+            Self::Other { ctx, .. } => Ok(ctx),
         }
     }
 
@@ -374,74 +372,74 @@ impl Value {
     pub const fn null() -> Self {
         Self::Null
     }
-    pub fn from_bool(ctx: NonNull<c::JSContext>, val: bool) -> Self {
+    pub fn from_bool(ctx: &js::Context, val: bool) -> Self {
         unsafe { Self::new_moved(ctx, c::JS_NewBool(ctx.as_ptr(), val as _)) }
     }
-    pub fn from_i8(ctx: NonNull<c::JSContext>, val: i8) -> Self {
+    pub fn from_i8(ctx: &js::Context, val: i8) -> Self {
         Self::from_i32(ctx, val as _)
     }
-    pub fn from_u8(ctx: NonNull<c::JSContext>, val: u8) -> Self {
+    pub fn from_u8(ctx: &js::Context, val: u8) -> Self {
         Self::from_i32(ctx, val as _)
     }
-    pub fn from_i16(ctx: NonNull<c::JSContext>, val: i16) -> Self {
+    pub fn from_i16(ctx: &js::Context, val: i16) -> Self {
         Self::from_i32(ctx, val as _)
     }
-    pub fn from_u16(ctx: NonNull<c::JSContext>, val: u16) -> Self {
+    pub fn from_u16(ctx: &js::Context, val: u16) -> Self {
         Self::from_i32(ctx, val as _)
     }
-    pub fn from_i32(ctx: NonNull<c::JSContext>, val: i32) -> Self {
+    pub fn from_i32(ctx: &js::Context, val: i32) -> Self {
         unsafe { Self::new_moved(ctx, c::JS_NewInt32(ctx.as_ptr(), val)) }
     }
-    pub fn from_u32(ctx: NonNull<c::JSContext>, val: u32) -> Self {
+    pub fn from_u32(ctx: &js::Context, val: u32) -> Self {
         if val <= i32::MAX as u32 {
             return Self::from_i32(ctx, val as _);
         }
         Self::from_u128(ctx, val as _)
     }
-    pub fn from_i64(ctx: NonNull<c::JSContext>, val: i64) -> Self {
+    pub fn from_i64(ctx: &js::Context, val: i64) -> Self {
         if val <= i32::MAX.into() {
             return Self::from_i32(ctx, val as _);
         }
         Self::bigint(ctx, val)
     }
-    pub fn from_u64(ctx: NonNull<c::JSContext>, val: u64) -> Self {
+    pub fn from_u64(ctx: &js::Context, val: u64) -> Self {
         if val <= i32::MAX as u64 {
             return Self::from_i32(ctx, val as _);
         }
         Self::biguint(ctx, val)
     }
-    pub fn from_i128(ctx: NonNull<c::JSContext>, val: i128) -> Self {
+    pub fn from_i128(ctx: &js::Context, val: i128) -> Self {
         Self::bigint_from_str(ctx, &val.to_string()).expect("Failed to create BigInt fron i128")
     }
-    pub fn from_u128(ctx: NonNull<c::JSContext>, val: u128) -> Self {
+    pub fn from_u128(ctx: &js::Context, val: u128) -> Self {
         Self::bigint_from_str(ctx, &val.to_string()).expect("Failed to create BigInt fron i128")
     }
-    pub fn from_f32(ctx: NonNull<c::JSContext>, val: f32) -> Self {
+    pub fn from_f32(ctx: &js::Context, val: f32) -> Self {
         Self::from_f64(ctx, val as _)
     }
-    pub fn from_f64(ctx: NonNull<c::JSContext>, val: f64) -> Self {
+    pub fn from_f64(ctx: &js::Context, val: f64) -> Self {
         unsafe { Self::new_moved(ctx, c::JS_NewFloat64(ctx.as_ptr(), val)) }
     }
-    pub fn from_usize(ctx: NonNull<c::JSContext>, val: usize) -> Self {
+    pub fn from_usize(ctx: &js::Context, val: usize) -> Self {
         Self::from_u64(ctx, val as _)
     }
-    pub fn bigint(ctx: NonNull<c::JSContext>, val: i64) -> Self {
+    pub fn bigint(ctx: &js::Context, val: i64) -> Self {
         unsafe { Self::new_moved(ctx, c::JS_NewBigInt64(ctx.as_ptr(), val)) }
     }
-    pub fn bigint_from_str(ctx: NonNull<c::JSContext>, val: &str) -> Result<Self> {
+    pub fn bigint_from_str(ctx: &js::Context, val: &str) -> Result<Self> {
         let val = Self::from_str(ctx, val);
         get_global(ctx).call_method("BigInt", &[val])
     }
-    pub fn biguint(ctx: NonNull<c::JSContext>, val: u64) -> Self {
+    pub fn biguint(ctx: &js::Context, val: u64) -> Self {
         unsafe { Self::new_moved(ctx, c::JS_NewBigUint64(ctx.as_ptr(), val)) }
     }
-    pub fn from_str(ctx: NonNull<c::JSContext>, val: &str) -> Self {
+    pub fn from_str(ctx: &js::Context, val: &str) -> Self {
         unsafe {
             let val = c::JS_NewStringLen(ctx.as_ptr(), val.as_ptr() as _, val.len() as _);
             Self::new_moved(ctx, val)
         }
     }
-    pub fn from_bytes(ctx: NonNull<c::JSContext>, bytes: &[u8]) -> Self {
+    pub fn from_bytes(ctx: &js::Context, bytes: &[u8]) -> Self {
         unsafe {
             Self::new_moved(
                 ctx,
@@ -449,10 +447,10 @@ impl Value {
             )
         }
     }
-    pub fn new_array(ctx: NonNull<c::JSContext>) -> Self {
+    pub fn new_array(ctx: &js::Context) -> Self {
         unsafe { Self::new_moved(ctx, c::JS_NewArray(ctx.as_ptr())) }
     }
-    pub fn new_object(ctx: NonNull<c::JSContext>) -> Self {
+    pub fn new_object(ctx: &js::Context) -> Self {
         unsafe { Self::new_moved(ctx, c::JS_NewObject(ctx.as_ptr())) }
     }
 }
@@ -647,6 +645,6 @@ impl Value {
     }
 }
 
-pub fn get_global(context: NonNull<c::JSContext>) -> Value {
+pub fn get_global(context: &js::Context) -> Value {
     Value::new_moved(context, unsafe { c::JS_GetGlobalObject(context.as_ptr()) })
 }

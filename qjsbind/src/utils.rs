@@ -1,34 +1,17 @@
-use core::ptr::NonNull;
-
 use alloc::ffi::CString;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use crate::c;
+use crate as js;
 
-pub fn js_throw_type_error(ctx: NonNull<c::JSContext>, msg: &str) -> c::JSValue {
+pub fn js_throw_type_error(ctx: &js::Context, msg: &str) -> c::JSValue {
     let cmsg = CString::new(msg).unwrap_or_default();
     unsafe { c::JS_ThrowTypeError(ctx.as_ptr(), cmsg.as_ptr()) }
 }
 
-pub fn ctx_get_exception_str(ctx: NonNull<c::JSContext>) -> String {
-    let ctx_ptr = ctx.as_ptr();
-    unsafe {
-        let e = c::JS_GetException(ctx_ptr);
-        let mut exc_str = ctx_to_string(ctx, e);
-        let stack = c::JS_GetPropertyStr(ctx_ptr, e, cstr::cstr!("stack").as_ptr() as _);
-        if !c::is_undefined(stack) {
-            exc_str.push_str("\n[stack]\n");
-            exc_str.push_str(&ctx_to_string(ctx, stack));
-        }
-        c::JS_FreeValue(ctx_ptr, e);
-        c::JS_FreeValue(ctx_ptr, stack);
-        exc_str
-    }
-}
-
 pub fn ctx_to_str<T>(
-    ctx: NonNull<c::JSContext>,
+    ctx: &js::Context,
     value: c::JSValueConst,
     cb: impl FnOnce(&str) -> T,
 ) -> T {
@@ -46,7 +29,7 @@ pub fn ctx_to_str<T>(
     }
 }
 
-pub fn ctx_to_string(ctx: NonNull<c::JSContext>, value: c::JSValueConst) -> String {
+pub fn ctx_to_string(ctx: &js::Context, value: c::JSValueConst) -> String {
     ctx_to_str(ctx, value, |s| s.to_string())
 }
 

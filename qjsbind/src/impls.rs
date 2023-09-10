@@ -1,5 +1,3 @@
-use core::ptr::NonNull;
-
 use alloc::{
     boxed::Box,
     collections::BTreeMap,
@@ -8,7 +6,8 @@ use alloc::{
 };
 use tinyvec::TinyVec;
 
-use super::{c, Error, FromArgs, FromJsValue, Result, ToArgs, ToJsValue, Value};
+use super::{Error, FromArgs, FromJsValue, Result, ToArgs, ToJsValue, Value};
+use crate as js;
 
 impl FromJsValue for Value {
     fn from_js_value(js_value: Value) -> Result<Self> {
@@ -156,7 +155,7 @@ impl<const N: usize, T: FromJsValue + Default> FromJsValue for [T; N] {
 }
 
 impl ToJsValue for Value {
-    fn to_js_value(&self, _ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, _ctx: &js::Context) -> Result<Value> {
         Ok(self.clone())
     }
 }
@@ -164,7 +163,7 @@ impl ToJsValue for Value {
 macro_rules! impl_to_js_for {
     ($t: ident, $encode_fn: ident) => {
         impl ToJsValue for $t {
-            fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {
+            fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
                 Ok(Value::$encode_fn(ctx, *self))
             }
         }
@@ -187,18 +186,18 @@ impl_to_js_for!(bool, from_bool);
 impl_to_js_for!(usize, from_usize);
 
 impl ToJsValue for &str {
-    fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         Ok(Value::from_str(ctx, self))
     }
 }
 impl ToJsValue for String {
-    fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         Ok(Value::from_str(ctx, self))
     }
 }
 
 impl ToJsValue for () {
-    fn to_js_value(&self, _ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, _ctx: &js::Context) -> Result<Value> {
         Ok(Value::null())
     }
 }
@@ -206,7 +205,7 @@ impl ToJsValue for () {
 macro_rules! impl_to_js_for_tuple {
     ($($t: ident),*) => {
         impl<$($t: ToJsValue),*> ToJsValue for ($($t,)*) {
-            fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {
+            fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
                 let js_array = Value::new_array(ctx);
                 #[allow(non_snake_case)]
                 let ($($t,)*) = self;
@@ -230,7 +229,7 @@ impl_to_js_for_tuple!(A, B, C, D, E, F, G, H);
 impl_to_js_for_tuple!(A, B, C, D, E, F, G, H, I);
 
 impl<T: ToJsValue> ToJsValue for Option<T> {
-    fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         match self {
             Some(value) => value.to_js_value(ctx),
             None => Ok(Value::null()),
@@ -239,13 +238,13 @@ impl<T: ToJsValue> ToJsValue for Option<T> {
 }
 
 impl<T: ToJsValue> ToJsValue for Box<T> {
-    fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         self.as_ref().to_js_value(ctx)
     }
 }
 
 impl<T: ToJsValue> ToJsValue for [T] {
-    fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         let js_array = Value::new_array(ctx);
         for value in self.iter() {
             js_array.array_push(&value.to_js_value(ctx)?)?;
@@ -255,19 +254,19 @@ impl<T: ToJsValue> ToJsValue for [T] {
 }
 
 impl<T: ToJsValue> ToJsValue for Vec<T> {
-    fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         self.as_slice().to_js_value(ctx)
     }
 }
 
 impl<const N: usize, T: ToJsValue> ToJsValue for [T; N] {
-    fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         self.as_slice().to_js_value(ctx)
     }
 }
 
 impl<V: ToJsValue> ToJsValue for BTreeMap<String, V> {
-    fn to_js_value(&self, ctx: NonNull<c::JSContext>) -> Result<Value> {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         let js_object = Value::new_object(ctx);
         for (key, value) in self.iter() {
             js_object.set_property(&key, &value.to_js_value(ctx)?)?;
@@ -289,7 +288,7 @@ macro_rules! impl_arglist_for {
             }
         }
         impl<$($t: ToJsValue),*> ToArgs for ($($t,)*) {
-            fn to_args(&self, ctx: core::ptr::NonNull<c::JSContext>) -> Result<TinyVec<[Value; 8]>> {
+            fn to_args(&self, ctx: &js::Context) -> Result<TinyVec<[Value; 8]>> {
                 #[allow(unused_mut)]
                 let mut args = TinyVec::new();
                 #[allow(non_snake_case)]
