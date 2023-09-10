@@ -1,3 +1,4 @@
+use alloc::borrow::Cow;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::{format, rc::Rc, vec::Vec};
@@ -121,12 +122,30 @@ impl Registry {
             .get(ind)
             .ok_or(js::Error::Custom(format!("Unknown type {ind}")))
     }
-    fn get_type(&self, tid: &Id) -> js::Result<&Type> {
+    fn get_type(&self, tid: &Id) -> js::Result<Cow<Type>> {
         let mut t = self.get_type_shallow(tid)?;
         while let Type::Alias(id) = t {
             t = self.get_type_shallow(id)?;
         }
-        Ok(t)
+        Ok(Cow::Borrowed(t))
+    }
+    fn resolve_type(&self, tid: &Id) -> js::Result<Cow<Type>> {
+        let result = self.get_type(tid);
+        if result.is_ok() {
+            return result;
+        }
+        let Id::Name(def) = tid else {
+            return result;
+        };
+        let ast = parser::parse_types(def)?;
+        if ast.len() != 1 {
+            return result;
+        }
+        let ty = ast.into_iter().next().unwrap().ty;
+        if ty.is_alias() {
+            return result;
+        }
+        Ok(Cow::Owned(ty))
     }
 }
 
@@ -228,13 +247,13 @@ fn encode_value(
     registry: &Registry,
     out: &mut impl Output,
 ) -> js::Result<()> {
-    let t = registry.get_type(tid)?;
-    match t {
-        Type::Alias(_) => unreachable!("Alias should be resolved by get_type"),
+    let t = registry.resolve_type(tid)?;
+    match t.as_ref() {
+        Type::Alias(_) => unreachable!("Alias should be resolved"),
         Type::Primitive(t) => encode_primitive(value, &t, out),
         Type::Compact(ty) => {
-            let t = registry.get_type(&ty)?;
-            match t {
+            let t = registry.resolve_type(&ty)?;
+            match t.as_ref() {
                 Type::Primitive(t) => encode_compact_primitive(value, &t, out),
                 Type::Tuple(t) if t.is_empty() => {
                     Compact(()).encode_to(out);
@@ -244,8 +263,8 @@ fn encode_value(
             }
         }
         Type::Seq(ty) => {
-            let t = registry.get_type(&ty)?;
-            if matches!(t, Type::Primitive(PrimitiveType::U8)) {
+            let t = registry.resolve_type(&ty)?;
+            if matches!(t.as_ref(), Type::Primitive(PrimitiveType::U8)) {
                 let result = u8a_or_hex(&value, |bytes| {
                     bytes.encode_to(out);
                     Ok(())
@@ -270,8 +289,8 @@ fn encode_value(
         }
         Type::Array(ty, len) => {
             let len = *len as usize;
-            let t = registry.get_type(&ty)?;
-            if matches!(t, Type::Primitive(PrimitiveType::U8)) {
+            let t = registry.resolve_type(&ty)?;
+            if matches!(t.as_ref(), Type::Primitive(PrimitiveType::U8)) {
                 let result = u8a_or_hex(&value, |bytes| {
                     if bytes.len() != len {
                         return Err(js::Error::Custom(format!(
@@ -416,13 +435,13 @@ fn decode_valude(
     ty: &Id,
     registry: &Registry,
 ) -> js::Result<js::Value> {
-    let t = registry.get_type(ty)?;
-    match t {
-        Type::Alias(_) => unreachable!("Alias should be resolved by get_type"),
+    let t = registry.resolve_type(ty)?;
+    match t.as_ref() {
+        Type::Alias(_) => unreachable!("Alias should be resolved"),
         Type::Primitive(t) => decode_primitive(ctx, buf, &t),
         Type::Compact(ty) => {
-            let t = registry.get_type(&ty)?;
-            match t {
+            let t = registry.resolve_type(&ty)?;
+            match t.as_ref() {
                 Type::Primitive(t) => decode_compact_primitive(ctx, buf, &t),
                 Type::Tuple(t) if t.is_empty() => {
                     Compact::<()>::decode(buf)
@@ -433,8 +452,8 @@ fn decode_valude(
             }
         }
         Type::Seq(ty) => {
-            let t = registry.get_type(&ty)?;
-            if matches!(t, Type::Primitive(PrimitiveType::U8)) {
+            let t = registry.resolve_type(&ty)?;
+            if matches!(t.as_ref(), Type::Primitive(PrimitiveType::U8)) {
                 let value = Vec::<u8>::decode(buf)
                     .map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
                 return AsBytes(value).to_js_value(ctx);
@@ -459,7 +478,8 @@ fn decode_valude(
         }
         Type::Array(ty, len) => {
             let len = *len as usize;
-            let t = registry.get_type(&ty)?;
+            let t = registry.resolve_type(&ty)?;
+            let t = t.as_ref();
             if matches!(t, Type::Primitive(PrimitiveType::U8)) {
                 if buf.len() < len {
                     return Err(js::Error::Static("Unexpected end of buffer"));

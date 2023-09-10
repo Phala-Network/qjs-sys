@@ -165,6 +165,10 @@ impl Type {
             _ => None,
         }
     }
+
+    pub fn is_alias(&self) -> bool {
+        matches!(self, Self::Alias(_))
+    }
 }
 
 impl From<PrimitiveType> for Type {
