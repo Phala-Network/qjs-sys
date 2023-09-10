@@ -13,7 +13,7 @@ where
     Vec<u8>: TryInto<T>,
 {
     let bytes = js_value.decode_bytes()?;
-    Ok(bytes.try_into().or(Err(Error::Expect("try from bytes")))?)
+    bytes.try_into().or(Err(Error::Expect("try from bytes")))
 }
 
 pub fn decode_as_bytes_maybe_hex<T>(js_value: Value) -> Result<T>
@@ -21,7 +21,7 @@ where
     Vec<u8>: TryInto<T>,
 {
     let bytes = js_value.decode_bytes_maybe_hex()?;
-    Ok(bytes.try_into().or(Err(Error::Expect("try from bytes")))?)
+    bytes.try_into().or(Err(Error::Expect("try from bytes")))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

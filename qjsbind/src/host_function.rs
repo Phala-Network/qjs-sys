@@ -1,6 +1,4 @@
-use crate::{
-    self as js, c, utils::js_throw_type_error, FromJsValue, ToJsValue, Value,
-};
+use crate::{self as js, c, utils::js_throw_type_error, FromJsValue, ToJsValue, Value};
 
 pub trait HostFunction {
     fn call(&self, ctx: &js::Context, this_val: c::JSValueConst, args: &[c::JSValue])
@@ -12,7 +10,12 @@ pub struct Function<Ctx, Args, Ret, F> {
     _phantom: core::marker::PhantomData<(Ctx, Args, Ret)>,
 }
 
-pub fn call_host_function<Ctx, Args, Ret, F>(
+/// Call a host function from JavaScript.
+///
+/// # Safety
+/// `ctx` must be a valid pointer to a `JSContext`.
+/// `argv` must be a valid pointer to an array of `argc` `JSValue`s.
+pub unsafe fn call_host_function<Ctx, Args, Ret, F>(
     func: F,
     ctx: *mut c::JSContext,
     this_val: c::JSValueConst,
@@ -138,20 +141,3 @@ impl_host_fn!((A, B, C, D, E));
 impl_host_fn!((A, B, C, D, E, F));
 impl_host_fn!((A, B, C, D, E, F, G));
 impl_host_fn!((A, B, C, D, E, F, G, H));
-
-pub extern "C" fn host_fn_stub<Src, F>(
-    ctx: *mut c::JSContext,
-    this_val: c::JSValueConst,
-    argc: core::ffi::c_int,
-    argv: *const c::JSValueConst,
-) -> c::JSValue
-where
-    Src: TryFrom<js::Context>,
-    Src::Error: core::fmt::Debug,
-    F: HostFunction + Default,
-{
-    let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
-    let ctx = js::Context::clone_from_ptr(ctx).expect("host call with null context");
-    let func = F::default();
-    func.call(&ctx, this_val, args)
-}

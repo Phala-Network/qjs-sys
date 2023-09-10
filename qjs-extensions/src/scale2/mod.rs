@@ -36,23 +36,22 @@ impl Enum {
     fn get_variant_by_name(&self, name: &str) -> js::Result<(&str, Option<Id>, u32)> {
         for (ind, (variant_name, tid, scale_ind)) in self.variants.iter().enumerate() {
             if variant_name == name {
-                return Ok((&variant_name, tid.clone(), scale_ind.unwrap_or(ind as _)));
+                return Ok((variant_name, tid.clone(), scale_ind.unwrap_or(ind as _)));
             }
         }
         Err(js::Error::Custom(format!("Unknown variant {}", name)))
     }
 
     fn get_variant_by_index(&self, tag: u8) -> js::Result<(TinyString, Option<Id>)> {
-        match self.variants.get(tag as usize) {
-            Some((name, ty, ind)) => match ind {
+        if let Some((name, ty, ind)) = self.variants.get(tag as usize) {
+            match ind {
+                None => return Ok((name.clone(), ty.clone())),
                 Some(ind) => {
                     if tag as u32 == *ind {
                         return Ok((name.clone(), ty.clone()));
                     }
                 }
-                None => return Ok((name.clone(), ty.clone())),
-            },
-            None => (),
+            }
         };
         // fallback to linear search for custom index
         for (name, ty, ind) in self.variants.iter() {
@@ -117,7 +116,7 @@ impl Registry {
                 *id
             }
             Id::Num(ind) => *ind as usize,
-            Id::Type(ty) => return Ok(&*ty),
+            Id::Type(ty) => return Ok(ty),
         };
         self.types
             .get(ind)
@@ -251,21 +250,21 @@ fn encode_value(
     let t = registry.resolve_type(tid)?;
     match t.as_ref() {
         Type::Alias(_) => unreachable!("Alias should be resolved"),
-        Type::Primitive(t) => encode_primitive(value, &t, out),
-        Type::Compact(ty) => {
-            let t = registry.resolve_type(&ty)?;
-            match t.as_ref() {
-                Type::Primitive(t) => encode_compact_primitive(value, &t, out),
-                Type::Tuple(t) if t.is_empty() => {
+        Type::Primitive(ty) => encode_primitive(value, ty, out),
+        Type::Compact(tid) => {
+            let ty = registry.resolve_type(tid)?;
+            match ty.as_ref() {
+                Type::Primitive(ty) => encode_compact_primitive(value, ty, out),
+                Type::Tuple(tids) if tids.is_empty() => {
                     Compact(()).encode_to(out);
                     Ok(())
                 }
                 _ => compactable_err(),
             }
         }
-        Type::Seq(ty) => {
-            let t = registry.resolve_type(&ty)?;
-            if matches!(t.as_ref(), Type::Primitive(PrimitiveType::U8)) {
+        Type::Seq(tid) => {
+            let ty = registry.resolve_type(tid)?;
+            if matches!(ty.as_ref(), Type::Primitive(PrimitiveType::U8)) {
                 let result = u8a_or_hex(&value, |bytes| {
                     bytes.encode_to(out);
                     Ok(())
@@ -277,20 +276,20 @@ fn encode_value(
             let length = value.get_property("length")?.decode_u32()?;
             Compact(length).encode_to(out);
             for i in 0..length {
-                encode_value(value.index(i as _)?, &ty, registry, out)?;
+                encode_value(value.index(i as _)?, tid, registry, out)?;
             }
             Ok(())
         }
         Type::Tuple(ids) => {
             for (ind, ty) in ids.iter().enumerate() {
                 let sub_value = value.index(ind)?;
-                encode_value(sub_value, &ty, registry, out)?;
+                encode_value(sub_value, ty, registry, out)?;
             }
             Ok(())
         }
         Type::Array(ty, len) => {
             let len = *len as usize;
-            let t = registry.resolve_type(&ty)?;
+            let t = registry.resolve_type(ty)?;
             if matches!(t.as_ref(), Type::Primitive(PrimitiveType::U8)) {
                 let result = u8a_or_hex(&value, |bytes| {
                     if bytes.len() != len {
@@ -316,7 +315,7 @@ fn encode_value(
             }
             for ind in 0..len {
                 let sub_value = value.index(ind)?;
-                encode_value(sub_value, &ty, registry, out)?;
+                encode_value(sub_value, ty, registry, out)?;
             }
             Ok(())
         }
@@ -324,7 +323,7 @@ fn encode_value(
             for entry in value.entries()? {
                 let (k, v) = entry?;
                 let key = js::JsString::from_js_value(k)?;
-                if let Some((_name, ty, ind)) = def.get_variant_by_name(key.as_str()).ok() {
+                if let Ok((_name, ty, ind)) = def.get_variant_by_name(key.as_str()) {
                     let Ok(ind) = u8::try_from(ind) else {
                         return Err(js::Error::Custom(format!(
                             "Variant index {} is too large",
@@ -350,7 +349,7 @@ fn encode_value(
         Type::Struct(fields) => {
             for (name, ty) in fields.iter() {
                 let sub_value = value.get_property(name)?;
-                encode_value(sub_value, &ty, registry, out)?;
+                encode_value(sub_value, ty, registry, out)?;
             }
             Ok(())
         }
@@ -439,12 +438,12 @@ fn decode_valude(
     let t = registry.resolve_type(ty)?;
     match t.as_ref() {
         Type::Alias(_) => unreachable!("Alias should be resolved"),
-        Type::Primitive(t) => decode_primitive(ctx, buf, &t),
-        Type::Compact(ty) => {
-            let t = registry.resolve_type(&ty)?;
-            match t.as_ref() {
-                Type::Primitive(t) => decode_compact_primitive(ctx, buf, &t),
-                Type::Tuple(t) if t.is_empty() => {
+        Type::Primitive(ty) => decode_primitive(ctx, buf, ty),
+        Type::Compact(tid) => {
+            let tid = registry.resolve_type(tid)?;
+            match tid.as_ref() {
+                Type::Primitive(ty) => decode_compact_primitive(ctx, buf, ty),
+                Type::Tuple(tids) if tids.is_empty() => {
                     Compact::<()>::decode(buf)
                         .map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
                     Ok(ctx.new_array())
@@ -453,7 +452,7 @@ fn decode_valude(
             }
         }
         Type::Seq(ty) => {
-            let t = registry.resolve_type(&ty)?;
+            let t = registry.resolve_type(ty)?;
             if matches!(t.as_ref(), Type::Primitive(PrimitiveType::U8)) {
                 let value = Vec::<u8>::decode(buf)
                     .map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
@@ -464,7 +463,7 @@ fn decode_valude(
                 .0;
             let out = ctx.new_array();
             for _ in 0..length {
-                let sub_value = decode_valude(ctx, buf, &ty, registry)?;
+                let sub_value = decode_valude(ctx, buf, ty, registry)?;
                 out.array_push(&sub_value)?;
             }
             Ok(out)
@@ -472,14 +471,14 @@ fn decode_valude(
         Type::Tuple(types) => {
             let out = ctx.new_array();
             for ty in types {
-                let sub_value = decode_valude(ctx, buf, &ty, registry)?;
+                let sub_value = decode_valude(ctx, buf, ty, registry)?;
                 out.array_push(&sub_value)?;
             }
             Ok(out)
         }
         Type::Array(ty, len) => {
             let len = *len as usize;
-            let t = registry.resolve_type(&ty)?;
+            let t = registry.resolve_type(ty)?;
             let t = t.as_ref();
             if matches!(t, Type::Primitive(PrimitiveType::U8)) {
                 if buf.len() < len {
@@ -491,7 +490,7 @@ fn decode_valude(
             }
             let out = ctx.new_array();
             for _ in 0..len {
-                let sub_value = decode_valude(ctx, buf, &ty, registry)?;
+                let sub_value = decode_valude(ctx, buf, ty, registry)?;
                 out.array_push(&sub_value)?;
             }
             Ok(out)
@@ -511,8 +510,8 @@ fn decode_valude(
         Type::Struct(fields) => {
             let out = ctx.new_object();
             for (name, ty) in fields {
-                let sub_value = decode_valude(ctx, buf, &ty, registry)?;
-                out.set_property(&name, &sub_value)?;
+                let sub_value = decode_valude(ctx, buf, ty, registry)?;
+                out.set_property(name, &sub_value)?;
             }
             Ok(out)
         }

@@ -91,7 +91,7 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Vec<ScaleType>, extra::Err<Simpl
         });
     let compact_def = just("@")
         .ignore_then(number)
-        .map(|len| ScaleType::Compact(len));
+        .map(ScaleType::Compact);
     let tuple_def = just("(")
         .ignore_then(
             number
@@ -100,7 +100,7 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Vec<ScaleType>, extra::Err<Simpl
                 .collect::<Vec<_>>(),
         )
         .then_ignore(just(")"))
-        .map(|ids| ScaleType::Tuple(ids));
+        .map(ScaleType::Tuple);
     let array_def = just("[")
         .ignore_then(number.then_ignore(just(";")).then(number))
         .then_ignore(just("]"))
@@ -108,7 +108,7 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Vec<ScaleType>, extra::Err<Simpl
     let seq_def = just("[")
         .ignore_then(number)
         .then_ignore(just("]"))
-        .map(|len| ScaleType::Seq(len));
+        .map(ScaleType::Seq);
     let enum_variant = text::ident()
         .map(String::from)
         .then(just(":").ignore_then(number.or_not()).or_not())
@@ -130,7 +130,7 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Vec<ScaleType>, extra::Err<Simpl
     let struct_def = just("{")
         .ignore_then(struct_field.separated_by(just(",")).collect::<Vec<_>>())
         .then_ignore(just("}"))
-        .map(|vec| ScaleType::Struct(vec));
+        .map(ScaleType::Struct);
     let separator = text::whitespace().then(just(";").then(text::whitespace()).or_not());
     choice((
         primitive_def,

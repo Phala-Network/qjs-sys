@@ -94,6 +94,11 @@ impl Drop for Context {
 pub struct Runtime {
     ptr: NonNull<c::JSRuntime>,
 }
+impl Default for Runtime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl Runtime {
     pub fn new() -> Self {

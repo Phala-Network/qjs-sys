@@ -28,7 +28,7 @@ fn patch_or_err(input: TokenStream, with_context: bool) -> syn::Result<TokenStre
         syn::ReturnType::Type(_, ty) => quote! { #ty },
     };
     Ok(quote! {
-        pub extern "C" fn #fn_ident(
+        pub unsafe extern "C" fn #fn_ident(
             ctx: *mut #crate_qjsbind::c::JSContext,
             this_val: #crate_qjsbind::c::JSValueConst,
             argc: core::ffi::c_int,

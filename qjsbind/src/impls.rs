@@ -92,7 +92,7 @@ impl<T: FromJsValue> FromJsValue for Box<T> {
 
 impl<T: FromJsValue> FromJsValue for Vec<T> {
     fn from_js_value(js_value: Value) -> Result<Self> {
-        let len = js_value.length()? as usize;
+        let len = js_value.length()?;
         let mut vec = Vec::with_capacity(len);
         for i in 0..len {
             vec.push(T::from_js_value(js_value.get_property(&i.to_string())?)?)
@@ -269,7 +269,7 @@ impl<V: ToJsValue> ToJsValue for BTreeMap<String, V> {
     fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         let js_object = Value::new_object(ctx);
         for (key, value) in self.iter() {
-            js_object.set_property(&key, &value.to_js_value(ctx)?)?;
+            js_object.set_property(key, &value.to_js_value(ctx)?)?;
         }
         Ok(js_object)
     }

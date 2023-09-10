@@ -21,29 +21,28 @@ impl EnumType {
     fn get_variant_by_name(&self, name: &str) -> js::Result<(&str, Option<usize>, usize)> {
         for (ind, (variant_name, tid, scale_ind)) in self.variants.iter().enumerate() {
             if variant_name == name {
-                return Ok((variant_name.as_str(), tid.clone(), scale_ind.unwrap_or(ind)));
+                return Ok((variant_name.as_str(), *tid, scale_ind.unwrap_or(ind)));
             }
         }
         Err(js::Error::Custom(format!("Unknown variant {}", name)))
     }
 
     fn get_variant_by_index(&self, tag: usize) -> js::Result<(&str, Option<usize>)> {
-        match self.variants.get(tag) {
-            Some((name, tid, ind)) => match ind {
+        if let Some((name, tid, ind)) = self.variants.get(tag) {
+            match ind {
                 Some(ind) => {
                     if tag == *ind {
-                        return Ok((name.as_str(), tid.clone()));
+                        return Ok((name.as_str(), *tid));
                     }
                 }
-                None => return Ok((name.as_str(), tid.clone())),
-            },
-            None => (),
+                None => return Ok((name.as_str(), *tid)),
+            }
         };
         // fallback to linear search for custom index
         for (name, tid, ind) in self.variants.iter() {
             if let Some(ind) = ind {
                 if tag == *ind {
-                    return Ok((name.as_str(), tid.clone()));
+                    return Ok((name.as_str(), *tid));
                 }
             }
         }
@@ -226,7 +225,7 @@ fn encode_value(
             for entry in value.entries()? {
                 let (k, v) = entry?;
                 let key = js::JsString::from_js_value(k)?;
-                if let Some((_name, tid, ind)) = def.get_variant_by_name(key.as_str()).ok() {
+                if let Ok((_name, tid, ind)) = def.get_variant_by_name(key.as_str()) {
                     let Ok(ind) = u8::try_from(ind) else {
                         return Err(js::Error::Custom(format!(
                             "Variant index {} is too large",

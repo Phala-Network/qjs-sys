@@ -208,11 +208,11 @@ where
             .separated_by(just(Op(',')))
             .allow_trailing()
             .collect::<Vec<_>>();
-        let compact_def = just(Op('@')).ignore_then(tid).map(|tid| Type::Compact(tid));
+        let compact_def = just(Op('@')).ignore_then(tid).map(Type::Compact);
         let tuple_def = just(Op('('))
             .ignore_then(tids)
             .then_ignore(just(Op(')')))
-            .map(|ty| Type::Tuple(ty));
+            .map(Type::Tuple);
         let array_def = just(Op('['))
             .ignore_then(typ.clone().then_ignore(just(Op(';'))).then(num))
             .then_ignore(just(Op(']')))
@@ -220,7 +220,7 @@ where
         let seq_def = just(Op('['))
             .ignore_then(typ.clone())
             .then_ignore(just(Op(']')))
-            .map(|len| Type::Seq(len));
+            .map(Type::Seq);
         let enum_variant = ident
             .then(just(Op(':')).ignore_then(typ.clone().or_not()).or_not())
             .then(just(Op(':')).ignore_then(num).or_not())
@@ -245,7 +245,7 @@ where
                     .collect::<Vec<_>>(),
             )
             .then_ignore(just(Op('}')))
-            .map(|vec| Type::Struct(vec));
+            .map(Type::Struct);
         let alias_def = tid.map(Type::Alias);
         let primitive_types = choice((
             just(Ident("u8")).map(|_| PrimitiveType::U8),
@@ -263,7 +263,7 @@ where
         ));
         let primitive_def = just(Op('#'))
             .ignore_then(primitive_types)
-            .map(|ty| Type::Primitive(ty));
+            .map(Type::Primitive);
         choice((
             primitive_def,
             alias_def,

@@ -19,6 +19,9 @@ impl OwnedRawArgs {
     pub fn len(&self) -> usize {
         self.raw_args.len()
     }
+    pub fn is_empty(&self) -> bool {
+        self.raw_args.is_empty()
+    }
 }
 
 pub trait FromJsValue {

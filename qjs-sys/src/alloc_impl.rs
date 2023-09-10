@@ -28,7 +28,7 @@ extern "C" fn __pink_realloc(
             let cap_required = cap(size);
             if cap_required > buffer.capacity() {
                 if buffer
-                    .try_reserve(cap_required - buffer.capacity())
+                    .try_reserve(cap_required.saturating_sub(buffer.capacity()))
                     .is_err()
                 {
                     return core::ptr::null_mut();
@@ -43,6 +43,7 @@ extern "C" fn __pink_realloc(
     }
 }
 
+#[allow(clippy::arithmetic_side_effects)]
 fn cap(size: usize) -> usize {
     size / size_of::<usize>() + 2
 }

@@ -21,7 +21,10 @@ impl JsString {
     pub fn as_cstr(&self) -> &CStr {
         unsafe { CStr::from_ptr(self.ptr as _) }
     }
-    pub fn to_string(&self) -> String {
+}
+
+impl ToString for JsString {
+    fn to_string(&self) -> String {
         self.as_str().to_string()
     }
 }
