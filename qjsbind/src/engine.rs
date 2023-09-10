@@ -1,6 +1,6 @@
 use core::ptr::NonNull;
 
-use crate::{c, JsCode, Value};
+use crate::{c, Code, Value};
 use alloc::string::{String, ToString};
 
 pub struct Context {
@@ -34,7 +34,7 @@ impl Context {
         Value::from_str(self, s)
     }
 
-    pub fn eval(&self, code: &JsCode) -> Result<Value, String> {
+    pub fn eval(&self, code: &Code) -> Result<Value, String> {
         crate::eval(self, code)
     }
 

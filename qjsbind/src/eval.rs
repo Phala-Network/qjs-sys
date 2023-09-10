@@ -4,12 +4,12 @@ use alloc::string::{String, ToString};
 
 use crate::{self as js, c, Value};
 
-pub enum JsCode<'a> {
+pub enum Code<'a> {
     Source(&'a str),
     Bytecode(&'a [u8]),
 }
 
-pub fn eval(ctx: &js::Context, script: &JsCode) -> Result<Value, String> {
+pub fn eval(ctx: &js::Context, script: &Code) -> Result<Value, String> {
     struct IO {
         output: Result<Value, String>,
     }
@@ -46,12 +46,12 @@ pub fn eval(ctx: &js::Context, script: &JsCode) -> Result<Value, String> {
     };
 
     let code = match script {
-        JsCode::Source(src) => c::code_t {
+        Code::Source(src) => c::code_t {
             code: src.as_ptr() as _,
             code_len: src.as_bytes().len() as _,
             is_bytecode: 0,
         },
-        JsCode::Bytecode(bytes) => c::code_t {
+        Code::Bytecode(bytes) => c::code_t {
             code: bytes.as_ptr() as _,
             code_len: bytes.len() as _,
             is_bytecode: 1,
