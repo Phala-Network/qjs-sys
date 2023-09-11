@@ -91,7 +91,7 @@ pub fn recursive_to_string(value: &js::Value, level: u8, escape: bool, buf: &mut
                 buf.push_str("[object Object]");
                 return;
             };
-            buf.push_str("{");
+            buf.push('{');
             for r in entries {
                 let Ok((key, value)) = r else {
                     continue;
@@ -103,9 +103,9 @@ pub fn recursive_to_string(value: &js::Value, level: u8, escape: bool, buf: &mut
                 }
                 buf.push_str(&key.to_string());
                 buf.push_str(": ");
-                recursive_to_string(&value, level - 1, true, buf);
+                recursive_to_string(&value, level.saturating_sub(1), true, buf);
             }
-            buf.push_str("}");
+            buf.push('}');
         }
         return;
     } else if value.is_array() {
@@ -118,7 +118,7 @@ pub fn recursive_to_string(value: &js::Value, level: u8, escape: bool, buf: &mut
             buf.push_str("[object Array]");
             return;
         };
-        buf.push_str("[");
+        buf.push('[');
         for r in entries {
             let Ok((_, value)) = r else {
                 continue;
@@ -128,9 +128,9 @@ pub fn recursive_to_string(value: &js::Value, level: u8, escape: bool, buf: &mut
             } else {
                 buf.push_str(", ");
             }
-            recursive_to_string(&value, level - 1, true, buf);
+            recursive_to_string(&value, level.saturating_sub(1), true, buf);
         }
-        buf.push_str("]");
+        buf.push(']');
         return;
     } else if value.is_uint8_array() {
         // print uint8 array as hex string

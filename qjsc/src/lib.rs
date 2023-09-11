@@ -21,7 +21,7 @@ fn compile_js(js: syn::LitStr) -> syn::Result<TokenStream2> {
         }
         Err(err) => {
             let msg = format!("{}: {}", err, js);
-            return Err(syn::Error::new(js.span(), msg));
+            Err(syn::Error::new(js.span(), msg))
         }
     }
 }
