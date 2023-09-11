@@ -108,27 +108,6 @@ pub enum PrimitiveType {
     Str,
 }
 
-impl PrimitiveType {
-    pub fn from_str(s: &str) -> Option<&'static PrimitiveType> {
-        let ty = match s {
-            "u8" => &PrimitiveType::U8,
-            "u16" => &PrimitiveType::U16,
-            "u32" => &PrimitiveType::U32,
-            "u64" => &PrimitiveType::U64,
-            "u128" => &PrimitiveType::U128,
-            "i8" => &PrimitiveType::I8,
-            "i16" => &PrimitiveType::I16,
-            "i32" => &PrimitiveType::I32,
-            "i64" => &PrimitiveType::I64,
-            "i128" => &PrimitiveType::I128,
-            "bool" => &PrimitiveType::Bool,
-            "str" => &PrimitiveType::Str,
-            _ => return None,
-        };
-        Some(ty)
-    }
-}
-
 impl core::str::FromStr for PrimitiveType {
     type Err = ();
 
@@ -149,25 +128,58 @@ pub enum Type {
     Alias(Id),
 }
 
-impl Type {
-    pub fn primitive(s: &str) -> Option<&'static Self> {
-        match s {
-            "u8" => Some(&Self::Primitive(PrimitiveType::U8)),
-            "u16" => Some(&Self::Primitive(PrimitiveType::U16)),
-            "u32" => Some(&Self::Primitive(PrimitiveType::U32)),
-            "u64" => Some(&Self::Primitive(PrimitiveType::U64)),
-            "u128" => Some(&Self::Primitive(PrimitiveType::U128)),
-            "i8" => Some(&Self::Primitive(PrimitiveType::I8)),
-            "i16" => Some(&Self::Primitive(PrimitiveType::I16)),
-            "i32" => Some(&Self::Primitive(PrimitiveType::I32)),
-            "i64" => Some(&Self::Primitive(PrimitiveType::I64)),
-            "i128" => Some(&Self::Primitive(PrimitiveType::I128)),
-            "bool" => Some(&Self::Primitive(PrimitiveType::Bool)),
-            "str" => Some(&Self::Primitive(PrimitiveType::Str)),
-            _ => None,
+macro_rules! impl_primitive_types {
+    ($(($id:literal, $ty:ident)),*) => {
+        impl Type {
+            pub fn primitive(s: &str) -> Option<&'static Self> {
+                match s {
+                    $(
+                        $id => Some(&Self::Primitive(PrimitiveType::$ty)),
+                    )*
+                    _ => None,
+                }
+            }
         }
-    }
+        fn primitive_parser<'tokens, 'src: 'tokens, E>(
+        ) -> impl Parser<'tokens, ParserInput<'tokens, 'src>, PrimitiveType, E> + Clone
+        where
+            E: extra::ParserExtra<'tokens, ParserInput<'tokens, 'src>>,
+        {
+            use Token::*;
+            choice((
+                $(just(Ident($id)).map(|_| PrimitiveType::$ty),)*
+            ))
+        }
+        impl PrimitiveType {
+            pub fn from_str(s: &str) -> Option<&'static PrimitiveType> {
+                let ty = match s {
+                    $(
+                        $id => &PrimitiveType::$ty,
+                    )*
+                    _ => return None,
+                };
+                Some(ty)
+            }
+        }
+    };
+}
 
+impl_primitive_types! {
+    ("u8", U8),
+    ("u16", U16),
+    ("u32", U32),
+    ("u64", U64),
+    ("u128", U128),
+    ("i8", I8),
+    ("i16", I16),
+    ("i32", I32),
+    ("i64", I64),
+    ("i128", I128),
+    ("bool", Bool),
+    ("str", Str)
+}
+
+impl Type {
     pub fn is_alias(&self) -> bool {
         matches!(self, Self::Alias(_))
     }
@@ -247,22 +259,8 @@ where
             .then_ignore(just(Op('}')))
             .map(Type::Struct);
         let alias_def = tid.map(Type::Alias);
-        let primitive_types = choice((
-            just(Ident("u8")).map(|_| PrimitiveType::U8),
-            just(Ident("u16")).map(|_| PrimitiveType::U16),
-            just(Ident("u32")).map(|_| PrimitiveType::U32),
-            just(Ident("u64")).map(|_| PrimitiveType::U64),
-            just(Ident("u128")).map(|_| PrimitiveType::U128),
-            just(Ident("i8")).map(|_| PrimitiveType::I8),
-            just(Ident("i16")).map(|_| PrimitiveType::I16),
-            just(Ident("i32")).map(|_| PrimitiveType::I32),
-            just(Ident("i64")).map(|_| PrimitiveType::I64),
-            just(Ident("i128")).map(|_| PrimitiveType::I128),
-            just(Ident("bool")).map(|_| PrimitiveType::Bool),
-            just(Ident("str")).map(|_| PrimitiveType::Str),
-        ));
         let primitive_def = just(Op('#'))
-            .ignore_then(primitive_types)
+            .ignore_then(primitive_parser())
             .map(Type::Primitive);
         choice((
             primitive_def,
