@@ -11,6 +11,7 @@ hex = { version = "0.4", default-features = false, features = ["alloc"] }
 cstr = "0.2"
 tinyvec = { version = "1", default-features = false, features = ["alloc"] }
 scopeguard = { version = "1", default-features = false }
+tynm = "0.1"
 
 [features]
 default = ["std"]

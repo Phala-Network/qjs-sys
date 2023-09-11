@@ -26,7 +26,8 @@ impl Default for RawValue {
     }
 }
 
-pub enum Value {
+pub use JsValue as Value;
+pub enum JsValue {
     Undefined,
     Null,
     Exception,
@@ -181,16 +182,14 @@ impl Value {
         };
         let value = Self::new_moved(ctx, value);
         if value.is_exception() {
-            Err(Error::JsException)
+            Err(Error::JsException(ctx.get_exception_str()))
         } else {
             Ok(value)
         }
     }
 
     pub fn get_property_t<T: FromJsValue>(&self, name: &str) -> Result<T> {
-        let perr = |e| Error::Custom(format!("get proptety {name}: {e}"));
-        let value = self.get_property(name).map_err(perr)?;
-        T::from_js_value(value).map_err(perr)
+        T::from_js_value(self.get_property(name)?)
     }
 
     pub fn length(&self) -> Result<usize> {
@@ -241,7 +240,7 @@ impl Value {
         };
         let ret = Self::new_moved(ctx, value);
         if ret.is_exception() {
-            Err(Error::JsException)
+            Err(Error::JsException(ctx.get_exception_str()))
         } else {
             Ok(ret)
         }

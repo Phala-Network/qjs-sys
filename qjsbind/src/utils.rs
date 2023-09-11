@@ -4,11 +4,6 @@ use alloc::vec::Vec;
 
 use crate::{self as js, c, FromJsValue};
 
-pub fn js_throw_type_error(ctx: &js::Context, msg: &str) -> c::JSValue {
-    let cmsg = CString::new(msg).unwrap_or_default();
-    unsafe { c::JS_ThrowTypeError(ctx.as_ptr(), cmsg.as_ptr()) }
-}
-
 pub fn ctx_to_str<T>(ctx: &js::Context, value: c::JSValueConst, cb: impl FnOnce(&str) -> T) -> T {
     unsafe {
         let mut len: c::size_t = 0;

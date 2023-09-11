@@ -1,9 +1,4 @@
-use alloc::{
-    boxed::Box,
-    collections::BTreeMap,
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 use tinyvec::TinyVec;
 
 use super::{Error, FromArgs, FromJsValue, Result, ToArgs, ToJsValue, Value};
@@ -92,12 +87,7 @@ impl<T: FromJsValue> FromJsValue for Box<T> {
 
 impl<T: FromJsValue> FromJsValue for Vec<T> {
     fn from_js_value(js_value: Value) -> Result<Self> {
-        let len = js_value.length()?;
-        let mut vec = Vec::with_capacity(len);
-        for i in 0..len {
-            vec.push(T::from_js_value(js_value.get_property(&i.to_string())?)?)
-        }
-        Ok(vec)
+        iter_values(js_value)?.collect()
     }
 }
 
@@ -148,7 +138,10 @@ impl<const N: usize, T: FromJsValue + Default> FromJsValue for [T; N] {
         let mut iter = iter_values(js_value)?;
         let mut array: Vec<T> = vec![];
         for _ in 0..N {
-            array.push(iter.next().ok_or(Error::ExpectLen("array", N))??);
+            array.push(
+                iter.next()
+                    .ok_or_else(|| Error::ExpectLen(tynm::type_name::<T>(), N))??,
+            );
         }
         Ok(array.try_into().ok().expect("BUG: array length mismatch"))
     }

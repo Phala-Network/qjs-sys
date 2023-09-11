@@ -16,7 +16,7 @@ pub use qjs_sys as sys;
 pub use qjs_sys::c;
 pub use qjsbind_derive::{host_call, FromJsValue, ToJsValue};
 pub use traits::{FromArgs, FromJsValue, OwnedRawArgs, ToArgs, ToJsValue};
-pub use utils::{compile, ctx_to_str, ctx_to_string, js_throw_type_error, recursive_to_string};
+pub use utils::{compile, ctx_to_str, ctx_to_string, recursive_to_string};
 pub use value::{get_global, Value};
 
 #[macro_use]

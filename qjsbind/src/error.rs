@@ -8,8 +8,8 @@ pub enum Error {
     Custom(String),
     Static(&'static str),
     Expect(&'static str),
-    ExpectLen(&'static str, usize),
-    JsException,
+    ExpectLen(String, usize),
+    JsException(String),
 }
 
 impl Display for Error {
@@ -18,8 +18,8 @@ impl Display for Error {
             Error::Custom(s) => f.write_str(s),
             Error::Static(s) => f.write_str(s),
             Error::Expect(s) => write!(f, "expect {}", s),
-            Error::JsException => f.write_str("js exception"),
-            Error::ExpectLen(s, l) => write!(f, "expect {} of length {}", s, l),
+            Error::JsException(e) => f.write_str(e),
+            Error::ExpectLen(s, l) => write!(f, "expect [{s};{l}]"),
         }
     }
 }

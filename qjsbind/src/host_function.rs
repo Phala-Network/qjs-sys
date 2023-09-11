@@ -1,4 +1,4 @@
-use crate::{self as js, c, utils::js_throw_type_error, FromJsValue, ToJsValue, Value};
+use crate::{self as js, c, FromJsValue, ToJsValue, Value};
 
 pub trait HostFunction {
     fn call(&self, ctx: &js::Context, this_val: c::JSValueConst, args: &[c::JSValue])
@@ -57,14 +57,16 @@ where
         Ok(v) => match v.to_js_value(ctx) {
             Ok(v) => v.leak(),
             Err(err) => {
-                let msg = format!("failed to convert to JSValue: {err:?}");
-                js_throw_type_error(ctx, &msg);
+                let msg = format!(
+                    "ValueError: failed to convert {} to JsValue: {err:?}",
+                    tynm::type_name::<V>()
+                );
+                ctx.throw_str(&msg);
                 c::JS_EXCEPTION
             }
         },
         Err(err) => {
-            let msg = format!("{err:?}");
-            js_throw_type_error(ctx, &msg);
+            ctx.throw_dbg(err);
             c::JS_EXCEPTION
         }
     }
@@ -102,11 +104,11 @@ macro_rules! impl_host_fn {
                     Ok(ctx) => ctx,
                     Err(e) => {
                         let msg = format!(
-                            "failed to convert JSContext to {}: {:?}",
-                            core::any::type_name::<Srv>(),
+                            "TypeError: failed to convert JsContext to {}: {:?}",
+                            tynm::type_name::<Srv>(),
                             e
                         );
-                        js_throw_type_error(ctx, &msg);
+                        ctx.throw_str(&msg);
                         return c::JS_EXCEPTION;
                     }
                 };
@@ -119,8 +121,8 @@ macro_rules! impl_host_fn {
                     let $arg = match $arg::from_js_value(value) {
                         Ok(arg) => arg,
                         Err(err) => {
-                            let msg = format!("failed to convert JSValue to {}: {err:?}", core::any::type_name::<$arg>());
-                            js_throw_type_error(ctx, &msg);
+                            let msg = format!("TypeError: failed to convert JsValue to {}: {err:?}", tynm::type_name::<$arg>());
+                            ctx.throw_str(&msg);
                             return c::JS_EXCEPTION;
                         }
                     };
