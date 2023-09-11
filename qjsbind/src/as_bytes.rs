@@ -26,6 +26,11 @@ where
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AsBytes<T>(pub T);
+impl<T> From<T> for AsBytes<T> {
+    fn from(t: T) -> Self {
+        Self(t)
+    }
+}
 
 impl<T: AsRef<[u8]>> ToJsValue for AsBytes<T> {
     fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
@@ -44,6 +49,11 @@ where
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BytesOrHex<T>(pub T);
+impl<T> From<T> for BytesOrHex<T> {
+    fn from(t: T) -> Self {
+        Self(t)
+    }
+}
 
 impl<T: AsRef<[u8]>> ToJsValue for BytesOrHex<T> {
     fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
