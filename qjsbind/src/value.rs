@@ -630,8 +630,15 @@ impl Value {
             }
             Ok(v)
         } else if self.is_string() {
-            let s = self.to_string_utf8().ok_or(Error::Expect("string"))?;
-            Ok(s.as_str().as_bytes().to_vec())
+            #[cfg(feature = "treat-hex-as-bytes")]
+            {
+                self.decode_bytes_maybe_hex()
+            }
+            #[cfg(not(feature = "treat-hex-as-bytes"))]
+            {
+                let s = self.to_string_utf8().ok_or(Error::Expect("string"))?;
+                Ok(s.as_str().as_bytes().to_vec())
+            }
         } else {
             Err(Error::Expect("bytes-like value"))
         }
