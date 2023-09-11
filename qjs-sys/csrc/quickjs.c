@@ -134,6 +134,7 @@ typedef enum JSErrorEnum {
     JS_URI_ERROR,
     JS_INTERNAL_ERROR,
     JS_AGGREGATE_ERROR,
+    JS_GENERIC_ERROR,
     
     JS_NATIVE_ERROR_COUNT, /* number of different NativeError objects */
 } JSErrorEnum;
@@ -6570,6 +6571,17 @@ JSValue __attribute__((format(printf, 2, 3))) JS_ThrowTypeError(JSContext *ctx, 
 
     va_start(ap, fmt);
     val = JS_ThrowError(ctx, JS_TYPE_ERROR, fmt, ap);
+    va_end(ap);
+    return val;
+}
+
+JSValue __attribute__((format(printf, 2, 3))) JS_ThrowGenericError(JSContext *ctx, const char *fmt, ...)
+{
+    JSValue val;
+    va_list ap;
+
+    va_start(ap, fmt);
+    val = JS_ThrowError(ctx, JS_GENERIC_ERROR, fmt, ap);
     va_end(ap);
     return val;
 }
@@ -50868,7 +50880,7 @@ void JS_EnableBignumExt(JSContext *ctx, BOOL enable)
 static const char * const native_error_name[JS_NATIVE_ERROR_COUNT] = {
     "EvalError", "RangeError", "ReferenceError",
     "SyntaxError", "TypeError", "URIError",
-    "InternalError", "AggregateError",
+    "InternalError", "AggregateError", "Error",
 };
 
 /* Minimum amount of objects to be able to compile code and display

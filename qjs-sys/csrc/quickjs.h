@@ -645,6 +645,7 @@ void JS_ResetUncatchableError(JSContext *ctx);
 JSValue JS_NewError(JSContext *ctx);
 JSValue __js_printf_like(2, 3) JS_ThrowSyntaxError(JSContext *ctx, const char *fmt, ...);
 JSValue __js_printf_like(2, 3) JS_ThrowTypeError(JSContext *ctx, const char *fmt, ...);
+JSValue __js_printf_like(2, 3) JS_ThrowGenericError(JSContext *ctx, const char *fmt, ...);
 JSValue __js_printf_like(2, 3) JS_ThrowReferenceError(JSContext *ctx, const char *fmt, ...);
 JSValue __js_printf_like(2, 3) JS_ThrowRangeError(JSContext *ctx, const char *fmt, ...);
 JSValue __js_printf_like(2, 3) JS_ThrowInternalError(JSContext *ctx, const char *fmt, ...);

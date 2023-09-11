@@ -58,7 +58,7 @@ where
             Ok(v) => v.leak(),
             Err(err) => {
                 let msg = format!(
-                    "ValueError: failed to convert {} to JsValue: {err:?}",
+                    "failed to convert {} to JsValue: {err:?}",
                     tynm::type_name::<V>()
                 );
                 ctx.throw_str(&msg);
@@ -104,11 +104,11 @@ macro_rules! impl_host_fn {
                     Ok(ctx) => ctx,
                     Err(e) => {
                         let msg = format!(
-                            "TypeError: failed to convert JsContext to {}: {:?}",
+                            "failed to convert JsContext to {}: {:?}",
                             tynm::type_name::<Srv>(),
                             e
                         );
-                        ctx.throw_str(&msg);
+                        ctx.throw_type_err(&msg);
                         return c::JS_EXCEPTION;
                     }
                 };
@@ -121,8 +121,8 @@ macro_rules! impl_host_fn {
                     let $arg = match $arg::from_js_value(value) {
                         Ok(arg) => arg,
                         Err(err) => {
-                            let msg = format!("TypeError: failed to convert JsValue to {}: {err:?}", tynm::type_name::<$arg>());
-                            ctx.throw_str(&msg);
+                            let msg = format!("failed to convert JsValue to {}: {err:?}", tynm::type_name::<$arg>());
+                            ctx.throw_type_err(&msg);
                             return c::JS_EXCEPTION;
                         }
                     };

@@ -47,10 +47,15 @@ impl Context {
     }
 
     pub fn throw_str(&self, err: &str) {
-        let err = self.new_string(err);
+        let cmsg = alloc::ffi::CString::new(err).unwrap_or_default();
         unsafe {
-            c::JS_Throw(self.as_ptr(), err.leak());
+            c::JS_ThrowGenericError(self.as_ptr(), cmsg.as_ptr());
         }
+    }
+
+    pub fn throw_type_err(&self, err: &str) {
+        let cmsg = alloc::ffi::CString::new(err).unwrap_or_default();
+        unsafe { c::JS_ThrowTypeError(self.as_ptr(), cmsg.as_ptr()) };
     }
 
     pub fn get_exception_str(&self) -> String {
