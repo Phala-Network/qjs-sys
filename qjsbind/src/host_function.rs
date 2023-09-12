@@ -59,7 +59,7 @@ where
             Err(err) => {
                 let msg = format!(
                     "failed to convert {} to JsValue: {err:?}",
-                    tynm::type_name::<V>()
+                    crate::type_name::<V>()
                 );
                 ctx.throw_str(&msg);
                 c::JS_EXCEPTION
@@ -105,7 +105,7 @@ macro_rules! impl_host_fn {
                     Err(e) => {
                         let msg = format!(
                             "failed to convert JsContext to {}: {:?}",
-                            tynm::type_name::<Srv>(),
+                            crate::type_name::<Srv>(),
                             e
                         );
                         ctx.throw_type_err(&msg);
@@ -121,7 +121,7 @@ macro_rules! impl_host_fn {
                     let $arg = match $arg::from_js_value(value) {
                         Ok(arg) => arg,
                         Err(err) => {
-                            let msg = format!("failed to convert JsValue to {}: {err:?}", tynm::type_name::<$arg>());
+                            let msg = format!("failed to convert JsValue to {}: {err:?}", crate::type_name::<$arg>());
                             ctx.throw_type_err(&msg);
                             return c::JS_EXCEPTION;
                         }

@@ -33,3 +33,11 @@ mod opaque_value;
 mod traits;
 mod utils;
 mod value;
+
+#[cfg(feature = "tynm")]
+use tynm::type_name;
+
+#[cfg(not(feature = "tynm"))]
+fn type_name<T>() -> alloc::string::String {
+    core::any::type_name::<T>().into()
+}

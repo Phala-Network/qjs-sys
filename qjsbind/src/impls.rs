@@ -140,7 +140,7 @@ impl<const N: usize, T: FromJsValue + Default> FromJsValue for [T; N] {
         for _ in 0..N {
             array.push(
                 iter.next()
-                    .ok_or_else(|| Error::ExpectLen(tynm::type_name::<T>(), N))??,
+                    .ok_or_else(|| Error::ExpectLen(crate::type_name::<T>(), N))??,
             );
         }
         Ok(array.try_into().ok().expect("BUG: array length mismatch"))
