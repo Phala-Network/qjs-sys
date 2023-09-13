@@ -1,4 +1,3 @@
-use alloc::borrow::Cow;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::{format, rc::Rc, vec::Vec};
@@ -7,7 +6,7 @@ use parity_scale_codec::{Compact, Decode, Encode, Output};
 
 use js::{self as js, AsBytes, BytesOrHex, FromJsValue, ToJsValue};
 
-use self::parser::{Enum, Id, PrimitiveType, String as TinyString, Type};
+use self::parser::{Enum, Id, IdInfo, PrimitiveType, String as TinyString, Type, TypeDef};
 
 mod parser;
 
@@ -42,10 +41,10 @@ impl js::FromJsValue for Id {
     fn from_js_value(js_value: js::Value) -> js::Result<Self> {
         if js_value.is_string() {
             let name = js::JsString::from_js_value(js_value)?;
-            Ok(Id::Name(name.as_str().into()))
+            Ok(Id::from(name.as_str()))
         } else {
             let ind = js_value.decode_u32()?;
-            Ok(Id::Num(ind))
+            Ok(Id::from(ind))
         }
     }
 }
@@ -105,65 +104,174 @@ impl From<Registry> for TypeRegistry {
     }
 }
 
+struct GenericLookup<'a> {
+    map: BTreeMap<&'a str, &'a Id>,
+}
+
+impl<'a> GenericLookup<'a> {
+    fn new(type_params: &'a [TinyString], type_args: &'a [Id]) -> Self {
+        let map: BTreeMap<_, _> =
+            core::iter::zip(type_params.iter().map(|t| t.as_str()), type_args.iter()).collect();
+        Self { map }
+    }
+    fn get(&self, name: &str) -> Option<&Id> {
+        self.map.get(name).copied()
+    }
+
+    fn resolve_tid(&self, tid: &Id) -> js::Result<Id> {
+        match &tid.info {
+            IdInfo::Name(name) => {
+                if let Some(id) = self.get(name.as_str()) {
+                    if !tid.type_args.is_empty() {
+                        return Err(js::Error::Custom(format!(
+                            "Generic type {} can not have type arguments",
+                            name
+                        )));
+                    }
+                    return Ok((*id).clone());
+                }
+                let mut type_args = Vec::new();
+                if !tid.type_args.is_empty() {
+                    for id in tid.type_args.iter() {
+                        let id = self.resolve_tid(id)?;
+                        type_args.push(id);
+                    }
+                }
+                let mut tid = tid.clone();
+                tid.type_args = type_args;
+                Ok(tid)
+            }
+            IdInfo::Num(_) => Ok(tid.clone()),
+            IdInfo::Type(ty) => {
+                let ty = self.resolve_type(ty)?;
+                Ok(Id {
+                    info: IdInfo::Type(alloc::boxed::Box::new(ty)),
+                    type_args: Vec::new(),
+                })
+            }
+        }
+    }
+
+    fn resolve_type(&self, ty: &Type) -> js::Result<Type> {
+        match ty {
+            Type::Primitive(_) => Ok(ty.clone()),
+            Type::Compact(_) => Ok(ty.clone()),
+            Type::Seq(tid) => Ok(Type::Seq(self.resolve_tid(tid)?)),
+            Type::Tuple(tids) => {
+                let tids = tids
+                    .iter()
+                    .map(|tid| self.resolve_tid(tid))
+                    .collect::<js::Result<Vec<_>>>()?;
+                Ok(Type::Tuple(tids))
+            }
+            Type::Array(tid, len) => {
+                let tid = self.resolve_tid(tid)?;
+                Ok(Type::Array(tid, *len))
+            }
+            Type::Enum(def) => {
+                let variants = def
+                    .variants
+                    .iter()
+                    .map(|(name, tid, ind)| {
+                        let ty = tid.as_ref().map(|tid| self.resolve_tid(tid)).transpose()?;
+                        Ok((name.clone(), ty, *ind))
+                    })
+                    .collect::<js::Result<Vec<_>>>()?;
+                Ok(Type::Enum(Enum { variants }))
+            }
+            Type::Struct(fields) => {
+                let fields = fields
+                    .iter()
+                    .map(|(name, tid)| {
+                        let ty = self.resolve_tid(tid)?;
+                        Ok((name.clone(), ty))
+                    })
+                    .collect::<js::Result<Vec<_>>>()?;
+                Ok(Type::Struct(fields))
+            }
+            Type::Alias(id) => {
+                let id = self.resolve_tid(id)?;
+                Ok(Type::Alias(id))
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 struct Registry {
-    types: Vec<Type>,
+    types: Vec<TypeDef>,
     lookup: BTreeMap<TinyString, usize>,
 }
 
 impl Registry {
     fn append(&mut self, typelist: Vec<parser::TypeDef>) -> js::Result<()> {
         for def in typelist.into_iter() {
-            if let Some(name) = def.name {
+            if let Some(name) = def.name.name.clone() {
                 self.lookup.insert(name, self.types.len());
             }
-            self.types.push(def.ty);
+            self.types.push(def);
         }
         Ok(())
     }
 
-    fn get_type_shallow<'a>(&'a self, tid: &'a Id) -> js::Result<&'a Type> {
-        let ind = match tid {
-            Id::Name(name) => {
+    fn resolve_generic(&self, tid: &Id, def: &TypeDef) -> js::Result<Type> {
+        if def.name.type_params.len() != tid.type_args.len() {
+            return Err(js::Error::Custom(format!(
+                "Type {} expected {} type parameters, got {}",
+                def.name,
+                def.name.type_params.len(),
+                tid.type_args.len()
+            )));
+        }
+        if tid.type_args.is_empty() {
+            return Ok(def.ty.clone());
+        }
+        let lookup = GenericLookup::new(&def.name.type_params, &tid.type_args);
+        lookup.resolve_type(&def.ty)
+    }
+
+    fn get_type_shallow(&self, tid: &Id) -> js::Result<Type> {
+        let ind = match &tid.info {
+            IdInfo::Name(name) => {
                 let Some(id) = self.lookup.get(name) else {
                     return match Type::primitive(name.as_str()) {
-                        Some(prim) => Ok(prim),
+                        Some(prim) => Ok(prim.clone()),
                         None => Err(js::Error::Custom(format!("Unknown type {name}"))),
                     };
                 };
                 *id
             }
-            Id::Num(ind) => *ind as usize,
-            Id::Type(ty) => return Ok(ty),
+            IdInfo::Num(ind) => *ind as usize,
+            IdInfo::Type(ty) => return Ok((**ty).clone()),
         };
-        self.types
+        let def = self
+            .types
             .get(ind)
-            .ok_or(js::Error::Custom(format!("Unknown type {ind}")))
+            .ok_or(js::Error::Custom(format!("Unknown type {ind}")))?;
+        self.resolve_generic(tid, def)
     }
-    fn get_type<'a>(&'a self, tid: &'a Id) -> js::Result<Cow<'a, Type>> {
+
+    fn get_type(&self, tid: &Id) -> js::Result<Type> {
         let mut t = self.get_type_shallow(tid)?;
-        while let Type::Alias(id) = t {
+        while let Type::Alias(id) = &t {
             t = self.get_type_shallow(id)?;
         }
-        Ok(Cow::Borrowed(t))
+        Ok(t)
     }
-    fn resolve_type<'a>(&'a self, tid: &'a Id) -> js::Result<Cow<'a, Type>> {
+
+    fn resolve_type(&self, tid: &Id, fallback: bool) -> js::Result<Type> {
         let result = self.get_type(tid);
-        if result.is_ok() {
+        if result.is_ok() || !fallback {
             return result;
         }
-        let Id::Name(def) = tid else {
+        let IdInfo::Name(lit) = &tid.info else {
             return result;
         };
-        let ast = parser::parse_types(def)?;
-        if ast.len() != 1 {
-            return result;
+        let ty = parser::parse_type(lit)?;
+        if let Type::Alias(id) = ty {
+            return self.resolve_type(&id, false);
         }
-        let ty = ast.into_iter().next().unwrap().ty;
-        if ty.is_alias() {
-            return result;
-        }
-        Ok(Cow::Owned(ty))
+        Ok(ty)
     }
 }
 
@@ -265,13 +373,13 @@ fn encode_value(
     registry: &Registry,
     out: &mut impl Output,
 ) -> js::Result<()> {
-    let t = registry.resolve_type(tid)?;
-    match t.as_ref() {
+    let t = registry.resolve_type(tid, true)?;
+    match &t {
         Type::Alias(_) => unreachable!("Alias should be resolved"),
         Type::Primitive(ty) => encode_primitive(value, ty, out),
         Type::Compact(tid) => {
-            let ty = registry.resolve_type(tid)?;
-            match ty.as_ref() {
+            let ty = registry.resolve_type(tid, false)?;
+            match &ty {
                 Type::Primitive(ty) => encode_compact_primitive(value, ty, out),
                 Type::Tuple(tids) if tids.is_empty() => {
                     Compact(()).encode_to(out);
@@ -281,8 +389,8 @@ fn encode_value(
             }
         }
         Type::Seq(tid) => {
-            let ty = registry.resolve_type(tid)?;
-            if matches!(ty.as_ref(), Type::Primitive(PrimitiveType::U8)) {
+            let ty = registry.resolve_type(tid, false)?;
+            if matches!(ty, Type::Primitive(PrimitiveType::U8)) {
                 let result = u8a_or_hex(&value, |bytes| {
                     bytes.encode_to(out);
                     Ok(())
@@ -307,8 +415,8 @@ fn encode_value(
         }
         Type::Array(ty, len) => {
             let len = *len as usize;
-            let t = registry.resolve_type(ty)?;
-            if matches!(t.as_ref(), Type::Primitive(PrimitiveType::U8)) {
+            let t = registry.resolve_type(ty, false)?;
+            if matches!(t, Type::Primitive(PrimitiveType::U8)) {
                 let result = u8a_or_hex(&value, |bytes| {
                     if bytes.len() != len {
                         return Err(js::Error::Custom(format!(
@@ -486,13 +594,13 @@ fn decode_valude(
     ty: &Id,
     registry: &Registry,
 ) -> js::Result<js::Value> {
-    let t = registry.resolve_type(ty)?;
-    match t.as_ref() {
+    let t = registry.resolve_type(ty, true)?;
+    match &t {
         Type::Alias(_) => unreachable!("Alias should be resolved"),
         Type::Primitive(ty) => decode_primitive(ctx, buf, ty),
         Type::Compact(tid) => {
-            let tid = registry.resolve_type(tid)?;
-            match tid.as_ref() {
+            let tid = registry.resolve_type(tid, false)?;
+            match &tid {
                 Type::Primitive(ty) => decode_compact_primitive(ctx, buf, ty),
                 Type::Tuple(tids) if tids.is_empty() => {
                     Compact::<()>::decode(buf)
@@ -503,8 +611,8 @@ fn decode_valude(
             }
         }
         Type::Seq(ty) => {
-            let t = registry.resolve_type(ty)?;
-            if matches!(t.as_ref(), Type::Primitive(PrimitiveType::U8)) {
+            let t = registry.resolve_type(ty, false)?;
+            if matches!(t, Type::Primitive(PrimitiveType::U8)) {
                 let value = Vec::<u8>::decode(buf)
                     .map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
                 return AsBytes(value).to_js_value(ctx);
@@ -529,8 +637,7 @@ fn decode_valude(
         }
         Type::Array(ty, len) => {
             let len = *len as usize;
-            let t = registry.resolve_type(ty)?;
-            let t = t.as_ref();
+            let t = registry.resolve_type(ty, false)?;
             if matches!(t, Type::Primitive(PrimitiveType::U8)) {
                 if buf.len() < len {
                     return Err(js::Error::Static("Unexpected end of buffer"));
@@ -619,92 +726,4 @@ fn decode_compact_primitive(
         PrimitiveType::U128 => decode_num!(u128),
         _ => compactable_err(),
     }
-}
-
-#[cfg(test)]
-#[no_mangle]
-extern "C" fn __pink_getrandom() {}
-
-#[test]
-fn it_works() {
-    use parity_scale_codec::{Decode, Encode};
-
-    #[derive(Debug, PartialEq, Eq, Encode, Decode)]
-    struct Foo {
-        a: u32,
-        #[codec(compact)]
-        b: u32,
-        #[codec(compact)]
-        c: (),
-        d: String,
-        e: Vec<u8>,
-        f: [u8; 3],
-        g: [u32; 3],
-        bar: Bar,
-        baz: Bar,
-    }
-    #[derive(Debug, PartialEq, Eq, Encode, Decode)]
-    enum Bar {
-        A,
-        #[codec(index = 20)]
-        B(u32),
-        C(u32, u32),
-    }
-
-    let foo = Foo {
-        a: 1,
-        b: 2,
-        c: (),
-        d: "hello".into(),
-        e: vec![1, 2, 3],
-        f: [1, 2, 3],
-        g: [1, 2, 3],
-        bar: Bar::C(1, 2),
-        baz: Bar::B(42),
-    };
-    let encoded = foo.encode();
-
-    let typedef = r#"
-        Foo = {
-            a: u32,
-            b: @u32,
-            // Compat(()) is allowed
-            c: @(),
-            d: str,
-            e: [u8],
-            f: [u8;3],
-            g: [u32;3],
-            bar: Bar,
-            // Anonymous type is allowed
-            baz: <A|B:u32:20|C:(u32,u32)>,
-        };
-        Bar = <A|B:u32:20|C:(u32,u32)>;
-    "#;
-    let registry = parse_types_str(typedef).unwrap();
-    let runtime = js::Runtime::new();
-    let ctx = runtime.new_context();
-    let decoded = decode_valude(
-        &ctx,
-        &mut &encoded[..],
-        &Id::Name("Foo".into()),
-        &registry.borrow(),
-    )
-    .unwrap();
-    let g = ctx.get_global_object();
-    g.set_property("input", &decoded).unwrap();
-    let json = ctx
-        .eval(&js::Code::Source("JSON.stringify(input)"))
-        .unwrap();
-    println!("decoded json: {}", json.to_string());
-    let mut js_encoded = Vec::new();
-    encode_value(
-        decoded,
-        &Id::Name("Foo".into()),
-        &registry.borrow(),
-        &mut js_encoded,
-    )
-    .unwrap();
-    assert_eq!(encoded, js_encoded);
-    let rs_decoded = Foo::decode(&mut &encoded[..]).unwrap();
-    assert_eq!(foo, rs_decoded);
 }

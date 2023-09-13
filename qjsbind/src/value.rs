@@ -255,6 +255,9 @@ impl Value {
     }
 
     pub fn entries(&self) -> Result<PairIter> {
+        if self.is_undefined() || self.is_null() {
+            return Err(Error::Expect("object for entries"));
+        }
         #[allow(non_snake_case)]
         let Object = get_global(self.context()?).get_property("Object")?;
         let entries_fn = Object.get_property("entries")?;

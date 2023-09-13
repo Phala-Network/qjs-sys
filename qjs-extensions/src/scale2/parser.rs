@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use chumsky::{error::Error, prelude::*};
-use core::fmt;
+use core::fmt::{self, Display};
 use tinyvec_string::TinyString;
 
 //use crate::scale::PrimitiveType;
@@ -57,7 +57,12 @@ fn lexer<'src>(
 }
 
 #[derive(Debug, Clone)]
-pub enum Id {
+pub struct Id {
+    pub info: IdInfo,
+    pub type_args: Vec<Id>,
+}
+#[derive(Debug, Clone)]
+pub enum IdInfo {
     Name(String),
     Num(u32),
     Type(Box<Type>),
@@ -65,19 +70,25 @@ pub enum Id {
 
 impl From<&str> for Id {
     fn from(s: &str) -> Self {
-        Self::Name(s.into())
+        <Self as From<String>>::from(s.into())
     }
 }
 
 impl From<String> for Id {
     fn from(s: String) -> Self {
-        Self::Name(s)
+        Self {
+            info: IdInfo::Name(s),
+            type_args: Default::default(),
+        }
     }
 }
 
 impl From<u32> for Id {
     fn from(n: u32) -> Self {
-        Self::Num(n)
+        Self {
+            info: IdInfo::Num(n),
+            type_args: Default::default(),
+        }
     }
 }
 
@@ -179,12 +190,6 @@ impl_primitive_types! {
     ("str", Str)
 }
 
-impl Type {
-    pub fn is_alias(&self) -> bool {
-        matches!(self, Self::Alias(_))
-    }
-}
-
 impl From<PrimitiveType> for Type {
     fn from(ty: PrimitiveType) -> Self {
         Self::Primitive(ty)
@@ -192,27 +197,108 @@ impl From<PrimitiveType> for Type {
 }
 
 #[derive(Clone, Debug)]
-pub struct TypeDef {
+pub struct TypeName {
     pub name: Option<String>,
+    pub type_params: Vec<String>,
+}
+
+impl TypeName {
+    fn new(name: String, type_params: Vec<String>) -> Self {
+        Self {
+            name: Some(name),
+            type_params,
+        }
+    }
+    fn anonymous() -> Self {
+        Self {
+            name: None,
+            type_params: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TypeDef {
+    pub name: TypeName,
     pub ty: Type,
+}
+
+impl Display for TypeName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.name {
+            Some(name) => {
+                write!(f, "{}", name)?;
+            }
+            None => {
+                write!(f, "_")?;
+            }
+        }
+        if !self.type_params.is_empty() {
+            write!(f, "<")?;
+            for (i, ty) in self.type_params.iter().enumerate() {
+                if i != 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}", ty)?;
+            }
+            write!(f, ">")?;
+        }
+        Ok(())
+    }
 }
 
 type ParserInput<'tokens, 'src> =
     chumsky::input::SpannedInput<Token<'src>, Span, &'tokens [(Token<'src>, Span)]>;
 
-fn type_parser<'tokens, 'src: 'tokens, E>(
-) -> impl Parser<'tokens, ParserInput<'tokens, 'src>, Type, E> + Clone
+fn generic_type_parser<'tokens, 'src: 'tokens, E>(
+    typ: impl Parser<'tokens, ParserInput<'tokens, 'src>, Id, E> + Clone,
+) -> impl Parser<'tokens, ParserInput<'tokens, 'src>, Vec<Id>, E> + Clone
 where
     E: extra::ParserExtra<'tokens, ParserInput<'tokens, 'src>>,
 {
+    use Token::*;
+    just(Op('<'))
+        .ignore_then(typ.clone().separated_by(just(Op(','))).collect::<Vec<_>>())
+        .then_ignore(just(Op('>')))
+}
+fn tid_parser<'tokens, 'src: 'tokens, E>(
+    typ: impl Parser<'tokens, ParserInput<'tokens, 'src>, Id, E> + Clone,
+) -> impl Parser<'tokens, ParserInput<'tokens, 'src>, Id, E> + Clone
+where
+    E: extra::ParserExtra<'tokens, ParserInput<'tokens, 'src>>,
+{
+    use Token::*;
+    let tid_name = select! {
+        Ident(ident) => IdInfo::Name(ident.into()),
+        Num(n) => IdInfo::Num(n),
+    };
+    tid_name
+        .then(generic_type_parser(typ.clone()).or_not())
+        .map(|(info, type_args)| match type_args {
+            None => Id {
+                info,
+                type_args: Vec::new(),
+            },
+            Some(type_args) => Id { info, type_args },
+        })
+}
+fn type_parser<'tokens, 'src: 'tokens>() -> impl Parser<
+    'tokens,
+    ParserInput<'tokens, 'src>,
+    Type,
+    extra::Err<Rich<'tokens, Token<'src>, Span>>,
+> + Clone {
     recursive(|typedef| {
         use Token::*;
         let ident = select! { Ident(ident) => String::from(ident) };
-        let tid = select! {
-            Ident(ident) => Id::Name(ident.into()),
-            Num(n) => Id::Num(n),
-        };
-        let typ = tid.or(typedef.map(|t| Id::Type(Box::new(t))));
+        let typ = recursive(|typ| {
+            let tid = tid_parser(typ);
+            tid.or(typedef.map(|t| Id {
+                info: IdInfo::Type(Box::new(t)),
+                type_args: Vec::new(),
+            }))
+        });
+        let tid = tid_parser(typ.clone());
         let num = select! { Num(v) => v };
         // A list of type identifiers
         let tids = typ
@@ -248,7 +334,7 @@ where
             .then_ignore(just(Op('>')));
         let struct_field = ident
             .then(just(Op(':')).ignore_then(typ.clone()))
-            .map(|(name, tid)| (name, tid));
+            .map(|(name, ty)| (name, ty));
         let struct_def = just(Op('{'))
             .ignore_then(
                 struct_field
@@ -284,9 +370,17 @@ fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
     use Token::*;
     let ty = type_parser();
     let ident = select! { Ident(ident) => String::from(ident) };
+    let generic_def = just(Op('<'))
+        .ignore_then(ident.separated_by(just(Op(','))).collect::<Vec<_>>())
+        .then_ignore(just(Op('>')));
     let stmt = ident
+        .then(generic_def.or_not())
         .then_ignore(just(Op('=')))
         .or_not()
+        .map(|name| match name {
+            None => TypeName::anonymous(),
+            Some((name, gp)) => TypeName::new(name, gp.unwrap_or_default()),
+        })
         .then(ty)
         .map(|(name, ty)| TypeDef { name, ty });
     stmt.separated_by(just(Op(';')).or_not())
@@ -305,6 +399,19 @@ pub fn parse_types(src: &str) -> js::Result<Vec<TypeDef>> {
         .into_result()
         .map_err(super::to_js_error)?;
     Ok(ast)
+}
+
+pub fn parse_type(src: &str) -> js::Result<Type> {
+    let tokens = lexer()
+        .parse(src)
+        .into_result()
+        .map_err(super::to_js_error)?;
+
+    let ty = type_parser()
+        .parse(tokens.as_slice().spanned((src.len()..src.len()).into()))
+        .into_result()
+        .map_err(super::to_js_error)?;
+    Ok(ty)
 }
 
 #[test]
