@@ -78,14 +78,14 @@ pub fn compile(code: &str, filename: &str) -> Result<Vec<u8>, &'static str> {
 
 pub fn recursive_to_string(
     value: &js::Value,
-    level: u8,
+    depth: u8,
     escape: bool,
     buf: &mut String,
     indent: &str,
     indent_level: u8,
 ) {
     if value.is_generic_object() {
-        if level == 0 {
+        if depth == 0 {
             buf.push_str("{...}");
         } else {
             let mut first = true;
@@ -120,7 +120,7 @@ pub fn recursive_to_string(
                 buf.push_str(": ");
                 recursive_to_string(
                     &value,
-                    level.saturating_sub(1),
+                    depth.saturating_sub(1),
                     true,
                     buf,
                     indent,
@@ -137,7 +137,7 @@ pub fn recursive_to_string(
         }
         return;
     } else if value.is_array() {
-        if level == 0 {
+        if depth == 0 {
             buf.push_str("[...]");
             return;
         }
@@ -171,7 +171,7 @@ pub fn recursive_to_string(
             }
             recursive_to_string(
                 &value,
-                level.saturating_sub(1),
+                depth.saturating_sub(1),
                 true,
                 buf,
                 indent,

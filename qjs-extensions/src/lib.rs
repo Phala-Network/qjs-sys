@@ -19,3 +19,5 @@ pub mod utf8;
 pub mod scale;
 #[cfg(feature = "scale2")]
 pub mod scale2;
+
+pub mod repr;
