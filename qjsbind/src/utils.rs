@@ -106,7 +106,7 @@ pub fn recursive_to_string(
                 if first {
                     first = false;
                 } else {
-                    buf.push_str(",");
+                    buf.push(',');
                     if need_indent {
                         buf.push('\n');
                     }
@@ -120,7 +120,7 @@ pub fn recursive_to_string(
                 if need_indent {
                     buf.push_str(": ");
                 } else {
-                    buf.push_str(":");
+                    buf.push(':');
                 }
                 recursive_to_string(
                     &value,
@@ -163,7 +163,7 @@ pub fn recursive_to_string(
             if first {
                 first = false;
             } else {
-                buf.push_str(",");
+                buf.push(',');
                 if need_indent {
                     buf.push('\n');
                 }
