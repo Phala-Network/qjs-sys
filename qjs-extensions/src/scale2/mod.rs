@@ -477,6 +477,18 @@ fn encode_value(
             Ok(())
         }
         Type::Enum(def) => {
+            if let Some((ty, ind)) = def.is_option_and_some_def() {
+                if value.is_undefined() || value.is_null() {
+                    0u8.encode_to(out);
+                    return Ok(());
+                } else {
+                    let ind = u8::try_from(ind).or(Err(js::Error::Custom(format!(
+                        "Variant index {ind} is too large",
+                    ))))?;
+                    ind.encode_to(out);
+                    return encode_value(value, ty, registry, out);
+                }
+            }
             for entry in value.entries()? {
                 let (k, v) = entry?;
                 let key = js::JsString::from_js_value(k)?;
@@ -495,7 +507,7 @@ fn encode_value(
                 }
             }
             Err(js::Error::Custom(format!(
-                "Enum with any variant of {}",
+                "Expect enum with any variant of {}",
                 def.variants
                     .iter()
                     .map(|(name, _, _)| name.as_str())
@@ -684,9 +696,20 @@ fn decode_valude(
             }
             Ok(out)
         }
-        Type::Enum(variants) => {
+        Type::Enum(def) => {
             let tag = u8::decode(buf).map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
-            let (variant_name, variant_type) = variants.get_variant_by_index(tag)?;
+            if let Some((ty, ind)) = def.is_option_and_some_def() {
+                if tag == 0 {
+                    return Ok(js::Value::Null);
+                } else if tag as u32 == ind {
+                    return decode_valude(ctx, buf, ty, registry);
+                } else {
+                    return Err(js::Error::Custom(format!(
+                        "Unexpected variant index {tag} for Option<T>"
+                    )));
+                }
+            }
+            let (variant_name, variant_type) = def.get_variant_by_index(tag)?;
             let out = ctx.new_object();
             if let Some(variant_type) = variant_type {
                 let sub_value = decode_valude(ctx, buf, &variant_type, registry)?;

@@ -101,6 +101,24 @@ impl Enum {
     pub fn new(variants: Vec<(String, Option<Id>, Option<u32>)>) -> Self {
         Self { variants }
     }
+    pub fn is_option_and_some_def(&self) -> Option<(&Id, u32)> {
+        if self.variants.len() != 2 {
+            return None;
+        }
+        if !(self.variants[0].0.as_str() == "_None"
+            && self.variants[0].1.is_none()
+            && self.variants[0].2.unwrap_or(0) == 0)
+        {
+            return None;
+        }
+        if self.variants[1].0.as_str() != "_Some" {
+            return None;
+        }
+        let (_, Some(tid), ind) = &self.variants[1] else {
+            return None;
+        };
+        Some((tid, ind.unwrap_or(1)))
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
