@@ -106,7 +106,7 @@ pub fn recursive_to_string(
                 if first {
                     first = false;
                 } else {
-                    buf.push_str(", ");
+                    buf.push_str(",");
                     if need_indent {
                         buf.push('\n');
                     }
@@ -117,7 +117,11 @@ pub fn recursive_to_string(
                     }
                 }
                 buf.push_str(&key.to_string());
-                buf.push_str(": ");
+                if need_indent {
+                    buf.push_str(": ");
+                } else {
+                    buf.push_str(":");
+                }
                 recursive_to_string(
                     &value,
                     depth.saturating_sub(1),
@@ -159,7 +163,7 @@ pub fn recursive_to_string(
             if first {
                 first = false;
             } else {
-                buf.push_str(", ");
+                buf.push_str(",");
                 if need_indent {
                     buf.push('\n');
                 }

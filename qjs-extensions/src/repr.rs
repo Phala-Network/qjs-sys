@@ -5,7 +5,7 @@ pub fn setup(ns: &js::Value) -> js::Result<()> {
     Ok(())
 }
 
-#[derive(js::FromJsValue, Default)]
+#[derive(js::FromJsValue, Default, Debug)]
 #[qjsbind(rename_all = "camelCase")]
 pub struct ReprConfig {
     depth: Option<u8>,
@@ -13,25 +13,20 @@ pub struct ReprConfig {
 }
 
 impl ReprConfig {
-    fn depth(&self) -> u8 {
-        self.depth.unwrap_or(5)
-    }
-    fn indent(&self) -> &str {
+    fn indent_or(&self, default: &'static str) -> &str {
         match &self.indent {
             Some(indent) => indent.as_str(),
-            None => "  ",
+            None => default,
         }
     }
 }
 
 #[js::host_call]
 fn host_repr(obj: js::Value, config: Option<ReprConfig>) -> String {
-    repr(&obj, &config.unwrap_or_default(), true)
-}
-
-fn repr(obj: &js::Value, config: &ReprConfig, escape: bool) -> String {
+    let config = config.unwrap_or_default();
     let mut buf = String::new();
-    js::recursive_to_string(obj, config.depth(), escape, &mut buf, config.indent(), 0);
+    let depth = config.depth.unwrap_or(5);
+    js::recursive_to_string(&obj, depth, true, &mut buf, config.indent_or(""), 0);
     buf
 }
 
@@ -41,10 +36,11 @@ pub fn print(args: &[js::Value], config: &ReprConfig) -> String {
         if i != 0 {
             buf.push(' ');
         }
-        if config.depth() == 0 {
+        let depth = config.depth.unwrap_or(0);
+        if depth == 0 {
             buf.push_str(&arg.to_string());
         } else {
-            js::recursive_to_string(arg, config.depth(), false, &mut buf, config.indent(), 0);
+            js::recursive_to_string(arg, depth, false, &mut buf, config.indent_or(""), 0);
         }
     }
     buf

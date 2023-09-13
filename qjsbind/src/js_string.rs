@@ -1,5 +1,5 @@
 use alloc::string::{String, ToString};
-use core::ffi::CStr;
+use core::{ffi::CStr, fmt::Debug};
 
 use crate::{self as js, c, Error, FromJsValue, Result, ToJsValue, Value};
 
@@ -9,6 +9,14 @@ pub struct JsString {
     value: Value,
     ptr: *const u8,
     len: usize,
+}
+
+impl Debug for JsString {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("JsString")
+            .field("", &self.as_str())
+            .finish()
+    }
 }
 
 impl JsString {
