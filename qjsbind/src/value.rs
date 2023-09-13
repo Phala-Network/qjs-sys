@@ -79,12 +79,23 @@ impl core::fmt::Display for Value {
     }
 }
 
-pub struct PairIter(Value);
+pub struct PairIter {
+    inner: Value,
+    len: Option<usize>,
+}
+impl PairIter {
+    pub fn new(inner: Value, len: Option<usize>) -> Self {
+        Self { inner, len }
+    }
+    pub fn length(&self) -> Option<usize> {
+        self.len
+    }
+}
 impl Iterator for PairIter {
     type Item = Result<(Value, Value)>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let next = opt_try!(self.0.next())?;
+        let next = opt_try!(self.inner.next())?;
         let key = opt_try!(next.get_property("0"));
         let value = opt_try!(next.get_property("1"));
         Some(Ok((key, value)))
@@ -92,7 +103,10 @@ impl Iterator for PairIter {
 }
 impl From<Value> for PairIter {
     fn from(value: Value) -> Self {
-        Self(value)
+        Self {
+            inner: value,
+            len: None,
+        }
     }
 }
 
@@ -263,7 +277,9 @@ impl Value {
         let entries_fn = Object.get_property("entries")?;
         let null = Value::null();
         let arr = entries_fn.call(&null, &[self.clone()])?;
-        arr.call_method_if_exists("values", &[]).map(Into::into)
+        let len = arr.length().ok();
+        let iter = arr.call_method_if_exists("values", &[])?;
+        Ok(PairIter::new(iter, len))
     }
 
     fn to_string_utf8(&self) -> Option<Utf8Repr> {

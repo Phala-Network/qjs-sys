@@ -76,7 +76,14 @@ pub fn compile(code: &str, filename: &str) -> Result<Vec<u8>, &'static str> {
     }
 }
 
-pub fn recursive_to_string(value: &js::Value, level: u8, escape: bool, buf: &mut String) {
+pub fn recursive_to_string(
+    value: &js::Value,
+    level: u8,
+    escape: bool,
+    buf: &mut String,
+    indent: &str,
+    indent_level: u8,
+) {
     if value.is_generic_object() {
         if level == 0 {
             buf.push_str("{...}");
@@ -86,7 +93,12 @@ pub fn recursive_to_string(value: &js::Value, level: u8, escape: bool, buf: &mut
                 buf.push_str("[object Object]");
                 return;
             };
+            let empty = entries.length().unwrap_or(1) == 0;
+            let need_indent = !indent.is_empty() && !empty;
             buf.push('{');
+            if need_indent {
+                buf.push('\n');
+            }
             for r in entries {
                 let Ok((key, value)) = r else {
                     continue;
@@ -95,10 +107,31 @@ pub fn recursive_to_string(value: &js::Value, level: u8, escape: bool, buf: &mut
                     first = false;
                 } else {
                     buf.push_str(", ");
+                    if need_indent {
+                        buf.push('\n');
+                    }
+                }
+                if need_indent {
+                    for _ in 0..indent_level.saturating_add(1) {
+                        buf.push_str(indent);
+                    }
                 }
                 buf.push_str(&key.to_string());
                 buf.push_str(": ");
-                recursive_to_string(&value, level.saturating_sub(1), true, buf);
+                recursive_to_string(
+                    &value,
+                    level.saturating_sub(1),
+                    true,
+                    buf,
+                    indent,
+                    indent_level.saturating_add(1),
+                );
+            }
+            if need_indent {
+                buf.push('\n');
+                for _ in 0..indent_level {
+                    buf.push_str(indent);
+                }
             }
             buf.push('}');
         }
@@ -113,7 +146,12 @@ pub fn recursive_to_string(value: &js::Value, level: u8, escape: bool, buf: &mut
             buf.push_str("[object Array]");
             return;
         };
+        let empty = value.length().unwrap_or(1) == 0;
+        let need_indent = !indent.is_empty() && !empty;
         buf.push('[');
+        if need_indent {
+            buf.push('\n');
+        }
         for r in entries {
             let Ok((_, value)) = r else {
                 continue;
@@ -122,8 +160,29 @@ pub fn recursive_to_string(value: &js::Value, level: u8, escape: bool, buf: &mut
                 first = false;
             } else {
                 buf.push_str(", ");
+                if need_indent {
+                    buf.push('\n');
+                }
             }
-            recursive_to_string(&value, level.saturating_sub(1), true, buf);
+            if need_indent {
+                for _ in 0..indent_level.saturating_add(1) {
+                    buf.push_str(indent);
+                }
+            }
+            recursive_to_string(
+                &value,
+                level.saturating_sub(1),
+                true,
+                buf,
+                indent,
+                indent_level.saturating_add(1),
+            );
+        }
+        if need_indent {
+            buf.push('\n');
+            for _ in 0..indent_level {
+                buf.push_str(indent);
+            }
         }
         buf.push(']');
         return;
