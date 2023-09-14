@@ -28,7 +28,7 @@ impl<'src> fmt::Display for Token<'src> {
 }
 
 fn lexer<'src>(
-) -> impl Parser<'src, &'src str, Vec<(Token<'src>, Span)>, extra::Err<Simple<'src, char, Span>>> {
+) -> impl Parser<'src, &'src str, Vec<(Token<'src>, Span)>, extra::Err<Rich<'src, char, Span>>> {
     // A parser for numbers
     let num = text::int(10)
         .try_map(|s: &str, span| {
@@ -411,12 +411,32 @@ pub fn parse_types(src: &str) -> js::Result<Vec<TypeDef>> {
     let tokens = lexer()
         .parse(src)
         .into_result()
-        .map_err(super::to_js_error)?;
-    let ast = parser()
+        .map_err(|errors| convert_errors(errors, src))?;
+    let result = parser()
         .parse(tokens.as_slice().spanned((src.len()..src.len()).into()))
-        .into_result()
-        .map_err(super::to_js_error)?;
-    Ok(ast)
+        .into_result();
+    result.map_err(|errors| convert_errors(errors, src))
+}
+
+fn convert_errors<S: Display>(errors: Vec<Rich<'_, S>>, src: &str) -> js::Error {
+    use std::fmt::Write;
+    let mut report = String::new();
+    for error in errors {
+        let span = error.span();
+        let src = substr(src, (span.start, span.end), 30);
+        write!(&mut report, "{error} at `{src}`").unwrap();
+    }
+    js::Error::Custom(report.to_string())
+}
+
+fn substr(src: &str, range: (usize, usize), range_extension: usize) -> &str {
+    let (start, mut end) = range;
+    if end + range_extension <= src.len() {
+        end += range_extension;
+    } else {
+        end = src.len();
+    }
+    &src[start..end]
 }
 
 pub fn parse_type(src: &str) -> js::Result<Type> {
