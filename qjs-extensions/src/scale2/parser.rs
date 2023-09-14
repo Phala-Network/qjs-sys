@@ -445,8 +445,10 @@ fn convert_errors(errors: Vec<Poor>, src: &str) -> js::Error {
     let mut report = String::new();
     for error in errors {
         let span = error.span;
-        let src = substr(src, (span.start, span.end), 30);
-        write!(&mut report, "Invalid syntax at `{src}`").unwrap();
+        let start = span.start;
+        let end = span.end;
+        let src = substr(src, (start, end), 30);
+        write!(&mut report, "Invalid syntax at {start}..{end}: `{src}`").unwrap();
     }
     js::Error::Custom(report.to_string())
 }
