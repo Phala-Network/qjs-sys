@@ -1,6 +1,8 @@
 use alloc::boxed::Box;
+use alloc::string::ToString;
 use alloc::vec::Vec;
 use chumsky::{error::Error, prelude::*};
+use core::fmt::Write;
 use core::fmt::{self, Display};
 use tinyvec_string::TinyString;
 
@@ -419,7 +421,6 @@ pub fn parse_types(src: &str) -> js::Result<Vec<TypeDef>> {
 }
 
 fn convert_errors<S: Display>(errors: Vec<Rich<'_, S>>, src: &str) -> js::Error {
-    use std::fmt::Write;
     let mut report = String::new();
     for error in errors {
         let span = error.span();
@@ -431,8 +432,9 @@ fn convert_errors<S: Display>(errors: Vec<Rich<'_, S>>, src: &str) -> js::Error 
 
 fn substr(src: &str, range: (usize, usize), range_extension: usize) -> &str {
     let (start, mut end) = range;
-    if end + range_extension <= src.len() {
-        end += range_extension;
+    let extended_end = end.saturating_add(range_extension);
+    if extended_end <= src.len() {
+        end = extended_end;
     } else {
         end = src.len();
     }
