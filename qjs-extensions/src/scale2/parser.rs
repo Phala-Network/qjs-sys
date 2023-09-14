@@ -1,6 +1,7 @@
 use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::vec::Vec;
+use chumsky::util::MaybeRef;
 use chumsky::{error::Error, prelude::*};
 use core::fmt::Write;
 use core::fmt::{self, Display};
@@ -11,6 +12,35 @@ use tinyvec_string::TinyString;
 pub type String = TinyString<[u8; 24]>;
 
 type Span = SimpleSpan<usize>;
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct Poor {
+    span: Span,
+}
+
+impl<'a, I: Input<'a, Span = Span>> Error<'a, I> for Poor {
+    #[inline]
+    fn expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
+        _expected: E,
+        _found: Option<MaybeRef<'a, I::Token>>,
+        span: I::Span,
+    ) -> Self {
+        Self { span }
+    }
+}
+
+impl fmt::Debug for Poor {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "at {:?}", self.span.start)?;
+        Ok(())
+    }
+}
+
+impl fmt::Display for Poor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 enum Token<'src> {
@@ -29,8 +59,7 @@ impl<'src> fmt::Display for Token<'src> {
     }
 }
 
-fn lexer<'src>(
-) -> impl Parser<'src, &'src str, Vec<(Token<'src>, Span)>, extra::Err<Rich<'src, char, Span>>> {
+fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<(Token<'src>, Span)>, extra::Err<Poor>> {
     // A parser for numbers
     let num = text::int(10)
         .try_map(|s: &str, span| {
@@ -302,12 +331,8 @@ where
             Some(type_args) => Id { info, type_args },
         })
 }
-fn type_parser<'tokens, 'src: 'tokens>() -> impl Parser<
-    'tokens,
-    ParserInput<'tokens, 'src>,
-    Type,
-    extra::Err<Rich<'tokens, Token<'src>, Span>>,
-> + Clone {
+fn type_parser<'tokens, 'src: 'tokens>(
+) -> impl Parser<'tokens, ParserInput<'tokens, 'src>, Type, extra::Err<Poor>> + Clone {
     recursive(|typedef| {
         use Token::*;
         let ident = select! { Ident(ident) => String::from(ident) };
@@ -381,12 +406,8 @@ fn type_parser<'tokens, 'src: 'tokens>() -> impl Parser<
     })
 }
 
-fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
-    'tokens,
-    ParserInput<'tokens, 'src>,
-    Vec<TypeDef>,
-    extra::Err<Rich<'tokens, Token<'src>, Span>>,
-> + Clone {
+fn parser<'tokens, 'src: 'tokens>(
+) -> impl Parser<'tokens, ParserInput<'tokens, 'src>, Vec<TypeDef>, extra::Err<Poor>> + Clone {
     use Token::*;
     let ty = type_parser();
     let ident = select! { Ident(ident) => String::from(ident) };
@@ -420,12 +441,12 @@ pub fn parse_types(src: &str) -> js::Result<Vec<TypeDef>> {
     result.map_err(|errors| convert_errors(errors, src))
 }
 
-fn convert_errors<S: Display>(errors: Vec<Rich<'_, S>>, src: &str) -> js::Error {
+fn convert_errors(errors: Vec<Poor>, src: &str) -> js::Error {
     let mut report = String::new();
     for error in errors {
-        let span = error.span();
+        let span = error.span;
         let src = substr(src, (span.start, span.end), 30);
-        write!(&mut report, "{error} at `{src}`").unwrap();
+        write!(&mut report, "Invalid syntax at `{src}`").unwrap();
     }
     js::Error::Custom(report.to_string())
 }
