@@ -14,6 +14,15 @@ impl JsUint8Array {
     pub fn as_bytes(&self) -> &[u8] {
         unsafe { core::slice::from_raw_parts(self.ptr, self.len) }
     }
+    pub fn fill_bytes(&self, bytes: &[u8]) -> bool {
+        if bytes.len() > self.len {
+            return false;
+        }
+        unsafe {
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), self.ptr as _, bytes.len());
+        }
+        true
+    }
     pub fn to_vec(&self) -> Vec<u8> {
         self.as_bytes().to_vec()
     }
