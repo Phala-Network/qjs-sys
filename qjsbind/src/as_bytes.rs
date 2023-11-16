@@ -24,7 +24,7 @@ where
     bytes.try_into().or(Err(Error::Expect("try from bytes")))
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct AsBytes<T>(pub T);
 impl<T> From<T> for AsBytes<T> {
     fn from(t: T) -> Self {
@@ -47,7 +47,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct BytesOrHex<T>(pub T);
 impl<T> From<T> for BytesOrHex<T> {
     fn from(t: T) -> Self {
