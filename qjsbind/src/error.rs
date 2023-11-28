@@ -10,6 +10,7 @@ pub enum Error {
     Expect(&'static str),
     ExpectLen(String, usize),
     JsException(String),
+    RuntimeDropped,
 }
 
 impl Display for Error {
@@ -20,6 +21,7 @@ impl Display for Error {
             Error::Expect(s) => write!(f, "expect {}", s),
             Error::JsException(e) => f.write_str(e),
             Error::ExpectLen(s, l) => write!(f, "expect [{s};{l}]"),
+            Error::RuntimeDropped => f.write_str("runtime has been dropped"),
         }
     }
 }
