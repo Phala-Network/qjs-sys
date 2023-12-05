@@ -33,6 +33,12 @@ pub trait ToJsValue {
     fn to_js_value(&self, ctx: &js::Context) -> Result<Value>;
 }
 
+impl ToJsValue for &dyn ToJsValue {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
+        (*self).to_js_value(ctx)
+    }
+}
+
 pub trait FromArgs {
     fn from_args(argv: &[Value]) -> Result<Self>
     where
