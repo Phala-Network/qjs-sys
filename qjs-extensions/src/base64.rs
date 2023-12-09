@@ -1,9 +1,9 @@
 use alloc::{string::String, vec::Vec};
 use base64::{engine::general_purpose, Engine as _};
-use js::{AsBytes, JsString, JsUint8Array, Result};
+use js::{AsBytes, JsString, BytesOrString, Result};
 
 #[js::host_call]
-pub fn encode(data: JsUint8Array, pad: bool) -> String {
+pub fn encode(data: BytesOrString, pad: bool) -> String {
     if pad {
         general_purpose::STANDARD.encode(data.as_bytes())
     } else {

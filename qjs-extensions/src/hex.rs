@@ -1,14 +1,14 @@
 use alloc::{string::String, vec::Vec};
-use js::{AsBytes, JsString, JsUint8Array, Result};
+use js::{AsBytes, BytesOrString, JsString, Result};
 
 #[js::host_call]
-pub fn encode(data: JsUint8Array, add_prefix: Option<bool>) -> String {
+pub fn encode(data: BytesOrString, add_prefix: Option<bool>) -> String {
     let prefix = if add_prefix.unwrap_or(false) {
         "0x"
     } else {
         ""
     };
-    alloc::format!("{}{}", prefix, hex_fmt::HexFmt(data.as_bytes()))
+    alloc::format!("{}{}", prefix, hex_fmt::HexFmt(data))
 }
 #[js::host_call]
 pub fn decode(hex_str: JsString) -> Result<AsBytes<Vec<u8>>> {
