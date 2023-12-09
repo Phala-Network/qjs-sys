@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use crate::{self as js, FromJsValue, ToJsValue};
+use crate::{self as js, FromJsValue, JsString, JsUint8Array, ToJsValue};
 
 use super::{Error, Result, Value};
 
@@ -67,5 +67,49 @@ where
 {
     fn from_js_value(value: Value) -> Result<Self> {
         Ok(Self(decode_as_bytes_maybe_hex(value)?))
+    }
+}
+
+pub enum BytesOrString {
+    Uint8Array(JsUint8Array),
+    String(JsString),
+    Bytes(Vec<u8>),
+}
+
+impl AsRef<[u8]> for BytesOrString {
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+impl BytesOrString {
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::Uint8Array(bytes) => bytes.as_bytes(),
+            Self::String(hex) => hex.as_str().as_bytes(),
+            Self::Bytes(bytes) => bytes.as_slice(),
+        }
+    }
+}
+
+impl FromJsValue for BytesOrString {
+    fn from_js_value(value: Value) -> Result<Self> {
+        if value.is_string() {
+            return Ok(Self::String(FromJsValue::from_js_value(value)?));
+        }
+        if value.is_uint8_array() {
+            return Ok(Self::Uint8Array(FromJsValue::from_js_value(value)?));
+        }
+        AsBytes::<Vec<u8>>::from_js_value(value).map(|v| Self::Bytes(v.0))
+    }
+}
+
+impl ToJsValue for BytesOrString {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
+        match self {
+            Self::Uint8Array(bytes) => Ok(bytes.to_js_value(ctx)?),
+            Self::String(hex) => Ok(hex.to_js_value(ctx)?),
+            Self::Bytes(bytes) => encode_as_bytes(ctx, bytes),
+        }
     }
 }
