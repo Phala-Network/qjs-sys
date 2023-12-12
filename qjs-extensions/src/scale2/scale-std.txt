@@ -1,0 +1,8 @@
+Vec<u8>=[u8]
+Option<T>=<_None|_Some:T>
+Result<T,E>=<Ok:T|Err:e>
+AccountId32=[u8;32]
+AccountId=[u8;32]
+Hash=[u8;32]
+H256=[u8;32]
+H160=[u8;20]

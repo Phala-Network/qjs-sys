@@ -14,6 +14,7 @@ mod parser;
 pub fn setup(obj: &js::Value, ctx: &js::Context) -> js::Result<()> {
     obj.define_property_fn("parseTypes", parse_types)?;
     obj.define_property_fn("appendTypes", append_types)?;
+    obj.define_property_fn("builtinTypes", builtin_types)?;
     obj.define_property_fn("encode", encode)?;
     obj.define_property_fn("encodeAll", encode_all)?;
     obj.define_property_fn("decode", decode)?;
@@ -313,7 +314,7 @@ impl js::FromJsValue for TypeRegistry {
         }
         if value.is_string() {
             let typelist = js::JsString::from_js_value(value)?;
-            return parse_types_str(typelist.as_str());
+            return parse_types_str(typelist.as_str(), false);
         }
         let me = value
             .opaque_object_data::<Self>()
@@ -336,15 +337,26 @@ fn to_js_error(errs: Vec<impl core::fmt::Debug>) -> js::Error {
     js::Error::Custom(output)
 }
 
+const BUILTIN_TYPES: &str = include_str!("./scale-std.txt");
+
 #[js::host_call]
-fn parse_types(typelist: js::JsString) -> js::Result<TypeRegistry> {
-    parse_types_str(typelist.as_str())
+fn builtin_types() -> String {
+    BUILTIN_TYPES.to_string()
 }
 
-fn parse_types_str(typelist: &str) -> js::Result<TypeRegistry> {
+#[js::host_call]
+fn parse_types(typelist: js::JsString, no_std: bool) -> js::Result<TypeRegistry> {
+    parse_types_str(typelist.as_str(), no_std)
+}
+
+fn parse_types_str(typelist: &str, no_std: bool) -> js::Result<TypeRegistry> {
     let ast = parser::parse_types(typelist)?;
     let mut registry = Registry::default();
     registry.append(ast)?;
+    if !no_std {
+        let ast = parser::parse_types(BUILTIN_TYPES)?;
+        registry.append(ast)?;
+    }
     Ok(registry.into())
 }
 
