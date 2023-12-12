@@ -84,7 +84,7 @@ impl Enum {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct TypeRegistry {
     inner: Rc<RefCell<Registry>>,
 }
@@ -223,13 +223,31 @@ impl<'a> GenericLookup<'a> {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct Registry {
     types: Vec<TypeDef>,
     lookup: BTreeMap<TinyString, usize>,
 }
 
 impl Registry {
+    const fn no_std() -> Self {
+        Self {
+            types: Vec::new(),
+            lookup: BTreeMap::new(),
+        }
+    }
+    fn std() -> js::Result<Self> {
+        Self::new(false)
+    }
+    fn new(no_std: bool) -> js::Result<Self> {
+        let mut me = Self::no_std();
+        if !no_std {
+            let ast = parser::parse_types(BUILTIN_TYPES)?;
+            me.append(ast)?;
+        }
+        Ok(me)
+    }
+
     fn append(&mut self, typelist: Vec<parser::TypeDef>) -> js::Result<()> {
         for def in typelist.into_iter() {
             if let Some(name) = def.name.name.clone() {
@@ -310,7 +328,7 @@ impl Registry {
 impl js::FromJsValue for TypeRegistry {
     fn from_js_value(value: js::Value) -> js::Result<Self> {
         if value.is_undefined() {
-            return Ok(Default::default());
+            return Ok(Registry::std()?.into());
         }
         if value.is_string() {
             let typelist = js::JsString::from_js_value(value)?;
@@ -345,18 +363,14 @@ fn builtin_types() -> String {
 }
 
 #[js::host_call]
-fn parse_types(typelist: js::JsString, no_std: bool) -> js::Result<TypeRegistry> {
-    parse_types_str(typelist.as_str(), no_std)
+fn parse_types(typelist: js::JsString, no_std: Option<bool>) -> js::Result<TypeRegistry> {
+    parse_types_str(typelist.as_str(), no_std.unwrap_or(false))
 }
 
 fn parse_types_str(typelist: &str, no_std: bool) -> js::Result<TypeRegistry> {
     let ast = parser::parse_types(typelist)?;
-    let mut registry = Registry::default();
+    let mut registry = Registry::new(no_std)?;
     registry.append(ast)?;
-    if !no_std {
-        let ast = parser::parse_types(BUILTIN_TYPES)?;
-        registry.append(ast)?;
-    }
     Ok(registry.into())
 }
 

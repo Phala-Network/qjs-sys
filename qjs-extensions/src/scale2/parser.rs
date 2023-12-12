@@ -73,7 +73,7 @@ fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<(Token<'src>, Span)>, extra
     // A parser for control characters (delimiters, semicolons, etc.)
     let op = one_of("|=@:;,#()[]{}<>").map(Token::Op);
     // A parser for identifiers and keywords
-    let ident = text::ident().map(Token::Ident);
+    let ident = text::ascii::ident().map(Token::Ident);
     // A single token can be one of the above
     let token = num.or(op).or(ident);
     let comment = just("//")
