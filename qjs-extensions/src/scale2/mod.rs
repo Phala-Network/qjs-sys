@@ -84,6 +84,13 @@ impl Enum {
     }
 }
 
+#[derive(Debug, Clone, FromJsValue, Default)]
+#[qjsbind(default)]
+struct ParseOptions {
+    #[qjsbind(default)]
+    no_std: bool,
+}
+
 #[derive(Debug, Clone)]
 struct TypeRegistry {
     inner: Rc<RefCell<Registry>>,
@@ -365,8 +372,8 @@ fn builtin_types() -> String {
 }
 
 #[js::host_call]
-fn parse_types(typelist: js::JsString, no_std: Option<bool>) -> js::Result<TypeRegistry> {
-    parse_types_str(typelist.as_str(), no_std.unwrap_or(false))
+fn parse_types(typelist: js::JsString, options: ParseOptions) -> js::Result<TypeRegistry> {
+    parse_types_str(typelist.as_str(), options.no_std)
 }
 
 fn parse_types_str(typelist: &str, no_std: bool) -> js::Result<TypeRegistry> {

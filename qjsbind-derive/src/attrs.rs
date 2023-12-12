@@ -42,6 +42,7 @@ pub enum TypeDefault {
 pub struct ContainerAttrs<'a> {
     ident: &'a syn::Ident,
     rename_all: Option<RenameAll>,
+    allow_default: bool,
 }
 
 pub fn get_meta_items(attr: &syn::Attribute) -> syn::Result<Vec<syn::NestedMeta>> {
@@ -94,6 +95,7 @@ impl<'a> ContainerAttrs<'a> {
         let mut rv = ContainerAttrs {
             ident: &input.ident,
             rename_all: None,
+            allow_default: false,
         };
 
         for meta_item in input.attrs.iter().flat_map(get_meta_items).flatten() {
@@ -107,6 +109,9 @@ impl<'a> ContainerAttrs<'a> {
                             ));
                         }
                         rv.rename_all = Some(RenameAll::parse(&nv.lit)?);
+                    }
+                    syn::Meta::Path(path) if path.is_ident("default") => {
+                        rv.allow_default = true;
                     }
                     _ => return Err(syn::Error::new_spanned(meta, "unsupported attribute")),
                 }
@@ -164,6 +169,10 @@ impl<'a> ContainerAttrs<'a> {
 
     pub fn ident(&self) -> &syn::Ident {
         self.ident
+    }
+
+    pub fn allow_default(&self) -> bool {
+        self.allow_default
     }
 }
 

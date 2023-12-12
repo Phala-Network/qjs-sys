@@ -80,6 +80,11 @@ fn derive_struct(
                 use #crate_qjsbind::{c, Value, FromJsValue, Result, Error, alloc};
                 impl #impl_generics FromJsValue for #ident #ty_generics #bounded_where_clause {
                     fn from_js_value(val: Value) -> Result<Self> {
+                        #(if container_attrs.allow_default()) {
+                            if val.is_undefined() || val.is_null() {
+                                return Ok(<Self as Default>::default());
+                            }
+                        }
                         Ok(Self {
                             #(for field in &attrs) {
                                 #{&field.field().ident}: {
