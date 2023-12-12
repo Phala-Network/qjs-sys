@@ -225,6 +225,7 @@ impl<'a> GenericLookup<'a> {
 
 #[derive(Debug, Clone)]
 struct Registry {
+    n_builtin: usize,
     types: Vec<TypeDef>,
     lookup: BTreeMap<TinyString, usize>,
 }
@@ -232,6 +233,7 @@ struct Registry {
 impl Registry {
     const fn no_std() -> Self {
         Self {
+            n_builtin: 0,
             types: Vec::new(),
             lookup: BTreeMap::new(),
         }
@@ -244,8 +246,13 @@ impl Registry {
         if !no_std {
             let ast = parser::parse_types(BUILTIN_TYPES)?;
             me.append(ast)?;
+            me.n_builtin = me.types.len();
         }
         Ok(me)
+    }
+
+    fn id2ind(&self, id: u32) -> usize {
+        self.n_builtin + id as usize
     }
 
     fn append(&mut self, typelist: Vec<parser::TypeDef>) -> js::Result<()> {
@@ -275,7 +282,7 @@ impl Registry {
     }
 
     fn get_type_shallow<'a>(&'a self, tid: &'a Id) -> js::Result<Cow<'a, Type>> {
-        let ind = match &tid.info {
+        let def = match &tid.info {
             IdInfo::Name(name) => {
                 let Some(id) = self.lookup.get(name) else {
                     return match Type::primitive(name.as_str()) {
@@ -283,15 +290,18 @@ impl Registry {
                         None => Err(js::Error::Custom(format!("Unknown type {name}"))),
                     };
                 };
-                *id
+                self.types
+                    .get(*id)
+                    .ok_or(js::Error::Custom(format!("Unknown type id of {name}")))?
             }
-            IdInfo::Num(ind) => *ind as usize,
+            IdInfo::Num(id) => {
+                let ind = self.id2ind(*id);
+                self.types
+                    .get(ind)
+                    .ok_or(js::Error::Custom(format!("Unknown type id {id}")))?
+            }
             IdInfo::Type(ty) => return Ok(Cow::Borrowed(ty)),
         };
-        let def = self
-            .types
-            .get(ind)
-            .ok_or(js::Error::Custom(format!("Unknown type {ind}")))?;
         self.resolve_generic(tid, def)
     }
 
@@ -345,14 +355,6 @@ impl js::ToJsValue for TypeRegistry {
     fn to_js_value(&self, ctx: &js::Context) -> js::Result<js::Value> {
         Ok(js::Value::new_opaque_object(ctx, self.clone()))
     }
-}
-
-fn to_js_error(errs: Vec<impl core::fmt::Debug>) -> js::Error {
-    let mut output = String::new();
-    for err in errs {
-        output.push_str(&format!("{err:?}\n"));
-    }
-    js::Error::Custom(output)
 }
 
 const BUILTIN_TYPES: &str = include_str!("./scale-std.txt");

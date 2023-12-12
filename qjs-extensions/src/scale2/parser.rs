@@ -448,7 +448,7 @@ fn convert_errors(errors: Vec<Poor>, src: &str) -> js::Error {
         let start = span.start;
         let end = span.end;
         let src = substr(src, (start, end), 30);
-        write!(&mut report, "Invalid syntax at {start}..{end}: `{src}`").unwrap();
+        write!(&mut report, "Invalid syntax at {start}..{end}: here->`{src}`").unwrap();
     }
     js::Error::Custom(report.to_string())
 }
@@ -468,12 +468,12 @@ pub fn parse_type(src: &str) -> js::Result<Type> {
     let tokens = lexer()
         .parse(src)
         .into_result()
-        .map_err(super::to_js_error)?;
+        .map_err(|errors| convert_errors(errors, src))?;
 
     let ty = type_parser()
         .parse(tokens.as_slice().spanned((src.len()..src.len()).into()))
         .into_result()
-        .map_err(super::to_js_error)?;
+        .map_err(|errors| convert_errors(errors, src))?;
     Ok(ty)
 }
 
