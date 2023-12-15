@@ -68,6 +68,8 @@ fn main() {
     }
     #[cfg(feature = "classic-host-call")]
     cc.define("WITH_CLASSIC_HOST_CALL", None);
+    #[cfg(feature = "pink-allocator")]
+    cc.define("CONFIG_PINK_ALLOCATOR", None);
 
     if is_wasm32 {
         cc.include("pink-libc/sysroot/include");
@@ -81,7 +83,7 @@ fn main() {
     let mut builder = bindgen::Builder::default()
         .header("csrc/qjs-pink.h")
         .use_core()
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks));
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
     for flag in c_flags {
         builder = builder.clang_arg(flag);
     }

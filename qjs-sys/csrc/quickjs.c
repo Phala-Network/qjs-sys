@@ -84,6 +84,15 @@
 #endif
 
 
+#ifdef CONFIG_PINK_ALLOCATOR
+void *__pink_malloc(size_t size);
+void __pink_free(void *ptr);
+void *__pink_realloc(void *ptr, size_t size);
+
+#define malloc(s) __pink_malloc(s)
+#define free(p) __pink_free(p)
+#define realloc(p,s) __pink_realloc(p,s)
+#endif
 /* dump object free */
 //#define DUMP_FREE
 //#define DUMP_CLOSURE
@@ -1700,6 +1709,9 @@ void JS_SetGCThreshold(JSRuntime *rt, size_t gc_threshold)
     rt->malloc_gc_threshold = gc_threshold;
 }
 
+#undef malloc
+#undef free
+#undef realloc
 #define malloc(s) malloc_is_forbidden(s)
 #define free(p) free_is_forbidden(p)
 #define realloc(p,s) realloc_is_forbidden(p,s)
