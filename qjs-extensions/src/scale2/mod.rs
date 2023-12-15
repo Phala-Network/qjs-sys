@@ -368,6 +368,7 @@ const BUILTIN_TYPES: &str = include_str!("./scale-std.txt");
 
 #[js::host_call]
 fn builtin_types() -> String {
+    use alloc::string::ToString;
     BUILTIN_TYPES.to_string()
 }
 
