@@ -115,6 +115,9 @@ impl Runtime {
     pub fn new_context(&self) -> Context {
         let ptr = unsafe { c::JS_NewContext(self.ptr.as_ptr()) };
         let ptr = NonNull::new(ptr).expect("Failed to create JSContext");
+        unsafe {
+            c::js_opaque_class_init(ptr.as_ptr());
+        }
         Context { ptr }
     }
 
