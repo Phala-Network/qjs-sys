@@ -1,4 +1,5 @@
-Vec<u8>=[u8]
+String=str
+Vec<T>=[T]
 Option<T>=<_None|_Some:T>
 Result<T,E>=<Ok:T|Err:e>
 AccountId32=[u8;32]
