@@ -33,7 +33,6 @@ fn main() {
     ];
     let c_flags = [
         "-funsigned-char",
-        "-DCONFIG_BIGNUM",
         "-D_GNU_SOURCE",
         "-D__pink__=1",
         "-Icsrc/quickjs",

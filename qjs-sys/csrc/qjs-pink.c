@@ -163,7 +163,7 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len,
     if (is_bytecode) {
         val = eval_bytecode(ctx, buf, buf_len);
     } else {
-        val = JS_Eval(ctx, buf, buf_len, "<eval>", 0);
+        val = JS_Eval(ctx, buf, buf_len, "<eval>", JS_EVAL_TYPE_GLOBAL);
     }
     if (JS_IsException(val)) {
         JSValue exception_val = JS_GetException(ctx);

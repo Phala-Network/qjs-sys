@@ -25,9 +25,7 @@ int js_eval_code(JSContext *ctx, const code_t* code, callbacks_t* callbacks);
 void js_std_dump_error(JSContext *ctx);
 void js_dump_exception(JSContext *ctx, JSValueConst exception_val);
 
-#ifdef CONFIG_BIGNUM
 #include "libbf.h"
 bf_t *JS_ToBigInt(JSContext *ctx, bf_t *buf, JSValueConst val);
-#endif
 
 #endif
