@@ -23,28 +23,20 @@ fn main() {
     }
 
     let cfiles = [
-        "csrc/cutils.c",
-        "csrc/libregexp.c",
-        "csrc/libunicode.c",
-        "csrc/quickjs.c",
+        "csrc/quickjs/cutils.c",
+        "csrc/quickjs/libregexp.c",
+        "csrc/quickjs/libunicode.c",
+        "csrc/quickjs/quickjs.c",
+        "csrc/quickjs/libbf.c",
         "csrc/qjs-pink.c",
-        "csrc/libbf.c",
         "csrc/quickjs-opaque.c",
-        "csrc/ext/queue.c",
-        "csrc/ext/utils.c",
-        "csrc/ext/js-utils.c",
-        "csrc/ext/buffer-utils.c",
-        #[cfg(feature = "stream")]
-        "csrc/ext/quickjs-stream.c",
-        "csrc/ext/quickjs-blob.c",
-        "csrc/ext/quickjs-ext.c",
     ];
     let c_flags = [
         "-funsigned-char",
         "-DCONFIG_BIGNUM",
         "-D_GNU_SOURCE",
         "-D__pink__=1",
-        "-Icsrc",
+        "-Icsrc/quickjs",
         "-Werror",
         "-Wno-unknown-warning-option",
         "-Wno-attributes",
@@ -79,7 +71,7 @@ fn main() {
     cc.compile("qjs");
 
     println!("cargo:rerun-if-changed=csrc/qjs-pink.h");
-    println!("cargo:rerun-if-changed=csrc/quickjs.h");
+    println!("cargo:rerun-if-changed=csrc/quickjs/quickjs.h");
     let mut builder = bindgen::Builder::default()
         .header("csrc/qjs-pink.h")
         .use_core()

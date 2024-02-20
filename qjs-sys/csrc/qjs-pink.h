@@ -3,7 +3,6 @@
 #include <stddef.h>
 #include "quickjs.h"
 #include "quickjs-opaque.h"
-#include "ext/quickjs-ext.h"
 
 typedef void (*output_t)(JSContext *ctx, void *userdata, JSValueConst output);
 typedef void (*output_error_t)(JSContext *ctx, void *userdata, const char* err);

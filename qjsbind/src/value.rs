@@ -461,7 +461,7 @@ impl Value {
         unsafe {
             Self::new_moved(
                 ctx,
-                c::JS_NewUint8Array(ctx.as_ptr(), bytes.as_ptr() as _, bytes.len() as _),
+                c::JS_NewUint8ArrayCopy(ctx.as_ptr(), bytes.as_ptr() as _, bytes.len() as _),
             )
         }
     }

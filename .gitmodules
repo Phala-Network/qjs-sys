@@ -1,3 +1,6 @@
 [submodule "wasi-libc"]
 	path = qjs-sys/pink-libc
 	url = https://github.com/Phala-Network/pink-libc.git
+[submodule "qjs-sys/csrc/quickjs"]
+	path = qjs-sys/csrc/quickjs
+	url = https://github.com/Phala-Network/quickjs-ng.git

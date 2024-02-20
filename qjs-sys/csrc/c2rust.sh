@@ -1,7 +1,7 @@
 #!/bin/bash
 
 CC=clang
-CFLAGS="-O3 -ffunction-sections -fdata-sections -fPIC -funsigned-char -DCONFIG_BIGNUM -D_GNU_SOURCE -D__pink__=1 -w -I."
+CFLAGS="-O3 -ffunction-sections -fdata-sections -fPIC -funsigned-char -DCONFIG_BIGNUM -D_GNU_SOURCE -D__pink__=1 -w -I. -I./quickjs"
 EXTRA_CFLAGS_32="--target=wasm32-unknown-unknown -I../pink-libc/sysroot/include"
 EXTRA_CFLAGS_64=
 
