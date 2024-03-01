@@ -10,6 +10,14 @@ pub struct JsUint8Array {
     len: usize,
 }
 
+impl core::fmt::Debug for JsUint8Array {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("JsUint8Array")
+            .field("len", &self.len)
+            .finish()
+    }
+}
+
 impl JsUint8Array {
     pub fn as_bytes(&self) -> &[u8] {
         unsafe { core::slice::from_raw_parts(self.ptr, self.len) }

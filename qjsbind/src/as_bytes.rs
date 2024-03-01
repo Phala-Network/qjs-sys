@@ -70,10 +70,17 @@ where
     }
 }
 
+#[derive(Debug)]
 pub enum BytesOrString {
     Uint8Array(JsUint8Array),
     String(JsString),
     Bytes(Vec<u8>),
+}
+
+impl Default for BytesOrString {
+    fn default() -> Self {
+        Self::Bytes(Vec::new())
+    }
 }
 
 impl AsRef<[u8]> for BytesOrString {
