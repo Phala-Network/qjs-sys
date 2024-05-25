@@ -8,6 +8,7 @@ use crate::{self as js, c, Error, FromJsValue, Result, ToJsValue, Value};
 
 /// A wrapper of JS string. When passing a string from JS to Rust, using this type
 /// is more efficient than `String` because it avoids extra memory allocation and copy.
+#[derive(Clone)]
 pub struct JsString {
     value: Value,
     ptr: *const u8,
@@ -40,18 +41,6 @@ impl JsString {
     }
 }
 
-impl Drop for JsString {
-    fn drop(&mut self) {
-        let ctx = self
-            .value
-            .context()
-            .expect("BUG: context is null for a JsString");
-        unsafe {
-            c::JS_FreeCString(ctx.as_ptr(), self.ptr as _);
-        }
-    }
-}
-
 impl FromJsValue for JsString {
     fn from_js_value(value: Value) -> Result<Self> {
         let ctx = value.context().or(Err(Error::Expect("Context")))?;
@@ -63,6 +52,9 @@ impl FromJsValue for JsString {
         if ptr.is_null() {
             return Err(Error::Expect("string"));
         }
+        let js_value = unsafe { c::JS_CStringOuterValue(ctx.as_ptr(), ptr) };
+        let value = Value::new_moved(ctx, js_value);
+
         Ok(JsString {
             value,
             ptr: ptr as _,
@@ -81,15 +73,5 @@ impl Deref for JsString {
     type Target = str;
     fn deref(&self) -> &Self::Target {
         self.as_str()
-    }
-}
-
-impl Clone for JsString {
-    fn clone(&self) -> Self {
-        Self {
-            value: self.value.clone(),
-            ptr: self.ptr,
-            len: self.len,
-        }
     }
 }
