@@ -20,4 +20,7 @@ pub mod scale;
 #[cfg(feature = "scale2")]
 pub mod scale2;
 
+#[cfg(feature = "crypto")]
+pub mod crypto;
+
 pub mod repr;

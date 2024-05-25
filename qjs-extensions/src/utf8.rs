@@ -18,7 +18,7 @@ pub fn encode(data: JsString) -> AsBytes<Vec<u8>> {
 #[js::host_call]
 pub fn encode_into(data: JsString, buf: JsUint8Array) -> EncodeProgress {
     let utf8_bytes = data.as_str().as_bytes();
-    if !buf.fill_bytes(utf8_bytes) {
+    if !buf.fill_with_bytes(utf8_bytes) {
         return Default::default();
     }
     EncodeProgress {

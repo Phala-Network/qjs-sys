@@ -1,9 +1,12 @@
+use core::ops::Deref;
+
 use alloc::vec::Vec;
 
 use crate::{self as js, c, Error, FromJsValue, Result, ToJsValue, Value};
 
 /// A wrapper of JS Uint8Array. When passing a string from JS to Rust, using this type
 /// is more efficient than `Vec<u8>` because it avoids extra memory allocation and copy.
+#[derive(Clone)]
 pub struct JsUint8Array {
     value: Value,
     ptr: *const u8,
@@ -22,7 +25,7 @@ impl JsUint8Array {
     pub fn as_bytes(&self) -> &[u8] {
         unsafe { core::slice::from_raw_parts(self.ptr, self.len) }
     }
-    pub fn fill_bytes(&self, bytes: &[u8]) -> bool {
+    pub fn fill_with_bytes(&self, bytes: &[u8]) -> bool {
         if bytes.len() > self.len {
             return false;
         }
@@ -57,5 +60,12 @@ impl FromJsValue for JsUint8Array {
 impl ToJsValue for JsUint8Array {
     fn to_js_value(&self, _ctx: &js::Context) -> Result<Value> {
         Ok(self.value.clone())
+    }
+}
+
+impl Deref for JsUint8Array {
+    type Target = [u8];
+    fn deref(&self) -> &Self::Target {
+        self.as_bytes()
     }
 }

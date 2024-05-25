@@ -1,5 +1,8 @@
-use alloc::string::{String, ToString};
-use core::{ffi::CStr, fmt::Debug};
+use core::{
+    ffi::CStr,
+    fmt::{Debug, Display},
+    ops::Deref,
+};
 
 use crate::{self as js, c, Error, FromJsValue, Result, ToJsValue, Value};
 
@@ -19,6 +22,12 @@ impl Debug for JsString {
     }
 }
 
+impl Display for JsString {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 impl JsString {
     pub fn as_str(&self) -> &str {
         unsafe {
@@ -28,12 +37,6 @@ impl JsString {
     }
     pub fn as_cstr(&self) -> &CStr {
         unsafe { CStr::from_ptr(self.ptr as _) }
-    }
-}
-
-impl ToString for JsString {
-    fn to_string(&self) -> String {
-        self.as_str().to_string()
     }
 }
 
@@ -71,5 +74,22 @@ impl FromJsValue for JsString {
 impl ToJsValue for JsString {
     fn to_js_value(&self, _ctx: &js::Context) -> Result<Value> {
         Ok(self.value.clone())
+    }
+}
+
+impl Deref for JsString {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl Clone for JsString {
+    fn clone(&self) -> Self {
+        Self {
+            value: self.value.clone(),
+            ptr: self.ptr,
+            len: self.len,
+        }
     }
 }

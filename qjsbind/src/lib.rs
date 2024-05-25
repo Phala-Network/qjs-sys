@@ -4,7 +4,8 @@
 pub extern crate alloc;
 
 pub use as_bytes::{
-    decode_as_bytes, decode_as_bytes_maybe_hex, encode_as_bytes, AsBytes, BytesOrHex, BytesOrString,
+    decode_as_bytes, decode_as_bytes_maybe_hex, encode_as_bytes, AsBytes, Bytes, BytesOrHex,
+    BytesOrString,
 };
 pub use engine::{Context, Runtime};
 pub use error::{Error, Result};
