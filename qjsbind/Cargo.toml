@@ -12,6 +12,7 @@ cstr = "0.2"
 tinyvec = { version = "1", default-features = false, features = ["alloc"] }
 scopeguard = { version = "1", default-features = false }
 tynm = { version = "0.1.8", optional = true }
+serde_json = { version = "1", optional = true }
 
 [features]
 default = ["std"]
@@ -20,3 +21,4 @@ with-polyfills = ["qjs-sys/with-polyfills"]
 sanitize-address = ["qjs-sys/sanitize-address"]
 treat-hex-as-bytes = []
 pink-allocator = ["qjs-sys/pink-allocator"]
+json = ["dep:serde_json"]

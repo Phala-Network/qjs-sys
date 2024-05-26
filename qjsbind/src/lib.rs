@@ -35,6 +35,9 @@ mod traits;
 mod utils;
 mod value;
 
+#[cfg(feature = "json")]
+mod json_value;
+
 #[cfg(feature = "tynm")]
 use tynm::type_name;
 
