@@ -60,6 +60,20 @@ fn recover(ptr: *mut ::core::ffi::c_void) -> Option<Vec<usize>> {
     }
 }
 
+#[no_mangle]
+extern "C" fn __pink_malloc_usable_size(ptr: *mut ::core::ffi::c_void) -> usize {
+    alloced_size(ptr).unwrap_or(0)
+}
+
+fn alloced_size(ptr: *mut ::core::ffi::c_void) -> Option<usize> {
+    let recovered = recover(ptr)?;
+    let size = (recovered.capacity() - 1)
+        .checked_mul(size_of::<usize>())
+        .expect("invalid alloced size");
+    forget(recovered);
+    Some(size)
+}
+
 #[cfg(feature = "classic-host-call")]
 extern "Rust" {
     fn __pink_host_call(id: u32, ctx: *mut c::JSContext, args: &[c::JSValueConst]) -> c::JSValue;
