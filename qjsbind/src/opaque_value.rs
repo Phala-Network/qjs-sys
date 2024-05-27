@@ -1,4 +1,5 @@
 use core::any::TypeId;
+use core::cell::RefCell;
 
 use alloc::boxed::Box;
 use qjs_sys::c;
@@ -20,15 +21,59 @@ fn type_id<T: 'static>() -> u64 {
     tag
 }
 
+struct Cell<T> {
+    cell: RefCell<Option<T>>,
+}
+
+impl<T> Cell<T> {
+    fn new(value: T) -> Self {
+        Self {
+            cell: RefCell::new(Some(value)),
+        }
+    }
+
+    fn take(&self) -> Option<T> {
+        self.cell.borrow_mut().take()
+    }
+}
+
+#[derive(Default)]
+pub struct Ref<'a, T> {
+    cell: Option<core::cell::Ref<'a, Option<T>>>,
+}
+
+impl<T> Ref<'_, T> {
+    fn none() -> Self {
+        Self { cell: None }
+    }
+    pub fn get(&self) -> Option<&T> {
+        self.cell.as_ref()?.as_ref()
+    }
+}
+
+#[derive(Default)]
+pub struct RefMut<'a, T> {
+    cell: Option<core::cell::RefMut<'a, Option<T>>>,
+}
+
+impl<T> RefMut<'_, T> {
+    fn none() -> Self {
+        Self { cell: None }
+    }
+    pub fn get_mut(&mut self) -> Option<&mut T> {
+        self.cell.as_mut()?.as_mut()
+    }
+}
+
 pub fn new_opaque_object<T: 'static>(ctx: &js::Context, value: T) -> Value {
     extern "C" fn free_opaque<T>(
         _rt: *mut c::JSRuntime,
         data: *mut ::core::ffi::c_void,
         _tag: ::core::ffi::c_int,
     ) {
-        let _drop_it = unsafe { Box::from_raw(data as *mut T) };
+        let _drop_it = unsafe { Box::from_raw(data as *mut Cell<T>) };
     }
-    let boxed = Box::new(value);
+    let boxed = Box::new(Cell::new(value));
     let data = Box::into_raw(boxed);
     let tag: u64 = type_id::<T>();
     let js_value = unsafe {
@@ -42,18 +87,35 @@ pub fn new_opaque_object<T: 'static>(ctx: &js::Context, value: T) -> Value {
     Value::new_moved(ctx, js_value)
 }
 
-pub fn opaque_object_get_data<T: 'static>(value: &Value) -> Option<&T> {
+pub fn opaque_object_get_data<T: 'static>(value: &Value) -> Ref<'_, T> {
     let Value::Other { value, ctx } = value else {
-        return None;
+        return Ref::none();
     };
     let ptr = unsafe { c::JS_OpaqueObjectDataGet(ctx.as_ptr(), *value, type_id::<T>() as _) };
     if ptr.is_null() {
-        return None;
+        return Ref::none();
     }
-    Some(unsafe { &*(ptr as *const T) })
+    let cell = unsafe { &*(ptr as *const Cell<T>) };
+    Ref {
+        cell: Some(cell.cell.borrow()),
+    }
 }
 
-pub fn opaque_object_take_data<T: 'static>(value: &Value) -> Option<Box<T>> {
+pub fn opaque_object_get_data_mut<T: 'static>(value: &Value) -> RefMut<'_, T> {
+    let Value::Other { value, ctx } = value else {
+        return RefMut::none();
+    };
+    let ptr = unsafe { c::JS_OpaqueObjectDataGet(ctx.as_ptr(), *value, type_id::<T>() as _) };
+    if ptr.is_null() {
+        return RefMut::none();
+    }
+    let cell = unsafe { &mut *(ptr as *mut Cell<T>) };
+    RefMut {
+        cell: Some(cell.cell.borrow_mut()),
+    }
+}
+
+pub fn opaque_object_take_data<T: 'static>(value: &Value) -> Option<T> {
     let Value::Other { value, ctx } = value else {
         return None;
     };
@@ -62,7 +124,7 @@ pub fn opaque_object_take_data<T: 'static>(value: &Value) -> Option<Box<T>> {
         if ptr.is_null() {
             return None;
         }
-        c::JS_OpaqueObjectDataForget(ctx.as_ptr(), *value);
-        Some(Box::from_raw(ptr as *mut T))
+        let cell = &*(ptr as *const Cell<T>);
+        cell.take()
     }
 }

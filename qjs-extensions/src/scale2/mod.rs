@@ -353,8 +353,10 @@ impl js::FromJsValue for TypeRegistry {
         }
         let me = value
             .opaque_object_data::<Self>()
-            .ok_or(js::Error::Expect("TypeRegistry"))?;
-        Ok(me.clone())
+            .get()
+            .ok_or(js::Error::Expect("TypeRegistry"))?
+            .clone();
+        Ok(me)
     }
 }
 

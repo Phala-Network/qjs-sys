@@ -3,7 +3,10 @@ use alloc::{
     vec::Vec,
 };
 
-use crate as js;
+use crate::{
+    self as js,
+    opaque_value::{opaque_object_get_data_mut, Ref, RefMut},
+};
 use crate::{
     opaque_value::{new_opaque_object, opaque_object_get_data, opaque_object_take_data},
     FromJsValue,
@@ -148,12 +151,16 @@ impl Value {
         new_opaque_object(ctx, value)
     }
 
-    pub fn opaque_object_data<T: 'static>(&self) -> Option<&T> {
+    pub fn opaque_object_data<T: 'static>(&self) -> Ref<'_, T> {
         opaque_object_get_data(self)
     }
 
+    pub fn opaque_object_data_mut<T: 'static>(&self) -> RefMut<'_, T> {
+        opaque_object_get_data_mut(self)
+    }
+
     pub fn opaque_object_take_data<T: 'static>(&self) -> Option<T> {
-        Some(*opaque_object_take_data(self)?)
+        opaque_object_take_data(self)
     }
 
     pub fn leak(self) -> c::JSValue {
