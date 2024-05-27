@@ -2,6 +2,7 @@ use core::any::TypeId;
 use core::cell::RefCell;
 
 use alloc::boxed::Box;
+use log::debug;
 use qjs_sys::c;
 
 use crate as js;
@@ -73,6 +74,7 @@ pub fn new_opaque_object<T: 'static>(ctx: &js::Context, value: T) -> Value {
     ) {
         let _drop_it = unsafe { Box::from_raw(data as *mut Cell<T>) };
     }
+    debug!("new_opaque_object TID={}, T={:?}", type_id::<T>(), core::any::type_name::<T>());
     let boxed = Box::new(Cell::new(value));
     let data = Box::into_raw(boxed);
     let tag: u64 = type_id::<T>();
@@ -88,6 +90,7 @@ pub fn new_opaque_object<T: 'static>(ctx: &js::Context, value: T) -> Value {
 }
 
 pub fn opaque_object_get_data<T: 'static>(value: &Value) -> Ref<'_, T> {
+    debug!("opaque_object_get_data TID={}, T={:?}", type_id::<T>(), core::any::type_name::<T>());
     let Value::Other { value, ctx } = value else {
         return Ref::none();
     };
@@ -102,6 +105,7 @@ pub fn opaque_object_get_data<T: 'static>(value: &Value) -> Ref<'_, T> {
 }
 
 pub fn opaque_object_get_data_mut<T: 'static>(value: &Value) -> RefMut<'_, T> {
+    debug!("opaque_object_get_data_mut TID={}, T={:?}", type_id::<T>(), core::any::type_name::<T>());
     let Value::Other { value, ctx } = value else {
         return RefMut::none();
     };
@@ -116,6 +120,7 @@ pub fn opaque_object_get_data_mut<T: 'static>(value: &Value) -> RefMut<'_, T> {
 }
 
 pub fn opaque_object_take_data<T: 'static>(value: &Value) -> Option<T> {
+    debug!("opaque_object_take_data TID={}, T={:?}", type_id::<T>(), core::any::type_name::<T>());
     let Value::Other { value, ctx } = value else {
         return None;
     };
