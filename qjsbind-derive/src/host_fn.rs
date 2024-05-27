@@ -1,14 +1,24 @@
 use proc_macro2::TokenStream;
+use syn::parse::Parser;
 use template_quote::quote;
 
-pub(crate) fn patch(input: TokenStream, with_context: bool) -> TokenStream {
-    match patch_or_err(input, with_context) {
+pub(crate) fn patch(attrs: TokenStream, input: TokenStream) -> TokenStream {
+    match patch_or_err(attrs, input) {
         Ok(tokens) => tokens,
         Err(err) => err.to_compile_error(),
     }
 }
 
-fn patch_or_err(input: TokenStream, with_context: bool) -> syn::Result<TokenStream> {
+fn patch_or_err(attrs: TokenStream, input: TokenStream) -> syn::Result<TokenStream> {
+    let mut with_context = false;
+    syn::meta::parser(|meta| {
+        if meta.path.is_ident("with_context") {
+            with_context = true;
+        }
+        Ok(())
+    })
+    .parse2(attrs)?;
+
     let the_fn: syn::ItemFn = syn::parse2(input.clone())?;
     let fn_ident = &the_fn.sig.ident;
     let crate_qjsbind = crate::find_crate_name("qjsbind")?;

@@ -23,13 +23,12 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn host_call(config: TokenStream, input: TokenStream) -> TokenStream {
-    let config = parse_macro_input!(config as syn::AttributeArgs);
-    let with_context = config.iter().any(|arg| match arg {
-        syn::NestedMeta::Meta(syn::Meta::Path(path)) => path.is_ident("with_context"),
-        _ => false,
-    });
-    host_fn::patch(syn::parse_macro_input!(input), with_context).into()
+pub fn host_call(attrs: TokenStream, input: TokenStream) -> TokenStream {
+    host_fn::patch(
+        syn::parse_macro_input!(attrs),
+        syn::parse_macro_input!(input),
+    )
+    .into()
 }
 
 fn find_crate_name(origin: &str) -> syn::Result<syn::Ident> {

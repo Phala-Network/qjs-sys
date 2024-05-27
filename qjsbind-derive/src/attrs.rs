@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 
+use syn::{DeriveInput, Error, ExprPath, Field, Ident, LitStr, Path, Result};
+
 #[derive(Copy, Clone)]
 #[allow(clippy::enum_variant_names)]
 pub enum RenameAll {
@@ -14,21 +16,17 @@ pub enum RenameAll {
 }
 
 impl RenameAll {
-    fn parse(lit: &syn::Lit) -> Result<RenameAll, syn::Error> {
-        if let syn::Lit::Str(s) = &lit {
-            match s.value().as_str() {
-                "lowercase" => Ok(RenameAll::LowerCase),
-                "UPPERCASE" => Ok(RenameAll::UpperCase),
-                "PascalCase" => Ok(RenameAll::PascalCase),
-                "camelCase" => Ok(RenameAll::CamelCase),
-                "snake_case" => Ok(RenameAll::SnakeCase),
-                "SCREAMING_SNAKE_CASE" => Ok(RenameAll::ScreamingSnakeCase),
-                "kebab-case" => Ok(RenameAll::KebabCase),
-                "SCREAMING-KEBAB-CASE" => Ok(RenameAll::ScreamingKebabCase),
-                _ => Err(syn::Error::new_spanned(lit, "")),
-            }
-        } else {
-            Err(syn::Error::new_spanned(lit, "rename expects a string"))
+    fn parse(lit: &LitStr) -> Result<RenameAll> {
+        match lit.value().as_str() {
+            "lowercase" => Ok(RenameAll::LowerCase),
+            "UPPERCASE" => Ok(RenameAll::UpperCase),
+            "PascalCase" => Ok(RenameAll::PascalCase),
+            "camelCase" => Ok(RenameAll::CamelCase),
+            "snake_case" => Ok(RenameAll::SnakeCase),
+            "SCREAMING_SNAKE_CASE" => Ok(RenameAll::ScreamingSnakeCase),
+            "kebab-case" => Ok(RenameAll::KebabCase),
+            "SCREAMING-KEBAB-CASE" => Ok(RenameAll::ScreamingKebabCase),
+            _ => Err(Error::new_spanned(lit, "invalid value")),
         }
     }
 }
@@ -36,25 +34,13 @@ impl RenameAll {
 #[derive(Clone)]
 pub enum TypeDefault {
     Implicit,
-    Explicit(syn::ExprPath),
+    Explicit(ExprPath),
 }
 
 pub struct ContainerAttrs<'a> {
-    ident: &'a syn::Ident,
+    ident: &'a Ident,
     rename_all: Option<RenameAll>,
     allow_default: bool,
-}
-
-pub fn get_meta_items(attr: &syn::Attribute) -> syn::Result<Vec<syn::NestedMeta>> {
-    if !attr.path.is_ident("qjsbind") {
-        return Ok(Vec::new());
-    }
-
-    match attr.parse_meta() {
-        Ok(syn::Meta::List(meta)) => Ok(meta.nested.into_iter().collect()),
-        Ok(_) => Err(syn::Error::new_spanned(attr, "expected #[qjsbind(...)]")),
-        Err(err) => Err(err),
-    }
 }
 
 fn respan(stream: proc_macro2::TokenStream, span: proc_macro2::Span) -> proc_macro2::TokenStream {
@@ -70,60 +56,45 @@ fn respan(stream: proc_macro2::TokenStream, span: proc_macro2::Span) -> proc_mac
         .collect()
 }
 
-fn get_lit_str(attr_name: &str, lit: &syn::Lit) -> syn::Result<String> {
-    if let syn::Lit::Str(lit) = lit {
-        Ok(lit.value())
-    } else {
-        Err(syn::Error::new_spanned(
-            lit,
-            format!(
-                "expected attribute to be a string: `{} = \"...\"`",
-                attr_name,
-            ),
-        ))
-    }
-}
-
-fn parse_lit_into_expr_path(attr_name: &str, lit: &syn::Lit) -> syn::Result<syn::ExprPath> {
-    let string = get_lit_str(attr_name, lit)?;
-    let token_stream = syn::parse_str(&string)?;
+fn parse_lit_into_expr_path(lit: &LitStr) -> Result<ExprPath> {
+    let token_stream = syn::parse_str(&lit.value())?;
     syn::parse2(respan(token_stream, lit.span()))
 }
 
 impl<'a> ContainerAttrs<'a> {
-    pub fn of(input: &'a syn::DeriveInput) -> syn::Result<ContainerAttrs<'a>> {
+    pub fn of(input: &'a DeriveInput) -> Result<ContainerAttrs<'a>> {
         let mut rv = ContainerAttrs {
             ident: &input.ident,
             rename_all: None,
             allow_default: false,
         };
 
-        for meta_item in input.attrs.iter().flat_map(get_meta_items).flatten() {
-            if let syn::NestedMeta::Meta(meta) = meta_item {
-                match &meta {
-                    syn::Meta::NameValue(nv) if nv.path.is_ident("rename_all") => {
-                        if rv.rename_all.is_some() {
-                            return Err(syn::Error::new_spanned(
-                                meta,
-                                "duplicate rename_all attribute",
-                            ));
-                        }
-                        rv.rename_all = Some(RenameAll::parse(&nv.lit)?);
-                    }
-                    syn::Meta::Path(path) if path.is_ident("default") => {
-                        rv.allow_default = true;
-                    }
-                    _ => return Err(syn::Error::new_spanned(meta, "unsupported attribute")),
-                }
-            } else {
-                return Err(syn::Error::new_spanned(meta_item, "unsupported attribute"));
+        for attr in input.attrs.iter() {
+            if !attr.path().is_ident("qjsbind") {
+                continue;
             }
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("rename_all") {
+                    let lit: LitStr = meta.value()?.parse()?;
+                    if rv.rename_all.is_some() {
+                        return Err(Error::new_spanned(
+                            meta.path,
+                            "duplicate rename_all attribute",
+                        ));
+                    }
+                    rv.rename_all = Some(RenameAll::parse(&lit)?);
+                } else if meta.path.is_ident("default") {
+                    rv.allow_default = true;
+                } else {
+                    return Err(Error::new_spanned(meta.path, "unsupported attribute"));
+                }
+                Ok(())
+            })?;
         }
-
         Ok(rv)
     }
 
-    pub fn get_field_name(&self, field: &syn::Field) -> String {
+    pub fn get_field_name(&self, field: &Field) -> String {
         let name = field.ident.as_ref().unwrap().to_string();
         if let Some(rename_all) = self.rename_all {
             match rename_all {
@@ -167,7 +138,7 @@ impl<'a> ContainerAttrs<'a> {
         }
     }
 
-    pub fn ident(&self) -> &syn::Ident {
+    pub fn ident(&self) -> &Ident {
         self.ident
     }
 
@@ -177,7 +148,7 @@ impl<'a> ContainerAttrs<'a> {
 }
 
 pub struct FieldAttrs<'a> {
-    field: &'a syn::Field,
+    field: &'a Field,
     rename: Option<String>,
     default: Option<TypeDefault>,
     as_bytes: bool,
@@ -185,7 +156,7 @@ pub struct FieldAttrs<'a> {
 }
 
 impl<'a> FieldAttrs<'a> {
-    pub fn of(field: &'a syn::Field) -> syn::Result<FieldAttrs<'a>> {
+    pub fn of(field: &'a Field) -> Result<FieldAttrs<'a>> {
         let mut rv = FieldAttrs {
             field,
             rename: None,
@@ -194,67 +165,54 @@ impl<'a> FieldAttrs<'a> {
             bytes_or_hex: false,
         };
 
-        for meta_item in field.attrs.iter().flat_map(get_meta_items).flatten() {
-            if let syn::NestedMeta::Meta(meta) = meta_item {
-                match &meta {
-                    syn::Meta::NameValue(nv) if nv.path.is_ident("rename") => {
-                        if rv.rename.is_some() {
-                            return Err(syn::Error::new_spanned(
-                                meta,
-                                "duplicate rename attribute",
-                            ));
-                        }
-                        rv.rename = Some(get_lit_str("rename", &nv.lit)?);
+        for attr in field.attrs.iter() {
+            if !attr.path().is_ident("qjsbind") {
+                continue;
+            }
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("rename") {
+                    if rv.rename.is_some() {
+                        return Err(Error::new_spanned(meta.path, "duplicate rename attribute"));
                     }
-                    syn::Meta::NameValue(nv) if nv.path.is_ident("default") => {
-                        if rv.default.is_some() {
-                            return Err(syn::Error::new_spanned(
-                                meta,
-                                "duplicate default attribute",
-                            ));
-                        }
-                        rv.default = Some(TypeDefault::Explicit(parse_lit_into_expr_path(
-                            "default", &nv.lit,
-                        )?));
+                    let lit: LitStr = meta.value()?.parse()?;
+                    rv.rename = Some(lit.value());
+                } else if meta.path.is_ident("default") {
+                    if rv.default.is_some() {
+                        return Err(Error::new_spanned(meta.path, "duplicate default attribute"));
                     }
-                    syn::Meta::Path(path) if path.is_ident("as_bytes") => {
-                        if rv.bytes_or_hex || rv.as_bytes {
-                            return Err(syn::Error::new_spanned(
-                                meta,
-                                "duplicate as_bytes attribute",
-                            ));
-                        }
-                        rv.as_bytes = true;
-                    }
-                    syn::Meta::Path(path) if path.is_ident("bytes_or_hex") => {
-                        if rv.bytes_or_hex || rv.as_bytes {
-                            return Err(syn::Error::new_spanned(
-                                meta,
-                                "duplicate bytes_or_hex attribute",
-                            ));
-                        }
-                        rv.bytes_or_hex = true;
-                    }
-                    syn::Meta::Path(path) if path.is_ident("default") => {
-                        if rv.default.is_some() {
-                            return Err(syn::Error::new_spanned(
-                                meta,
-                                "duplicate default attribute",
-                            ));
-                        }
+                    if let Ok(value) = meta.value() {
+                        let lit: LitStr = value.parse()?;
+                        let path = parse_lit_into_expr_path(&lit)?;
+                        rv.default = Some(TypeDefault::Explicit(path));
+                    } else {
                         rv.default = Some(TypeDefault::Implicit);
                     }
-                    _ => return Err(syn::Error::new_spanned(meta, "unsupported attribute")),
+                } else if meta.path.is_ident("as_bytes") {
+                    if rv.bytes_or_hex || rv.as_bytes {
+                        return Err(Error::new_spanned(
+                            meta.path,
+                            "duplicate as_bytes attribute",
+                        ));
+                    }
+                    rv.as_bytes = true;
+                } else if meta.path.is_ident("bytes_or_hex") {
+                    if rv.bytes_or_hex || rv.as_bytes {
+                        return Err(Error::new_spanned(
+                            meta.path,
+                            "duplicate bytes_or_hex attribute",
+                        ));
+                    }
+                    rv.bytes_or_hex = true;
+                } else {
+                    return Err(Error::new_spanned(meta.path, "unsupported attribute"));
                 }
-            } else {
-                return Err(syn::Error::new_spanned(meta_item, "unsupported attribute"));
-            }
+                Ok(())
+            })?;
         }
-
         Ok(rv)
     }
 
-    pub fn field(&self) -> &syn::Field {
+    pub fn field(&self) -> &Field {
         self.field
     }
 
@@ -273,7 +231,7 @@ impl<'a> FieldAttrs<'a> {
         self.bytes_or_hex
     }
 
-    pub fn decoder_fn(&self, crate_qjsbind: &syn::Ident) -> syn::Path {
+    pub fn decoder_fn(&self, crate_qjsbind: &Ident) -> Path {
         if self.as_bytes {
             syn::parse_quote!(#crate_qjsbind::decode_as_bytes)
         } else if self.bytes_or_hex {
@@ -283,7 +241,7 @@ impl<'a> FieldAttrs<'a> {
         }
     }
 
-    pub fn default_fn(&self) -> Option<syn::ExprPath> {
+    pub fn default_fn(&self) -> Option<ExprPath> {
         match &self.default {
             Some(TypeDefault::Implicit) => Some(syn::parse_quote!(Default::default)),
             Some(TypeDefault::Explicit(path)) => Some(path.clone()),
