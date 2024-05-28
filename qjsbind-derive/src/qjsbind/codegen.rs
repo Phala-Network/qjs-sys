@@ -105,15 +105,15 @@ impl ToTokens for Class {
         tokens.extend(quote! {
             impl crate_js::NativeClass for #name {
                 const CLASS_NAME: &'static str = #class_name_str;
-                fn class_object(ctx: crate_js::Context) -> crate_js::Value {
-                    let obj = ctx.get_object(#full_class_name_str);
+                fn class_object(ctx: &crate_js::Context) -> crate_js::Value {
+                    let obj = ctx.lookup_object(#full_class_name_str);
                     if !obj.is_undefined() {
                         return obj;
                     }
                     let class = ctx.new_class(#class_name_str);
                     #(#properties)*
                     #(#methods)*
-                    ctx.set_object(#full_class_name_str, class.clone());
+                    ctx.store_object(#full_class_name_str, class.clone());
                     class
                 }
             }

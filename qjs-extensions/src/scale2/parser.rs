@@ -194,7 +194,10 @@ macro_rules! impl_primitive_types {
             pub fn primitive(s: &str) -> Option<&'static Self> {
                 match s {
                     $(
-                        $id => Some(&Self::Primitive(PrimitiveType::$ty)),
+                        $id => {
+                            const T: Type = Type::Primitive(PrimitiveType::$ty);
+                            Some(&T)
+                        },
                     )*
                     _ => None,
                 }
@@ -448,7 +451,11 @@ fn convert_errors(errors: Vec<Poor>, src: &str) -> js::Error {
         let start = span.start;
         let end = span.end;
         let src = substr(src, (start, end), 30);
-        write!(&mut report, "Invalid syntax at {start}..{end}: here->`{src}`").unwrap();
+        write!(
+            &mut report,
+            "Invalid syntax at {start}..{end}: here->`{src}`"
+        )
+        .unwrap();
     }
     js::Error::Custom(report.to_string())
 }
