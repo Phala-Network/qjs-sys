@@ -1,2 +1,3 @@
 [workspace]
 members = ["qjs-sys", "qjsbind", "qjsbind-derive", "qjs-extensions", "qjsc"]
+resolver = "2"

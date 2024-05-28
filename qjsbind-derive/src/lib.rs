@@ -5,6 +5,7 @@ mod attrs;
 mod bound;
 mod derive;
 mod host_fn;
+mod qjsbind;
 
 #[proc_macro_derive(ToJsValue, attributes(qjsbind))]
 pub fn derive_serialize(input: TokenStream) -> TokenStream {
@@ -25,6 +26,15 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn host_call(attrs: TokenStream, input: TokenStream) -> TokenStream {
     host_fn::patch(
+        syn::parse_macro_input!(attrs),
+        syn::parse_macro_input!(input),
+    )
+    .into()
+}
+
+#[proc_macro_attribute]
+pub fn qjsbind(attrs: TokenStream, input: TokenStream) -> TokenStream {
+    qjsbind::patch(
         syn::parse_macro_input!(attrs),
         syn::parse_macro_input!(input),
     )

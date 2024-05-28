@@ -9,5 +9,6 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1.0.30"
 template-quote = "0.3"
-syn = "2.0.66"
+syn = { version = "2.0.66", features = ["full"] }
 proc-macro-crate = "3.1.0"
+itertools = "0.13.0"
