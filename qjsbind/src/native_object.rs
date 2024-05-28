@@ -5,10 +5,16 @@ use core::{
     ops::{Deref, DerefMut},
 };
 use js::{Context, FromJsValue, Result, ToJsValue, Value};
+use qjs_sys::c;
 
 pub trait NativeClass: 'static {
     const CLASS_NAME: &'static str;
-    fn class_object(ctx: &Context) -> Value;
+    fn constructor_object(ctx: &Context) -> Result<Value>;
+    fn constructor_ptr() -> c::JsCFunction;
+    fn register(ctx: &Context) -> Result<()> {
+        Self::constructor_object(ctx)?;
+        Ok(())
+    }
 }
 
 struct Guard<T>(T);
@@ -91,14 +97,15 @@ impl<T: 'static> ToJsValue for Native<T> {
 }
 
 impl<T: NativeClass> Native<T> {
-    pub fn new(ctx: &Context, value: T) -> Self {
-        let class_obj = T::class_object(ctx);
+    pub fn new(ctx: &Context, value: T) -> Result<Self> {
+        let constructor = T::constructor_object(ctx)?;
+        let proto = constructor.get_property("prototype")?;
         let object = Value::new_opaque_object(ctx, Guard(value));
-        let _ = object.set_prototype(&class_obj);
-        Self {
+        let _ = object.set_prototype(&proto);
+        Ok(Self {
             inner: object,
             _marker: PhantomData,
-        }
+        })
     }
 
     pub fn borrow(&self) -> Ref<'_, T> {
@@ -115,7 +122,26 @@ impl<T: NativeClass> Native<T> {
 }
 
 impl Context {
-    pub fn new_native<T: NativeClass>(&self, value: T) -> Native<T> {
+    pub fn new_native<T: NativeClass>(&self, value: T) -> Result<Native<T>> {
         Native::new(self, value)
+    }
+}
+
+pub trait IntoNativeObject {
+    type T: NativeClass;
+    fn into_native_object(self, ctx: &Context) -> Result<Native<Self::T>>;
+}
+
+impl<T: NativeClass> IntoNativeObject for T {
+    type T = T;
+    fn into_native_object(self, ctx: &Context) -> Result<Native<Self::T>> {
+        Native::new(ctx, self)
+    }
+}
+
+impl<T: NativeClass> IntoNativeObject for Result<T> {
+    type T = T;
+    fn into_native_object(self, ctx: &Context) -> Result<Native<Self::T>> {
+        self?.into_native_object(ctx)
     }
 }

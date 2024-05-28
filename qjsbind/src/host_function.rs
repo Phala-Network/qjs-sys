@@ -5,9 +5,9 @@ pub trait HostFunction {
         -> c::JSValue;
 }
 
-pub struct Function<Ctx, Args, Ret, F> {
+pub struct Function<Ctx, This, Args, Ret, F> {
     f: F,
-    _phantom: core::marker::PhantomData<(Ctx, Args, Ret)>,
+    _phantom: core::marker::PhantomData<(Ctx, This, Args, Ret)>,
 }
 
 /// Call a host function from JavaScript.
@@ -15,7 +15,7 @@ pub struct Function<Ctx, Args, Ret, F> {
 /// # Safety
 /// `ctx` must be a valid pointer to a `JSContext`.
 /// `argv` must be a valid pointer to an array of `argc` `JSValue`s.
-pub unsafe fn call_host_function<Ctx, Args, Ret, F>(
+pub unsafe fn call_host_function<Ctx, This, Args, Ret, F>(
     func: F,
     ctx: *mut c::JSContext,
     this_val: c::JSValueConst,
@@ -23,14 +23,14 @@ pub unsafe fn call_host_function<Ctx, Args, Ret, F>(
     argv: *const c::JSValue,
 ) -> c::JSValue
 where
-    Function<Ctx, Args, Ret, F>: HostFunction,
+    Function<Ctx, This, Args, Ret, F>: HostFunction,
 {
     let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
     let ctx = js::Context::clone_from_ptr(ctx).expect("calling host function with null context");
     Function::new(func).call(&ctx, this_val, args)
 }
 
-impl<Ctx, Args, Ret, F> Function<Ctx, Args, Ret, F> {
+impl<Ctx, This, Args, Ret, F> Function<Ctx, This, Args, Ret, F> {
     pub fn new(f: F) -> Self {
         Self {
             f,
@@ -39,7 +39,7 @@ impl<Ctx, Args, Ret, F> Function<Ctx, Args, Ret, F> {
     }
 }
 
-impl<Ctx, Args, Ret, F: Default> Default for Function<Ctx, Args, Ret, F> {
+impl<Ctx, This, Args, Ret, F: Default> Default for Function<Ctx, This, Args, Ret, F> {
     fn default() -> Self {
         Self {
             f: Default::default(),
@@ -74,32 +74,42 @@ where
 
 macro_rules! impl_host_fn {
     (($($arg:ident),*)) => {
-        impl<HF, Srv, $($arg,)* Ret> HostFunction for Function<Srv, ($($arg,)*), Ret, HF>
+        impl<HF, This, Srv, $($arg,)* Ret> HostFunction for Function<Srv, This, ($($arg,)*), Ret, HF>
         where
-            HF: Fn(Srv, Value, $($arg,)*) -> Ret,
+            HF: Fn(Srv, This, $($arg,)*) -> Ret,
             Srv: TryFrom<js::Context>,
             Srv::Error: core::fmt::Debug,
+            This: FromJsValue,
             $($arg: FromJsValue,)*
             Ret: ToJsValue,
         {
             fn call(&self, ctx: &js::Context, this_val: c::JSValueConst, args: &[c::JSValue]) -> c::JSValue {
                 #[allow(non_snake_case)]
-                Function::new(|srv: Srv, this_value, $($arg: $arg,)*| -> Result<Ret, ()> {
-                    Ok((self.f)(srv, this_value, $($arg,)*))
+                Function::new(|srv: Srv, this_value, $($arg: $arg,)*| -> Result<Ret, js::Error> {
+                    Ok((self.f)(srv, FromJsValue::from_js_value(this_value)?, $($arg,)*))
                 }).call(ctx, this_val, args)
             }
         }
-        impl<HF, Srv, $($arg,)* Ret, Err> HostFunction for Function<Srv, ($($arg,)*), Result<Ret, Err>, HF>
+        impl<HF, This, Srv, $($arg,)* Ret, Err> HostFunction for Function<Srv, This, ($($arg,)*), Result<Ret, Err>, HF>
         where
-            HF: Fn(Srv, Value, $($arg,)*) -> Result<Ret, Err>,
+            HF: Fn(Srv, This, $($arg,)*) -> Result<Ret, Err>,
             Srv: TryFrom<js::Context>,
             Srv::Error: core::fmt::Debug,
             Err: core::fmt::Debug,
+            This: FromJsValue,
             $($arg: FromJsValue,)*
             Ret: ToJsValue,
         {
             fn call(&self, ctx: &js::Context, this_val: c::JSValueConst, args: &[c::JSValue]) -> c::JSValue {
-                let this_value = Value::new_cloned(ctx, this_val);
+                let this_value = match FromJsValue::from_js_value(Value::new_cloned(ctx, this_val)) {
+                    Ok(this_value) => this_value,
+                    Err(err) => {
+                        let msg = format!("failed to convert JsValue to {}: {err:?}", crate::type_name::<This>());
+                        ctx.throw_type_err(&msg);
+                        return c::JS_EXCEPTION;
+                    }
+                };
+
                 let srv = match Srv::try_from(ctx.clone()) {
                     Ok(ctx) => ctx,
                     Err(e) => {

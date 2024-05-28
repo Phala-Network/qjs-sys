@@ -1,7 +1,8 @@
 use core::ptr::NonNull;
 
-use crate::{c, Code, Value};
+use crate::{c, Code, Result, Value};
 use alloc::string::{String, ToString};
+use qjs_sys::inline_fns::JSCFunction;
 
 pub struct Context {
     pub(crate) ptr: NonNull<c::JSContext>,
@@ -72,6 +73,61 @@ impl Context {
             c::JS_FreeValue(ctx_ptr, stack);
             exc_str
         }
+    }
+
+    pub fn lookup_object(&self, full_path: &str) -> Result<Value> {
+        let mut result = self.get_global_object();
+        for seg in full_path.split('.') {
+            if result.is_undefined() {
+                return Err(crate::Error::Custom(format!(
+                    "lookup_object: {full_path} is undefined",
+                )));
+            }
+            result = result.get_property(seg)?;
+        }
+        Ok(result)
+    }
+
+    pub fn store_object(&self, full_path: &str, obj: Value) -> Result<()> {
+        let mut segs: Vec<_> = full_path.split('.').collect();
+        let Some(last) = segs.pop() else {
+            return Err(crate::Error::Static(
+                "store_object: full_path must not be empty",
+            ));
+        };
+        let mut parent = self.get_global_object();
+        if parent.is_undefined() {
+            return Err(crate::Error::Static("store_object: global is undefined"));
+        }
+        for seg in segs {
+            parent = parent.get_property(seg)?;
+            if parent.is_undefined() {
+                return Err(crate::Error::Static("store_object: parent is undefined"));
+            }
+        }
+        parent.set_property(last, &obj)?;
+        Ok(())
+    }
+
+    pub fn new_function(
+        &self,
+        name: &str,
+        func: JSCFunction,
+        argc: u32,
+        ty: c::JSCFunctionEnum,
+    ) -> Value {
+        let f = unsafe {
+            c::JS_NewCFunction2Len(
+                self.as_ptr(),
+                Some(func),
+                name.as_ptr() as _,
+                name.len() as _,
+                argc as _,
+                ty,
+                0,
+            )
+        };
+        Value::new_moved(self, f)
     }
 }
 

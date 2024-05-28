@@ -14,13 +14,6 @@ use crate::{
 
 use super::{c, Error, Result};
 
-type JsCFunction = unsafe extern "C" fn(
-    ctx: *mut c::JSContext,
-    this_val: c::JSValueConst,
-    argc: core::ffi::c_int,
-    argv: *mut c::JSValue,
-) -> c::JSValue;
-
 #[repr(transparent)]
 pub struct RawValue(pub c::JSValue);
 impl Default for RawValue {
@@ -518,13 +511,12 @@ impl Value {
             }
         }
     }
-    pub fn define_property_fn(&self, key: &str, f: JsCFunction) -> Result<(), Error> {
+
+    pub fn define_property_fn(&self, key: &str, f: c::JsCFunction) -> Result<(), Error> {
         let ctx = self.context()?;
-        let f = unsafe {
-            c::JS_NewCFunctionLen(ctx.as_ptr(), Some(f), key.as_ptr() as _, key.len() as _, 0)
-        };
-        self.define_property_value(key, Value::new_moved(ctx, f))
+        self.define_property_value(key, ctx.new_function(key, f, 0, c::JS_CFUNC_generic))
     }
+
     pub fn define_property_value(&self, key: &str, f: Value) -> Result<(), Error> {
         unsafe {
             let ctx = self.context()?.as_ptr();
@@ -540,10 +532,48 @@ impl Value {
             if r != 0 {
                 Ok(())
             } else {
-                Err(Error::Custom(format!("Failed to define property: {key}")))
+                Err(Error::Custom(format!(
+                    "Failed to define property value: {key}"
+                )))
             }
         }
     }
+
+    pub fn define_property_getset(
+        &self,
+        key: &str,
+        getter: Option<c::JsCFunction>,
+        setter: Option<c::JsCFunction>,
+    ) -> Result<(), Error> {
+        let ctx = self.context()?;
+        let getter = match getter {
+            Some(getter) => ctx.new_function(key, getter, 0, c::JS_CFUNC_getter),
+            None => Value::undefined(),
+        };
+        let setter = match setter {
+            Some(setter) => ctx.new_function(key, setter, 1, c::JS_CFUNC_setter),
+            None => Value::undefined(),
+        };
+        unsafe {
+            let prop = c::JS_NewAtomLen(ctx.as_ptr(), key.as_ptr() as _, key.len());
+            let ret = c::JS_DefinePropertyGetSet(
+                ctx.as_ptr(),
+                *self.raw_value(),
+                prop,
+                getter.leak(),
+                setter.leak(),
+                0,
+            );
+            if ret < 0 {
+                return Err(Error::Custom(format!(
+                    "Failed to define property getter/setter `{key}`: {}",
+                    ctx.get_exception_str()
+                )));
+            }
+        }
+        Ok(())
+    }
+
     pub fn array_push(&self, value: &Value) -> Result<()> {
         _ = self
             .call_method("push", &[value.clone()])

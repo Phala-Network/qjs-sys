@@ -45,6 +45,7 @@ struct Method {
     name: Ident,
     args: Vec<(syn::Ident, syn::Type)>,
     return_ty: syn::ReturnType,
+    is_mut: bool,
     attrs: FnAttrs,
 }
 
@@ -53,10 +54,12 @@ struct FnAttrs {
     fn_type: FnType,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FnType {
     Getter,
     Setter,
     Method,
+    Constructor,
 }
 
 pub(crate) fn patch(config: TokenStream, input: TokenStream) -> TokenStream {

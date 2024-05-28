@@ -21,3 +21,14 @@ pub fn is_exception(v: JSValue) -> bool {
 pub fn is_undefined(v: JSValue) -> bool {
     unsafe { JS_IsUndefined(v) != 0 }
 }
+
+pub type JsCFunction = <JSCFunction as private::InnerT>::T;
+
+mod private {
+    pub trait InnerT {
+        type T;
+    }
+    impl<T> InnerT for Option<T> {
+        type T = T;
+    }
+}

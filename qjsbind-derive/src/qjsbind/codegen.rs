@@ -12,6 +12,8 @@ impl ToTokens for Mod {
         let classes = self.classes.values();
         tokens.extend(quote! {
             mod qjsbind_generated {
+                #![allow(non_snake_case)]
+
                 use super::*;
                 use #crate_js as crate_js;
 
@@ -38,6 +40,7 @@ impl ToTokens for Class {
         };
         let mut properties = vec![];
         let mut methods = vec![];
+        let mut constructor = None;
         for prop in self.derived_properties.iter() {
             let prop_js_name = prop.js_name_str(self);
             match (prop.attrs.is_getter, prop.attrs.is_setter) {
@@ -82,8 +85,11 @@ impl ToTokens for Class {
                 }
                 FnType::Method => {
                     methods.push(quote! {
-                        class.add_method(#js_name, #fn_name);
+                        proto.define_property_fn(#js_name, #fn_name)?;
                     });
+                }
+                FnType::Constructor => {
+                    constructor = Some(fn_name);
                 }
             }
         }
@@ -98,23 +104,29 @@ impl ToTokens for Class {
                 .map(|ident| quote! { Some(#ident) })
                 .unwrap_or(quote! { None });
             quote! {
-                class.add_property(#name, #getter, #setter);
+                proto.define_property_getset(#name, #getter, #setter)?;
             }
         });
 
         tokens.extend(quote! {
             impl crate_js::NativeClass for #name {
                 const CLASS_NAME: &'static str = #class_name_str;
-                fn class_object(ctx: &crate_js::Context) -> crate_js::Value {
-                    let obj = ctx.lookup_object(#full_class_name_str);
+                fn constructor_object(ctx: &crate_js::Context) -> crate_js::Result<crate_js::Value> {
+                    let obj = ctx.lookup_object(#full_class_name_str)?;
                     if !obj.is_undefined() {
-                        return obj;
+                        return Ok(obj);
                     }
-                    let class = ctx.new_class(#class_name_str);
+                    let constructor = ctx.new_function(#class_name_str, Self::constructor_ptr(), 0, crate_js::c::JS_CFUNC_constructor);
+                    let proto = ctx.new_object();
                     #(#properties)*
                     #(#methods)*
-                    ctx.store_object(#full_class_name_str, class.clone());
-                    class
+                    constructor.set_property("prototype", &proto)?;
+                    ctx.store_object(#full_class_name_str, constructor.clone())?;
+                    Ok(constructor)
+                }
+
+                fn constructor_ptr() -> crate_js::c::JsCFunction {
+                    #constructor
                 }
             }
         });
@@ -160,7 +172,7 @@ impl DerivedProperty {
             tokens.extend(quote! {
                 #[crate_js::host_call(with_context)]
                 fn #getter_fn(_ctx: crate_js::Context, this_value: Native<#{&class.name}>) -> #{&self.ty} {
-                    this_value.#{&self.name}.clone()
+                    this_value.borrow().#{&self.name}.clone()
                 }
             });
         }
@@ -170,7 +182,7 @@ impl DerivedProperty {
             tokens.extend(quote! {
                 #[crate_js::host_call(with_context)]
                 fn #setter_fn(_ctx: crate_js::Context, mut this_value: Native<#{&class.name}>, value: #{&self.ty}) {
-                    this_value.#{&self.name} = value;
+                    this_value.borrow_mut().#{&self.name} = value;
                 }
             });
         }
@@ -193,6 +205,7 @@ impl Method {
             FnType::Getter => format_ident!("{class_name}_getter__{js_name_str}"),
             FnType::Setter => format_ident!("{class_name}_setter__{js_name_str}"),
             FnType::Method => format_ident!("{class_name}_method__{js_name_str}"),
+            FnType::Constructor => format_ident!("{class_name}_constructor"),
         }
     }
 
@@ -212,7 +225,7 @@ impl Method {
                 tokens.extend(quote! {
                     #[crate_js::host_call(with_context)]
                     fn #fn_name(_ctx: crate_js::Context, this_value: Native<#class_name>, #(#args),*) #{&self.return_ty} {
-                        this_value.#name()
+                        this_value.borrow().#name()
                     }
                 });
             }
@@ -220,7 +233,7 @@ impl Method {
                 tokens.extend(quote! {
                     #[crate_js::host_call(with_context)]
                     fn #fn_name(_ctx: crate_js::Context, mut this_value: Native<#class_name>, #(#args),*) #{&self.return_ty} {
-                        this_value.#name(#(#args_idents),*)
+                        this_value.borrow_mut().#name(#(#args_idents),*)
                     }
                 });
             }
@@ -228,7 +241,22 @@ impl Method {
                 tokens.extend(quote! {
                     #[crate_js::host_call(with_context)]
                     fn #fn_name(_ctx: crate_js::Context, this_value: Native<#class_name>, #(#args),*) #{&self.return_ty} {
-                        this_value.#name(#(#args_idents),*)
+                        #(if self.is_mut) {
+                            this_value.borrow_mut().#name(#(#args_idents),*)
+                        }
+                        #(else) {
+                            this_value.borrow().#name(#(#args_idents),*)
+                        }
+
+                    }
+                });
+            }
+            FnType::Constructor => {
+                tokens.extend(quote! {
+                    #[crate_js::host_call(with_context)]
+                    fn #fn_name(ctx: crate_js::Context, _this_value: crate_js::Value, #(#args),*) -> crate_js::Result<Native<#class_name>> {
+                        use crate_js::IntoNativeObject;
+                        #class_name::#name(#(#args_idents),*).into_native_object(&ctx)
                     }
                 });
             }

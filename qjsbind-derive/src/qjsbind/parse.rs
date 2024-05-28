@@ -37,6 +37,21 @@ impl Class {
             attrs,
         }))
     }
+
+    fn validate(&self) -> Result<()> {
+        if self
+            .methods
+            .iter()
+            .find(|m| m.attrs.fn_type == FnType::Constructor)
+            .is_none()
+        {
+            return Err(syn::Error::new_spanned(
+                self.name.clone(),
+                "Missing constructor method",
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl ClassAttrs {
@@ -143,20 +158,22 @@ impl Method {
         let name = item_fn.sig.ident.clone();
         let mut is_mut_self = false;
         let mut inputs = item_fn.sig.inputs.iter();
-        let Some(first) = inputs.next() else {
-            return Err(syn::Error::new_spanned(
-                name,
-                "Expected at least one argument",
-            ));
-        };
-        let FnArg::Receiver(celf) = first else {
-            return Err(syn::Error::new_spanned(
-                first,
-                "Expected a receiver argument",
-            ));
-        };
-        if celf.mutability.is_some() {
-            is_mut_self = true;
+        if attrs.fn_type != FnType::Constructor {
+            let Some(first) = inputs.next() else {
+                return Err(syn::Error::new_spanned(
+                    name,
+                    "Expected at least one argument",
+                ));
+            };
+            let FnArg::Receiver(celf) = first else {
+                return Err(syn::Error::new_spanned(
+                    first,
+                    "Expected a receiver argument",
+                ));
+            };
+            if celf.mutability.is_some() {
+                is_mut_self = true;
+            }
         }
         let mut args = vec![];
         for arg in inputs {
@@ -205,13 +222,14 @@ impl Method {
                     ));
                 }
             }
-            FnType::Method => (),
+            FnType::Method | FnType::Constructor => (),
         }
         Ok(Some(Self {
             name,
             attrs,
             args,
             return_ty,
+            is_mut: is_mut_self,
         }))
     }
 }
@@ -219,19 +237,19 @@ impl Method {
 impl FnAttrs {
     fn from_attributes(attrs: &[Attribute]) -> Result<Self> {
         let mut js_name = None;
-        let mut is_getter = false;
-        let mut is_setter = false;
-        let mut is_method = false;
+        let mut fn_type = None;
 
         for attr in attrs {
             if attr.path().is_ident("qjs") {
                 attr.parse_nested_meta(|meta| {
                     if meta.path.is_ident("method") {
-                        is_method = true;
+                        fn_type = Some(FnType::Method);
                     } else if meta.path.is_ident("getter") {
-                        is_getter = true;
+                        fn_type = Some(FnType::Getter);
                     } else if meta.path.is_ident("setter") {
-                        is_setter = true;
+                        fn_type = Some(FnType::Setter);
+                    } else if meta.path.is_ident("constructor") {
+                        fn_type = Some(FnType::Constructor);
                     } else if meta.path.is_ident("js_name") {
                         js_name = Some(meta.value()?.parse::<LitStr>()?);
                     } else {
@@ -242,16 +260,11 @@ impl FnAttrs {
             }
         }
 
-        let fn_type = match (is_getter, is_setter, is_method) {
-            (true, false, false) => FnType::Getter,
-            (false, true, false) => FnType::Setter,
-            (false, false, true) => FnType::Method,
-            _ => {
-                return Err(syn::Error::new_spanned(
-                    attrs[0].clone(),
-                    "Expected exactly one of `getter`, `setter`, or `method`",
-                ))
-            }
+        let Some(fn_type) = fn_type else {
+            return Err(syn::Error::new_spanned(
+                attrs[0].clone(),
+                "Expected exactly one of `getter`, `setter`, `method`, or `constructor`",
+            ));
         };
 
         Ok(Self { js_name, fn_type })
@@ -299,6 +312,9 @@ impl Mod {
                     _ => {}
                 }
             }
+        }
+        for cls in classes.values() {
+            cls.validate()?;
         }
         Ok(Self { classes, js_crate })
     }
