@@ -5,7 +5,7 @@ use alloc::{
 
 use crate::{
     self as js,
-    opaque_value::{opaque_object_get_data_mut, Ref, RefMut},
+    opaque_value::{is_opaque_object_of, opaque_object_get_data_mut, Ref, RefMut},
 };
 use crate::{
     opaque_value::{new_opaque_object, opaque_object_get_data, opaque_object_take_data},
@@ -161,6 +161,10 @@ impl Value {
 
     pub fn opaque_object_take_data<T: 'static>(&self) -> Option<T> {
         opaque_object_take_data(self)
+    }
+
+    pub fn is_opaque_object_of<T: 'static>(&self) -> bool {
+        is_opaque_object_of::<T>(self)
     }
 
     pub fn leak(self) -> c::JSValue {

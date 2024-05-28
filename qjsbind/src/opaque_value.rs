@@ -61,6 +61,11 @@ impl<T> RefMut<'_, T> {
     fn none() -> Self {
         Self { cell: None }
     }
+
+    pub fn get(&self) -> Option<&T> {
+        self.cell.as_ref()?.as_ref()
+    }
+
     pub fn get_mut(&mut self) -> Option<&mut T> {
         self.cell.as_mut()?.as_mut()
     }
@@ -74,7 +79,11 @@ pub fn new_opaque_object<T: 'static>(ctx: &js::Context, value: T) -> Value {
     ) {
         let _drop_it = unsafe { Box::from_raw(data as *mut Cell<T>) };
     }
-    debug!("new_opaque_object TID={}, T={:?}", type_id::<T>(), core::any::type_name::<T>());
+    debug!(
+        "new_opaque_object TID={}, T={:?}",
+        type_id::<T>(),
+        core::any::type_name::<T>()
+    );
     let boxed = Box::new(Cell::new(value));
     let data = Box::into_raw(boxed);
     let tag: u64 = type_id::<T>();
@@ -89,8 +98,20 @@ pub fn new_opaque_object<T: 'static>(ctx: &js::Context, value: T) -> Value {
     Value::new_moved(ctx, js_value)
 }
 
+pub fn is_opaque_object_of<T: 'static>(value: &Value) -> bool {
+    let Value::Other { value, ctx } = value else {
+        return false;
+    };
+    let ptr = unsafe { c::JS_OpaqueObjectDataGet(ctx.as_ptr(), *value, type_id::<T>() as _) };
+    !ptr.is_null()
+}
+
 pub fn opaque_object_get_data<T: 'static>(value: &Value) -> Ref<'_, T> {
-    debug!("opaque_object_get_data TID={}, T={:?}", type_id::<T>(), core::any::type_name::<T>());
+    debug!(
+        "opaque_object_get_data TID={}, T={:?}",
+        type_id::<T>(),
+        core::any::type_name::<T>()
+    );
     let Value::Other { value, ctx } = value else {
         return Ref::none();
     };
@@ -105,7 +126,11 @@ pub fn opaque_object_get_data<T: 'static>(value: &Value) -> Ref<'_, T> {
 }
 
 pub fn opaque_object_get_data_mut<T: 'static>(value: &Value) -> RefMut<'_, T> {
-    debug!("opaque_object_get_data_mut TID={}, T={:?}", type_id::<T>(), core::any::type_name::<T>());
+    debug!(
+        "opaque_object_get_data_mut TID={}, T={:?}",
+        type_id::<T>(),
+        core::any::type_name::<T>()
+    );
     let Value::Other { value, ctx } = value else {
         return RefMut::none();
     };
@@ -120,7 +145,11 @@ pub fn opaque_object_get_data_mut<T: 'static>(value: &Value) -> RefMut<'_, T> {
 }
 
 pub fn opaque_object_take_data<T: 'static>(value: &Value) -> Option<T> {
-    debug!("opaque_object_take_data TID={}, T={:?}", type_id::<T>(), core::any::type_name::<T>());
+    debug!(
+        "opaque_object_take_data TID={}, T={:?}",
+        type_id::<T>(),
+        core::any::type_name::<T>()
+    );
     let Value::Other { value, ctx } = value else {
         return None;
     };

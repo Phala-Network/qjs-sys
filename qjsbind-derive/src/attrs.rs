@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use syn::{DeriveInput, Error, ExprPath, Field, Ident, LitStr, Path, Result};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[allow(clippy::enum_variant_names)]
 pub enum RenameAll {
     LowerCase,
@@ -16,7 +16,7 @@ pub enum RenameAll {
 }
 
 impl RenameAll {
-    fn parse(lit: &LitStr) -> Result<RenameAll> {
+    pub fn parse(lit: &LitStr) -> Result<RenameAll> {
         match lit.value().as_str() {
             "lowercase" => Ok(RenameAll::LowerCase),
             "UPPERCASE" => Ok(RenameAll::UpperCase),
@@ -28,6 +28,46 @@ impl RenameAll {
             "SCREAMING-KEBAB-CASE" => Ok(RenameAll::ScreamingKebabCase),
             _ => Err(Error::new_spanned(lit, "invalid value")),
         }
+    }
+    pub fn rename(&self, ident: &Ident) -> Ident {
+        let name = ident.to_string();
+        let renamed = match self {
+            RenameAll::LowerCase | RenameAll::SnakeCase => name.to_ascii_lowercase(),
+            RenameAll::UpperCase | RenameAll::ScreamingSnakeCase => name.to_ascii_uppercase(),
+            RenameAll::PascalCase => {
+                let mut pascal = String::new();
+                let mut capitalize = true;
+                for ch in name.chars() {
+                    if ch == '_' {
+                        capitalize = true;
+                    } else if capitalize {
+                        pascal.push(ch.to_ascii_uppercase());
+                        capitalize = false;
+                    } else {
+                        pascal.push(ch);
+                    }
+                }
+                pascal
+            }
+            RenameAll::CamelCase => {
+                let mut camel = String::new();
+                let mut capitalize = false;
+                for ch in name.chars() {
+                    if ch == '_' {
+                        capitalize = true;
+                    } else if capitalize {
+                        camel.push(ch.to_ascii_uppercase());
+                        capitalize = false;
+                    } else {
+                        camel.push(ch);
+                    }
+                }
+                camel
+            }
+            RenameAll::KebabCase => name.replace('_', "-"),
+            RenameAll::ScreamingKebabCase => name.replace('_', "-").to_ascii_uppercase(),
+        };
+        Ident::new(&renamed, ident.span())
     }
 }
 
@@ -94,47 +134,12 @@ impl<'a> ContainerAttrs<'a> {
         Ok(rv)
     }
 
-    pub fn get_field_name(&self, field: &Field) -> String {
-        let name = field.ident.as_ref().unwrap().to_string();
+    pub fn get_field_name(&self, field: &Field) -> Ident {
+        let ident = field.ident.as_ref().unwrap();
         if let Some(rename_all) = self.rename_all {
-            match rename_all {
-                RenameAll::LowerCase | RenameAll::SnakeCase => name,
-                RenameAll::UpperCase | RenameAll::ScreamingSnakeCase => name.to_ascii_uppercase(),
-                RenameAll::PascalCase => {
-                    let mut pascal = String::new();
-                    let mut capitalize = true;
-                    for ch in name.chars() {
-                        if ch == '_' {
-                            capitalize = true;
-                        } else if capitalize {
-                            pascal.push(ch.to_ascii_uppercase());
-                            capitalize = false;
-                        } else {
-                            pascal.push(ch);
-                        }
-                    }
-                    pascal
-                }
-                RenameAll::CamelCase => {
-                    let mut camel = String::new();
-                    let mut capitalize = false;
-                    for ch in name.chars() {
-                        if ch == '_' {
-                            capitalize = true;
-                        } else if capitalize {
-                            camel.push(ch.to_ascii_uppercase());
-                            capitalize = false;
-                        } else {
-                            camel.push(ch);
-                        }
-                    }
-                    camel
-                }
-                RenameAll::KebabCase => name.replace('_', "-"),
-                RenameAll::ScreamingKebabCase => name.replace('_', "-").to_ascii_uppercase(),
-            }
+            rename_all.rename(ident)
         } else {
-            name
+            ident.clone()
         }
     }
 
@@ -220,7 +225,12 @@ impl<'a> FieldAttrs<'a> {
         self.rename
             .as_deref()
             .map(Cow::Borrowed)
-            .unwrap_or_else(|| container_attrs.get_field_name(self.field).into())
+            .unwrap_or_else(|| {
+                container_attrs
+                    .get_field_name(self.field)
+                    .to_string()
+                    .into()
+            })
     }
 
     pub fn as_bytes(&self) -> bool {
