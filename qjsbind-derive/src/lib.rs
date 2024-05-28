@@ -7,7 +7,7 @@ mod derive;
 mod host_fn;
 mod qjsbind;
 
-#[proc_macro_derive(ToJsValue, attributes(qjsbind))]
+#[proc_macro_derive(ToJsValue, attributes(qjs))]
 pub fn derive_serialize(input: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(input as syn::DeriveInput);
     derive::derive(&mut input, false)
@@ -15,7 +15,7 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
         .into()
 }
 
-#[proc_macro_derive(FromJsValue, attributes(qjsbind))]
+#[proc_macro_derive(FromJsValue, attributes(qjs))]
 pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(input as syn::DeriveInput);
     derive::derive(&mut input, true)

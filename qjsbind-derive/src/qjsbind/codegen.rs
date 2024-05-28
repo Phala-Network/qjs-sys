@@ -1,3 +1,5 @@
+use crate::attrs::trim_rust_raw;
+
 use super::*;
 use quote::format_ident;
 
@@ -127,10 +129,11 @@ impl ToTokens for Class {
 
 impl Class {
     fn rename_field(&self, name: &Ident) -> Ident {
+        let name = trim_rust_raw(name.clone());
         if let Some(rename_all) = &self.attrs.rename_all {
             rename_all.rename(&name)
         } else {
-            name.clone()
+            name
         }
     }
 }

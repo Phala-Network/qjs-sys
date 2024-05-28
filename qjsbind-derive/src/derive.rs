@@ -88,7 +88,7 @@ fn derive_struct(
                         Ok(Self {
                             #(for field in &attrs) {
                                 #{&field.field().ident}: {
-                                    let field_value = val.get_property(#{field.name(&container_attrs)})?;
+                                    let field_value = val.get_property(#{field.js_name(&container_attrs)})?;
                                     #{
                                         match field.default_fn() {
                                             Some(f) => {
@@ -130,7 +130,7 @@ fn derive_struct(
                             #(else) {
                                 let field_value = self.#{&field.field().ident}.to_js_value(ctx)?;
                             }
-                            obj.set_property(#{field.name(&container_attrs)}, &field_value)?;
+                            obj.set_property(#{field.js_name(&container_attrs)}, &field_value)?;
                         }
                         Ok(obj)
                     }

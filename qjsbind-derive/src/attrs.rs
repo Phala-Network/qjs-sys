@@ -110,7 +110,7 @@ impl<'a> ContainerAttrs<'a> {
         };
 
         for attr in input.attrs.iter() {
-            if !attr.path().is_ident("qjsbind") {
+            if !attr.path().is_ident("qjs") {
                 continue;
             }
             attr.parse_nested_meta(|meta| {
@@ -134,12 +134,13 @@ impl<'a> ContainerAttrs<'a> {
         Ok(rv)
     }
 
-    pub fn get_field_name(&self, field: &Field) -> Ident {
-        let ident = field.ident.as_ref().expect("No field name found");
+    pub fn get_field_js_name(&self, field: &Field) -> Ident {
+        let ident = field.ident.as_ref().expect("No field name found").clone();
+        let ident = trim_rust_raw(ident);
         if let Some(rename_all) = self.rename_all {
-            rename_all.rename(ident)
+            rename_all.rename(&ident)
         } else {
-            ident.clone()
+            ident
         }
     }
 
@@ -149,6 +150,15 @@ impl<'a> ContainerAttrs<'a> {
 
     pub fn allow_default(&self) -> bool {
         self.allow_default
+    }
+}
+
+pub fn trim_rust_raw(name: Ident) -> Ident {
+    let name_str = name.to_string();
+    if name_str.starts_with("r#") {
+        Ident::new(&name_str[2..], name.span())
+    } else {
+        name
     }
 }
 
@@ -171,7 +181,7 @@ impl<'a> FieldAttrs<'a> {
         };
 
         for attr in field.attrs.iter() {
-            if !attr.path().is_ident("qjsbind") {
+            if !attr.path().is_ident("qjs") {
                 continue;
             }
             attr.parse_nested_meta(|meta| {
@@ -221,13 +231,13 @@ impl<'a> FieldAttrs<'a> {
         self.field
     }
 
-    pub fn name(&self, container_attrs: &ContainerAttrs) -> Cow<'_, str> {
+    pub fn js_name(&self, container_attrs: &ContainerAttrs) -> Cow<'_, str> {
         self.rename
             .as_deref()
             .map(Cow::Borrowed)
             .unwrap_or_else(|| {
                 container_attrs
-                    .get_field_name(self.field)
+                    .get_field_js_name(self.field)
                     .to_string()
                     .into()
             })
