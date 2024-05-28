@@ -6,7 +6,7 @@ pub fn setup(ns: &js::Value) -> js::Result<()> {
 }
 
 #[derive(js::FromJsValue, Default, Debug)]
-#[qjsbind(rename_all = "camelCase")]
+#[qjs(rename_all = "camelCase")]
 pub struct ReprConfig {
     depth: Option<u8>,
     indent: Option<js::JsString>,

@@ -85,9 +85,9 @@ impl Enum {
 }
 
 #[derive(Debug, Clone, FromJsValue, Default)]
-#[qjsbind(default)]
+#[qjs(default)]
 struct ParseOptions {
-    #[qjsbind(default)]
+    #[qjs(default)]
     no_std: bool,
 }
 

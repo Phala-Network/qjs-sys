@@ -21,14 +21,14 @@ struct BaseAlgorithm {
 
 #[allow(dead_code)]
 #[derive(js::FromJsValue, Debug)]
-#[qjsbind(rename_all = "camelCase")]
+#[qjs(rename_all = "camelCase")]
 struct RsaOaepParams {
     label: js::Bytes,
 }
 
 #[allow(dead_code)]
 #[derive(js::FromJsValue, Debug)]
-#[qjsbind(rename_all = "camelCase")]
+#[qjs(rename_all = "camelCase")]
 struct AesCtrParams {
     counter: js::Bytes,
     length: usize,
@@ -36,13 +36,13 @@ struct AesCtrParams {
 
 #[allow(dead_code)]
 #[derive(js::FromJsValue, Debug)]
-#[qjsbind(rename_all = "camelCase")]
+#[qjs(rename_all = "camelCase")]
 struct AesCbcParams {
     iv: js::Bytes,
 }
 
 #[derive(js::FromJsValue, Debug)]
-#[qjsbind(rename_all = "camelCase")]
+#[qjs(rename_all = "camelCase")]
 struct AesGcmParams {
     iv: js::Bytes,
     additional_data: Option<js::Bytes>,
@@ -71,14 +71,14 @@ impl js::FromJsValue for CryptAlgorithm {
 }
 
 #[derive(js::FromJsValue)]
-#[qjsbind(rename_all = "camelCase")]
+#[qjs(rename_all = "camelCase")]
 struct EcdhKeyDeriveParams {
     public: CryptoKey,
 }
 
 #[allow(dead_code)]
 #[derive(js::FromJsValue, Debug)]
-#[qjsbind(rename_all = "camelCase")]
+#[qjs(rename_all = "camelCase")]
 struct HkdfParams {
     hash: js::JsString,
     salt: js::Bytes,
@@ -87,7 +87,7 @@ struct HkdfParams {
 
 #[allow(dead_code)]
 #[derive(js::FromJsValue, Debug)]
-#[qjsbind(rename_all = "camelCase")]
+#[qjs(rename_all = "camelCase")]
 struct Pbkdf2Params {
     hash: js::JsString,
     salt: js::Bytes,
@@ -114,7 +114,7 @@ impl js::FromJsValue for DeriveAlgorithm {
 }
 
 #[derive(js::FromJsValue, js::ToJsValue, Debug, Clone)]
-#[qjsbind(rename_all = "camelCase")]
+#[qjs(rename_all = "camelCase")]
 struct HmacKeyGenParams {
     hash: js::JsString,
     length: Option<usize>,
@@ -148,7 +148,7 @@ impl js::FromJsValue for DeriveKeyGenAlgorithm {
 }
 
 #[derive(js::FromJsValue, js::ToJsValue, Debug, Clone)]
-#[qjsbind(rename_all = "camelCase")]
+#[qjs(rename_all = "camelCase")]
 struct RsaHashedKeyGenParams {
     name: js::JsString,
     modulus_length: usize,
@@ -157,7 +157,7 @@ struct RsaHashedKeyGenParams {
 }
 
 #[derive(js::FromJsValue, js::ToJsValue, Debug, Clone)]
-#[qjsbind(rename_all = "camelCase")]
+#[qjs(rename_all = "camelCase")]
 struct EcKeyGenParams {
     name: js::JsString,
     named_curve: js::JsString,
@@ -197,7 +197,7 @@ impl js::ToJsValue for KeyGenAlgorithm {
 }
 
 #[derive(js::FromJsValue, ToJsValue)]
-#[qjsbind(rename_all = "camelCase")]
+#[qjs(rename_all = "camelCase")]
 struct CryptoKey {
     r#type: String,
     extractable: bool,
@@ -207,7 +207,7 @@ struct CryptoKey {
 }
 
 #[derive(js::FromJsValue, js::ToJsValue)]
-#[qjsbind(rename_all = "camelCase")]
+#[qjs(rename_all = "camelCase")]
 struct CryptoKeyPair {
     public_key: CryptoKey,
     private_key: CryptoKey,

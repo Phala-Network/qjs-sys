@@ -135,7 +135,7 @@ impl<'a> ContainerAttrs<'a> {
     }
 
     pub fn get_field_name(&self, field: &Field) -> Ident {
-        let ident = field.ident.as_ref().unwrap();
+        let ident = field.ident.as_ref().expect("No field name found");
         if let Some(rename_all) = self.rename_all {
             rename_all.rename(ident)
         } else {
