@@ -2,6 +2,8 @@ use crate::attrs::trim_rust_raw;
 
 use super::*;
 use quote::format_ident;
+use syn::spanned::Spanned;
+use template_quote::quote_spanned;
 
 impl ToTokens for Mod {
     fn to_tokens(&self, tokens: &mut TokenStream) {
@@ -39,50 +41,57 @@ impl ToTokens for Class {
         };
         let mut properties = vec![];
         let mut methods = vec![];
-        for prop in self.derived_properties.iter() {
+        for field in self.fields.iter() {
+            let Some(prop) = &field.qjs_property else {
+                continue;
+            };
             let prop_js_name = prop.js_name_str(self);
-            match (prop.attrs.is_getter, prop.attrs.is_setter) {
-                (true, true) => {
+            match (&prop.attrs.getter, &prop.attrs.setter) {
+                (Some(getter), Some(setter)) => {
                     let getter_fn_name = prop.getter_fn_name(self);
                     let setter_fn_name = prop.setter_fn_name(self);
-                    properties.push((prop_js_name, Some(getter_fn_name), Some(setter_fn_name)));
+                    properties.push((
+                        prop_js_name,
+                        Some((getter, getter_fn_name)),
+                        Some((setter, setter_fn_name)),
+                    ));
                 }
-                (true, false) => {
+                (Some(getter), None) => {
                     let getter_fn_name = prop.getter_fn_name(self);
-                    properties.push((prop_js_name, Some(getter_fn_name), None));
+                    properties.push((prop_js_name, Some((getter, getter_fn_name)), None));
                 }
-                (false, true) => {
+                (None, Some(setter)) => {
                     let setter_fn_name = prop.setter_fn_name(self);
-                    properties.push((prop_js_name, None, Some(setter_fn_name)));
+                    properties.push((prop_js_name, None, Some((setter, setter_fn_name))));
                 }
-                (false, false) => {}
+                (None, None) => {}
             }
         }
 
         for method in self.methods.iter() {
             let js_name = method.js_name_str(self);
             let fn_name = method.impl_fn_name(self);
-            match method.attrs.fn_type {
-                MethodType::Getter => {
+            match &method.attrs.fn_type {
+                MethodType::Getter(marker) => {
                     if let Some((_, setter_fn_name, _)) =
                         properties.iter_mut().find(|(name, _, _)| name == &js_name)
                     {
-                        *setter_fn_name = Some(fn_name);
+                        *setter_fn_name = Some((marker, fn_name));
                     } else {
-                        properties.push((js_name, Some(fn_name), None));
+                        properties.push((js_name, Some((marker, fn_name)), None));
                     }
                 }
-                MethodType::Setter => {
+                MethodType::Setter(marker) => {
                     if let Some((_, getter_fn_name, _)) =
                         properties.iter_mut().find(|(name, _, _)| name == &js_name)
                     {
-                        *getter_fn_name = Some(fn_name);
+                        *getter_fn_name = Some((marker, fn_name));
                     } else {
-                        properties.push((js_name, None, Some(fn_name)));
+                        properties.push((js_name, None, Some((marker, fn_name))));
                     }
                 }
-                MethodType::Method => {
-                    methods.push(quote! {
+                MethodType::Method(marker) => {
+                    methods.push(quote_spanned! { marker.span() =>
                         proto.define_property_fn(#js_name, #fn_name)?;
                     });
                 }
@@ -92,23 +101,39 @@ impl ToTokens for Class {
         let properties = properties.iter().map(|(name, getter, setter)| {
             let getter = getter
                 .as_ref()
-                .map(|ident| quote! { Some(#ident) })
+                .map(|(marker, ident)| quote_spanned! { marker.span() => Some(#ident) })
                 .unwrap_or(quote! { None });
             let setter = setter
                 .as_ref()
-                .map(|ident| quote! { Some(#ident) })
+                .map(|(marker, ident)| quote_spanned! { marker.span() => Some(#ident) })
                 .unwrap_or(quote! { None });
             quote! {
                 proto.define_property_getset(#name, #getter, #setter)?;
             }
         });
 
+        let mark_stmts = self.fields.iter().enumerate().flat_map(|(i, field)| {
+            if field.no_gc() {
+                return None;
+            }
+            let name = match &field.field.ident {
+                Some(ident) => {
+                    quote! {#ident}
+                }
+                None => {
+                    let ind = syn::Index::from(i);
+                    quote! {#ind}
+                }
+            };
+            Some(quote_spanned! { field.field.span() =>
+                self.#name.gc_mark(rt, mark_fn);
+            })
+        });
+
         tokens.extend(quote! {
             impl crate_js::GcMark for #name {
                 fn gc_mark(&self, rt: *mut crate_js::c::JSRuntime, mark_fn: crate_js::c::JS_MarkFunc) {
-                    #(for field in self.gc_mark_fields.iter()) {
-                        self.#field.gc_mark(rt, mark_fn)
-                    }
+                    #(#mark_stmts)*
                 }
             }
             impl crate_js::NativeClass for #name {
@@ -129,8 +154,10 @@ impl ToTokens for Class {
                 }
             }
         });
-        for prop in &self.derived_properties {
-            prop.to_tokens(tokens, self);
+        for field in &self.fields {
+            if let Some(prop) = &field.qjs_property {
+                prop.to_tokens(tokens, self);
+            }
         }
         for method in &self.methods {
             method.to_tokens(tokens, self);
@@ -201,9 +228,9 @@ impl DerivedProperty {
     }
 
     fn to_tokens(&self, tokens: &mut TokenStream, class: &Class) {
-        if self.attrs.is_getter {
+        if let Some(getter) = &self.attrs.getter {
             let getter_fn = self.getter_fn_name(class);
-            tokens.extend(quote! {
+            tokens.extend(quote_spanned! { getter.span() =>
                 #[crate_js::host_call(with_context)]
                 fn #getter_fn(_ctx: crate_js::Context, this_value: crate_js::Native<#{&class.name}>) -> #{&self.ty} {
                     this_value.borrow().#{&self.name}.clone()
@@ -211,9 +238,9 @@ impl DerivedProperty {
             });
         }
 
-        if self.attrs.is_setter {
+        if let Some(setter) = &self.attrs.setter {
             let setter_fn = self.setter_fn_name(class);
-            tokens.extend(quote! {
+            tokens.extend(quote_spanned! { setter.span() =>
                 #[crate_js::host_call(with_context)]
                 fn #setter_fn(_ctx: crate_js::Context, mut this_value: crate_js::Native<#{&class.name}>, value: #{&self.ty}) {
                     this_value.borrow_mut().#{&self.name} = value;
@@ -236,9 +263,9 @@ impl Method {
         let js_name_str = self.js_name_str(class);
         let class_name = &class.name;
         match self.attrs.fn_type {
-            MethodType::Getter => format_ident!("{class_name}_getter__{js_name_str}"),
-            MethodType::Setter => format_ident!("{class_name}_setter__{js_name_str}"),
-            MethodType::Method => format_ident!("{class_name}_method__{js_name_str}"),
+            MethodType::Getter(_) => format_ident!("{class_name}_getter__{js_name_str}"),
+            MethodType::Setter(_) => format_ident!("{class_name}_setter__{js_name_str}"),
+            MethodType::Method(_) => format_ident!("{class_name}_method__{js_name_str}"),
         }
     }
 
@@ -253,25 +280,25 @@ impl Method {
         let args_idents = self.args.iter().map(|(name, _ty)| {
             quote! { #name }
         });
-        match self.attrs.fn_type {
-            MethodType::Getter => {
-                tokens.extend(quote! {
+        match &self.attrs.fn_type {
+            MethodType::Getter(marker) => {
+                tokens.extend(quote_spanned! { marker.span() =>
                     #[crate_js::host_call(with_context)]
                     fn #fn_name(_ctx: crate_js::Context, this_value: crate_js::Native<#class_name>, #(#args),*) #{&self.return_ty} {
                         this_value.borrow().#name()
                     }
                 });
             }
-            MethodType::Setter => {
-                tokens.extend(quote! {
+            MethodType::Setter(marker) => {
+                tokens.extend(quote_spanned! { marker.span() =>
                     #[crate_js::host_call(with_context)]
                     fn #fn_name(_ctx: crate_js::Context, mut this_value: crate_js::Native<#class_name>, #(#args),*) #{&self.return_ty} {
                         this_value.borrow_mut().#name(#(#args_idents),*)
                     }
                 });
             }
-            MethodType::Method => {
-                tokens.extend(quote! {
+            MethodType::Method(marker) => {
+                tokens.extend(quote_spanned! { marker.span() =>
                     #[crate_js::host_call(with_context)]
                     fn #fn_name(_ctx: crate_js::Context, this_value: crate_js::Native<#class_name>, #(#args),*) #{&self.return_ty} {
                         #(if self.is_mut) {

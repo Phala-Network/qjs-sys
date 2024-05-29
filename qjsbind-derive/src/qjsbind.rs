@@ -4,7 +4,9 @@
 use proc_macro2::TokenStream;
 use std::collections::BTreeMap;
 use syn::parse::Parser;
-use syn::{Attribute, Field, Ident, ImplItemFn, Item, ItemMod, ItemStruct, LitStr, Path, Result};
+use syn::{
+    Attribute, Field, Ident, ImplItemFn, Item, ItemMod, ItemStruct, LitStr, Path, Result, Type,
+};
 use template_quote::{quote, ToTokens};
 
 use crate::attrs::RenameAll;
@@ -20,10 +22,20 @@ struct Mod {
 struct Class {
     name: Ident,
     constructor: Option<Constructor>,
-    derived_properties: Vec<DerivedProperty>,
     methods: Vec<Method>,
-    gc_mark_fields: Vec<Ident>,
+    fields: Vec<ClassField>,
     attrs: ClassAttrs,
+}
+
+struct ClassField {
+    field: Field,
+    qjs_property: Option<DerivedProperty>,
+}
+
+impl ClassField {
+    fn no_gc(&self) -> bool {
+        self.qjs_property.as_ref().map_or(false, |p| p.attrs.no_gc)
+    }
 }
 
 struct ClassAttrs {
@@ -33,25 +45,25 @@ struct ClassAttrs {
 
 struct DerivedProperty {
     name: Ident,
-    ty: syn::Type,
+    ty: Type,
     attrs: FieldAttrs,
 }
 
 struct FieldAttrs {
     js_name: Option<LitStr>,
-    is_getter: bool,
-    is_setter: bool,
-    gc_mark: bool,
+    getter: Option<Ident>,
+    setter: Option<Ident>,
+    no_gc: bool,
 }
 
 struct Constructor {
     name: Ident,
-    args: Vec<(syn::Ident, syn::Type)>,
+    args: Vec<(syn::Ident, Type)>,
 }
 
 struct Method {
     name: Ident,
-    args: Vec<(syn::Ident, syn::Type)>,
+    args: Vec<(syn::Ident, Type)>,
     return_ty: syn::ReturnType,
     is_mut: bool,
     attrs: MethodAttrs,
@@ -62,11 +74,11 @@ struct MethodAttrs {
     fn_type: MethodType,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum MethodType {
-    Getter,
-    Setter,
-    Method,
+    Getter(Ident),
+    Setter(Ident),
+    Method(Ident),
 }
 
 pub(crate) fn patch(config: TokenStream, input: TokenStream) -> TokenStream {

@@ -22,24 +22,20 @@ impl Class {
         let name = item_struct.ident.clone();
         let attrs = ClassAttrs::from_attributes(&qjs_attrs)?;
 
-        let mut derived_properties = Vec::new();
-        let mut gc_mark_fields = Vec::new();
-
+        let mut fields = vec![];
         for field in &mut item_struct.fields.iter_mut() {
-            if let Some(derived_prop) = DerivedProperty::from_field(field)? {
-                if derived_prop.attrs.gc_mark {
-                    gc_mark_fields.push(derived_prop.name.clone());
-                }
-                derived_properties.push(derived_prop);
-            }
+            let qjs_property = DerivedProperty::from_field(field)?;
+            fields.push(ClassField {
+                field: field.clone(),
+                qjs_property,
+            });
         }
 
         Ok(Some(Self {
             name,
-            derived_properties,
             methods: Vec::new(),
             attrs,
-            gc_mark_fields,
+            fields,
             constructor: None,
         }))
     }
@@ -112,23 +108,32 @@ impl DerivedProperty {
 impl FieldAttrs {
     fn from_attributes(attrs: &[Attribute]) -> Result<Self> {
         let mut js_name = None;
-        let mut is_getter = false;
-        let mut is_setter = false;
-        let mut gc_mark = false;
+        let mut getter = None;
+        let mut setter = None;
+        let mut no_gc = false;
 
         for attr in attrs {
             if attr.path().is_ident("qjs") {
                 attr.parse_nested_meta(|meta| {
-                    if meta.path.is_ident("getter") {
-                        is_getter = true;
-                    } else if meta.path.is_ident("setter") {
-                        is_setter = true;
-                    } else if meta.path.is_ident("gc_mark") {
-                        gc_mark = true;
-                    } else if meta.path.is_ident("js_name") {
-                        js_name = Some(meta.value()?.parse::<LitStr>()?);
-                    } else {
-                        return Err(syn::Error::new_spanned(meta.path, "Unknown attribute"));
+                    let ident = meta.path.get_ident().ok_or_else(|| {
+                        syn::Error::new_spanned(meta.path.clone(), "Expected an identifier")
+                    })?;
+                    match ident.to_string().as_str() {
+                        "getter" => {
+                            getter = Some(ident.clone());
+                        }
+                        "setter" => {
+                            setter = Some(ident.clone());
+                        }
+                        "no_gc" => {
+                            no_gc = true;
+                        }
+                        "js_name" => {
+                            js_name = Some(meta.value()?.parse::<LitStr>()?);
+                        }
+                        _ => {
+                            return Err(syn::Error::new_spanned(meta.path, "Unknown attribute"));
+                        }
                     }
                     Ok(())
                 })?;
@@ -137,9 +142,9 @@ impl FieldAttrs {
 
         Ok(Self {
             js_name,
-            is_getter,
-            is_setter,
-            gc_mark,
+            getter,
+            setter,
+            no_gc,
         })
     }
 }
@@ -187,36 +192,36 @@ impl Method {
         let args = parse_fn_args(inputs)?;
         let return_ty = item_fn.sig.output.clone();
         // validate
-        match attrs.fn_type {
-            MethodType::Getter => {
+        match &attrs.fn_type {
+            MethodType::Getter(marker) => {
                 if is_mut_self {
                     return Err(syn::Error::new_spanned(
-                        name,
+                        marker.clone(),
                         "Getter method cannot take `&mut self`",
                     ));
                 }
                 if !args.is_empty() {
                     return Err(syn::Error::new_spanned(
-                        name,
+                        marker.clone(),
                         "Getter method cannot take arguments",
                     ));
                 }
             }
-            MethodType::Setter => {
+            MethodType::Setter(marker) => {
                 if !is_mut_self {
                     return Err(syn::Error::new_spanned(
-                        name,
+                        marker.clone(),
                         "Setter method must take `&mut self`",
                     ));
                 }
                 if args.len() != 1 {
                     return Err(syn::Error::new_spanned(
-                        name,
+                        marker.clone(),
                         "Setter method must take exactly one argument",
                     ));
                 }
             }
-            MethodType::Method => (),
+            MethodType::Method(_) => (),
         }
         Ok(Self {
             name,
@@ -237,18 +242,28 @@ impl MethodAttrs {
         for attr in attrs {
             if attr.path().is_ident("qjs") {
                 attr.parse_nested_meta(|meta| {
-                    if meta.path.is_ident("method") {
-                        fn_type = Some(MethodType::Method);
-                    } else if meta.path.is_ident("getter") {
-                        fn_type = Some(MethodType::Getter);
-                    } else if meta.path.is_ident("setter") {
-                        fn_type = Some(MethodType::Setter);
-                    } else if meta.path.is_ident("constructor") {
-                        is_constructor = true;
-                    } else if meta.path.is_ident("js_name") {
-                        js_name = Some(meta.value()?.parse::<LitStr>()?);
-                    } else {
-                        return Err(syn::Error::new_spanned(meta.path, "Unknown attribute"));
+                    let ident = meta.path.get_ident().ok_or_else(|| {
+                        syn::Error::new_spanned(meta.path.clone(), "Expected an identifier")
+                    })?;
+                    match ident.to_string().as_str() {
+                        "method" => {
+                            fn_type = Some(MethodType::Method(ident.clone()));
+                        }
+                        "getter" => {
+                            fn_type = Some(MethodType::Getter(ident.clone()));
+                        }
+                        "setter" => {
+                            fn_type = Some(MethodType::Setter(ident.clone()));
+                        }
+                        "constructor" => {
+                            is_constructor = true;
+                        }
+                        "js_name" => {
+                            js_name = Some(meta.value()?.parse::<LitStr>()?);
+                        }
+                        _ => {
+                            return Err(syn::Error::new_spanned(meta.path, "Unknown attribute"));
+                        }
                     }
                     Ok(())
                 })?;
