@@ -486,13 +486,21 @@ impl Value {
         let ctx = self.context()?;
         unsafe {
             let key = c::JS_NewAtomLen(ctx.as_ptr(), key.as_ptr() as _, key.len() as _);
+            let ret = self.set_property_atom(key, value);
+            c::JS_FreeAtom(ctx.as_ptr(), key);
+            ret
+        }
+    }
+
+    pub fn set_property_atom(&self, key: c::JSAtom, value: &Value) -> Result<(), Error> {
+        let ctx = self.context()?;
+        unsafe {
             let r = c::JS_SetProperty(
                 ctx.as_ptr(),
                 *self.raw_value(),
                 key,
                 c::JS_DupValue(ctx.as_ptr(), *value.raw_value()),
             );
-            c::JS_FreeAtom(ctx.as_ptr(), key);
             if r != 0 {
                 Ok(())
             } else {

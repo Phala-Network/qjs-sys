@@ -158,6 +158,222 @@ pub union JSCFunctionType {
         ) -> JSValue,
     >,
 }
+pub type JSAtomEnum = libc::c_uint;
+pub const JS_ATOM_END: JSAtomEnum = 214;
+pub const JS_ATOM_Symbol_asyncIterator: JSAtomEnum = 213;
+pub const JS_ATOM_Symbol_unscopables: JSAtomEnum = 212;
+pub const JS_ATOM_Symbol_species: JSAtomEnum = 211;
+pub const JS_ATOM_Symbol_hasInstance: JSAtomEnum = 210;
+pub const JS_ATOM_Symbol_isConcatSpreadable: JSAtomEnum = 209;
+pub const JS_ATOM_Symbol_toStringTag: JSAtomEnum = 208;
+pub const JS_ATOM_Symbol_split: JSAtomEnum = 207;
+pub const JS_ATOM_Symbol_search: JSAtomEnum = 206;
+pub const JS_ATOM_Symbol_replace: JSAtomEnum = 205;
+pub const JS_ATOM_Symbol_matchAll: JSAtomEnum = 204;
+pub const JS_ATOM_Symbol_match: JSAtomEnum = 203;
+pub const JS_ATOM_Symbol_iterator: JSAtomEnum = 202;
+pub const JS_ATOM_Symbol_toPrimitive: JSAtomEnum = 201;
+pub const JS_ATOM_Private_brand: JSAtomEnum = 200;
+pub const JS_ATOM_CallSite: JSAtomEnum = 199;
+pub const JS_ATOM_InternalError: JSAtomEnum = 198;
+pub const JS_ATOM_URIError: JSAtomEnum = 197;
+pub const JS_ATOM_TypeError: JSAtomEnum = 196;
+pub const JS_ATOM_SyntaxError: JSAtomEnum = 195;
+pub const JS_ATOM_ReferenceError: JSAtomEnum = 194;
+pub const JS_ATOM_RangeError: JSAtomEnum = 193;
+pub const JS_ATOM_EvalError: JSAtomEnum = 192;
+pub const JS_ATOM_AsyncGenerator: JSAtomEnum = 191;
+pub const JS_ATOM_AsyncGeneratorFunction: JSAtomEnum = 190;
+pub const JS_ATOM_AsyncFunctionReject: JSAtomEnum = 189;
+pub const JS_ATOM_AsyncFunctionResolve: JSAtomEnum = 188;
+pub const JS_ATOM_AsyncFunction: JSAtomEnum = 187;
+pub const JS_ATOM_PromiseRejectFunction: JSAtomEnum = 186;
+pub const JS_ATOM_PromiseResolveFunction: JSAtomEnum = 185;
+pub const JS_ATOM_Promise: JSAtomEnum = 184;
+pub const JS_ATOM_Proxy: JSAtomEnum = 183;
+pub const JS_ATOM_Generator: JSAtomEnum = 182;
+pub const JS_ATOM_RegExp_String_Iterator: JSAtomEnum = 181;
+pub const JS_ATOM_String_Iterator: JSAtomEnum = 180;
+pub const JS_ATOM_Array_Iterator: JSAtomEnum = 179;
+pub const JS_ATOM_Set_Iterator: JSAtomEnum = 178;
+pub const JS_ATOM_Map_Iterator: JSAtomEnum = 177;
+pub const JS_ATOM_WeakSet: JSAtomEnum = 176;
+pub const JS_ATOM_WeakMap: JSAtomEnum = 175;
+pub const JS_ATOM_Set: JSAtomEnum = 174;
+pub const JS_ATOM_Map: JSAtomEnum = 173;
+pub const JS_ATOM_FinalizationRegistry: JSAtomEnum = 172;
+pub const JS_ATOM_WeakRef: JSAtomEnum = 171;
+pub const JS_ATOM_BigInt: JSAtomEnum = 170;
+pub const JS_ATOM_DataView: JSAtomEnum = 169;
+pub const JS_ATOM_Float64Array: JSAtomEnum = 168;
+pub const JS_ATOM_Float32Array: JSAtomEnum = 167;
+pub const JS_ATOM_BigUint64Array: JSAtomEnum = 166;
+pub const JS_ATOM_BigInt64Array: JSAtomEnum = 165;
+pub const JS_ATOM_Uint32Array: JSAtomEnum = 164;
+pub const JS_ATOM_Int32Array: JSAtomEnum = 163;
+pub const JS_ATOM_Uint16Array: JSAtomEnum = 162;
+pub const JS_ATOM_Int16Array: JSAtomEnum = 161;
+pub const JS_ATOM_Uint8Array: JSAtomEnum = 160;
+pub const JS_ATOM_Int8Array: JSAtomEnum = 159;
+pub const JS_ATOM_Uint8ClampedArray: JSAtomEnum = 158;
+pub const JS_ATOM_SharedArrayBuffer: JSAtomEnum = 157;
+pub const JS_ATOM_ArrayBuffer: JSAtomEnum = 156;
+pub const JS_ATOM_RegExp: JSAtomEnum = 155;
+pub const JS_ATOM_ForInIterator: JSAtomEnum = 154;
+pub const JS_ATOM_GeneratorFunction: JSAtomEnum = 153;
+pub const JS_ATOM_Function: JSAtomEnum = 152;
+pub const JS_ATOM_Date: JSAtomEnum = 151;
+pub const JS_ATOM_JSON: JSAtomEnum = 150;
+pub const JS_ATOM_Math: JSAtomEnum = 149;
+pub const JS_ATOM_Arguments: JSAtomEnum = 148;
+pub const JS_ATOM_Symbol: JSAtomEnum = 147;
+pub const JS_ATOM_Boolean: JSAtomEnum = 146;
+pub const JS_ATOM_String: JSAtomEnum = 145;
+pub const JS_ATOM_Number: JSAtomEnum = 144;
+pub const JS_ATOM_Error: JSAtomEnum = 143;
+pub const JS_ATOM_Array: JSAtomEnum = 142;
+pub const JS_ATOM_Object: JSAtomEnum = 141;
+pub const JS_ATOM_toJSON: JSAtomEnum = 140;
+pub const JS_ATOM_bigint: JSAtomEnum = 139;
+pub const JS_ATOM_globalThis: JSAtomEnum = 138;
+pub const JS_ATOM_reason: JSAtomEnum = 137;
+pub const JS_ATOM_status: JSAtomEnum = 136;
+pub const JS_ATOM_indices: JSAtomEnum = 135;
+pub const JS_ATOM_groups: JSAtomEnum = 134;
+pub const JS_ATOM_exec: JSAtomEnum = 133;
+pub const JS_ATOM_async: JSAtomEnum = 132;
+pub const JS_ATOM_revoke: JSAtomEnum = 131;
+pub const JS_ATOM_proxy: JSAtomEnum = 130;
+pub const JS_ATOM_promise: JSAtomEnum = 129;
+pub const JS_ATOM_reject: JSAtomEnum = 128;
+pub const JS_ATOM_resolve: JSAtomEnum = 127;
+pub const JS_ATOM_then: JSAtomEnum = 126;
+pub const JS_ATOM_Module: JSAtomEnum = 125;
+pub const JS_ATOM__star_: JSAtomEnum = 124;
+pub const JS_ATOM__default_: JSAtomEnum = 123;
+pub const JS_ATOM_meta: JSAtomEnum = 122;
+pub const JS_ATOM_from: JSAtomEnum = 121;
+pub const JS_ATOM_as: JSAtomEnum = 120;
+pub const JS_ATOM_hash_constructor: JSAtomEnum = 119;
+pub const JS_ATOM_brand: JSAtomEnum = 118;
+pub const JS_ATOM_class_fields_init: JSAtomEnum = 117;
+pub const JS_ATOM_static_computed_field: JSAtomEnum = 116;
+pub const JS_ATOM_computed_field: JSAtomEnum = 115;
+pub const JS_ATOM_home_object: JSAtomEnum = 114;
+pub const JS_ATOM_this_active_func: JSAtomEnum = 113;
+pub const JS_ATOM_new_target: JSAtomEnum = 112;
+pub const JS_ATOM_raw: JSAtomEnum = 111;
+pub const JS_ATOM_unicode: JSAtomEnum = 110;
+pub const JS_ATOM_global: JSAtomEnum = 109;
+pub const JS_ATOM_flags: JSAtomEnum = 108;
+pub const JS_ATOM_source: JSAtomEnum = 107;
+pub const JS_ATOM_values: JSAtomEnum = 106;
+pub const JS_ATOM_next: JSAtomEnum = 105;
+pub const JS_ATOM_done: JSAtomEnum = 104;
+pub const JS_ATOM_add: JSAtomEnum = 103;
+pub const JS_ATOM_ownKeys: JSAtomEnum = 102;
+pub const JS_ATOM_getOwnPropertyDescriptor: JSAtomEnum = 101;
+pub const JS_ATOM_defineProperty: JSAtomEnum = 100;
+pub const JS_ATOM_deleteProperty: JSAtomEnum = 99;
+pub const JS_ATOM_has: JSAtomEnum = 98;
+pub const JS_ATOM_preventExtensions: JSAtomEnum = 97;
+pub const JS_ATOM_isExtensible: JSAtomEnum = 96;
+pub const JS_ATOM_setPrototypeOf: JSAtomEnum = 95;
+pub const JS_ATOM_getPrototypeOf: JSAtomEnum = 94;
+pub const JS_ATOM_construct: JSAtomEnum = 93;
+pub const JS_ATOM_split: JSAtomEnum = 92;
+pub const JS_ATOM_concat: JSAtomEnum = 91;
+pub const JS_ATOM_join: JSAtomEnum = 90;
+pub const JS_ATOM_apply: JSAtomEnum = 89;
+pub const JS_ATOM_defineProperties: JSAtomEnum = 88;
+pub const JS_ATOM_input: JSAtomEnum = 87;
+pub const JS_ATOM_index: JSAtomEnum = 86;
+pub const JS_ATOM_target: JSAtomEnum = 85;
+pub const JS_ATOM_lastIndex: JSAtomEnum = 84;
+pub const JS_ATOM__with_: JSAtomEnum = 83;
+pub const JS_ATOM__arg_var_: JSAtomEnum = 82;
+pub const JS_ATOM__var_: JSAtomEnum = 81;
+pub const JS_ATOM__ret_: JSAtomEnum = 80;
+pub const JS_ATOM__eval_: JSAtomEnum = 79;
+pub const JS_ATOM_caller: JSAtomEnum = 78;
+pub const JS_ATOM_callee: JSAtomEnum = 77;
+pub const JS_ATOM_arguments: JSAtomEnum = 76;
+pub const JS_ATOM_unknown: JSAtomEnum = 75;
+pub const JS_ATOM_integer: JSAtomEnum = 74;
+pub const JS_ATOM_symbol: JSAtomEnum = 73;
+pub const JS_ATOM_object: JSAtomEnum = 72;
+pub const JS_ATOM_string: JSAtomEnum = 71;
+pub const JS_ATOM_boolean: JSAtomEnum = 70;
+pub const JS_ATOM_number: JSAtomEnum = 69;
+pub const JS_ATOM_undefined: JSAtomEnum = 68;
+pub const JS_ATOM___proto__: JSAtomEnum = 67;
+pub const JS_ATOM_of: JSAtomEnum = 66;
+pub const JS_ATOM_set: JSAtomEnum = 65;
+pub const JS_ATOM_get: JSAtomEnum = 64;
+pub const JS_ATOM_value: JSAtomEnum = 63;
+pub const JS_ATOM_enumerable: JSAtomEnum = 62;
+pub const JS_ATOM_writable: JSAtomEnum = 61;
+pub const JS_ATOM_configurable: JSAtomEnum = 60;
+pub const JS_ATOM_constructor: JSAtomEnum = 59;
+pub const JS_ATOM_prototype: JSAtomEnum = 58;
+pub const JS_ATOM_eval: JSAtomEnum = 57;
+pub const JS_ATOM_valueOf: JSAtomEnum = 56;
+pub const JS_ATOM_toLocaleString: JSAtomEnum = 55;
+pub const JS_ATOM_toString: JSAtomEnum = 54;
+pub const JS_ATOM_name: JSAtomEnum = 53;
+pub const JS_ATOM_stack: JSAtomEnum = 52;
+pub const JS_ATOM_errors: JSAtomEnum = 51;
+pub const JS_ATOM_cause: JSAtomEnum = 50;
+pub const JS_ATOM_message: JSAtomEnum = 49;
+pub const JS_ATOM_length: JSAtomEnum = 48;
+pub const JS_ATOM_empty_string: JSAtomEnum = 47;
+pub const JS_ATOM_await: JSAtomEnum = 46;
+pub const JS_ATOM_yield: JSAtomEnum = 45;
+pub const JS_ATOM_static: JSAtomEnum = 44;
+pub const JS_ATOM_public: JSAtomEnum = 43;
+pub const JS_ATOM_protected: JSAtomEnum = 42;
+pub const JS_ATOM_private: JSAtomEnum = 41;
+pub const JS_ATOM_package: JSAtomEnum = 40;
+pub const JS_ATOM_let: JSAtomEnum = 39;
+pub const JS_ATOM_interface: JSAtomEnum = 38;
+pub const JS_ATOM_implements: JSAtomEnum = 37;
+pub const JS_ATOM_super: JSAtomEnum = 36;
+pub const JS_ATOM_import: JSAtomEnum = 35;
+pub const JS_ATOM_extends: JSAtomEnum = 34;
+pub const JS_ATOM_export: JSAtomEnum = 33;
+pub const JS_ATOM_enum: JSAtomEnum = 32;
+pub const JS_ATOM_const: JSAtomEnum = 31;
+pub const JS_ATOM_class: JSAtomEnum = 30;
+pub const JS_ATOM_with: JSAtomEnum = 29;
+pub const JS_ATOM_debugger: JSAtomEnum = 28;
+pub const JS_ATOM_function: JSAtomEnum = 27;
+pub const JS_ATOM_finally: JSAtomEnum = 26;
+pub const JS_ATOM_catch: JSAtomEnum = 25;
+pub const JS_ATOM_try: JSAtomEnum = 24;
+pub const JS_ATOM_throw: JSAtomEnum = 23;
+pub const JS_ATOM_default: JSAtomEnum = 22;
+pub const JS_ATOM_case: JSAtomEnum = 21;
+pub const JS_ATOM_switch: JSAtomEnum = 20;
+pub const JS_ATOM_continue: JSAtomEnum = 19;
+pub const JS_ATOM_break: JSAtomEnum = 18;
+pub const JS_ATOM_for: JSAtomEnum = 17;
+pub const JS_ATOM_while: JSAtomEnum = 16;
+pub const JS_ATOM_do: JSAtomEnum = 15;
+pub const JS_ATOM_instanceof: JSAtomEnum = 14;
+pub const JS_ATOM_in: JSAtomEnum = 13;
+pub const JS_ATOM_new: JSAtomEnum = 12;
+pub const JS_ATOM_typeof: JSAtomEnum = 11;
+pub const JS_ATOM_void: JSAtomEnum = 10;
+pub const JS_ATOM_delete: JSAtomEnum = 9;
+pub const JS_ATOM_this: JSAtomEnum = 8;
+pub const JS_ATOM_var: JSAtomEnum = 7;
+pub const JS_ATOM_return: JSAtomEnum = 6;
+pub const JS_ATOM_else: JSAtomEnum = 5;
+pub const JS_ATOM_if: JSAtomEnum = 4;
+pub const JS_ATOM_true: JSAtomEnum = 3;
+pub const JS_ATOM_false: JSAtomEnum = 2;
+pub const JS_ATOM_null: JSAtomEnum = 1;
+pub const __JS_ATOM_NULL: JSAtomEnum = 0;
 pub const NULL: libc::c_int = 0 as libc::c_int;
 #[inline]
 pub unsafe extern "C" fn JS_VALUE_GET_FLOAT64(mut v: JSValue) -> libc::c_double {
@@ -505,6 +721,15 @@ pub unsafe extern "C" fn JS_SetProperty(
     return JS_SetPropertyInternal(ctx, this_obj, prop, val, JS_PROP_THROW);
 }
 #[inline]
+pub unsafe extern "C" fn JS_NewCFunction(
+    mut ctx: *mut JSContext,
+    mut func: Option<JSCFunction>,
+    mut name: *const libc::c_char,
+    mut length: libc::c_int,
+) -> JSValue {
+    return JS_NewCFunction2(ctx, func, name, length, JS_CFUNC_generic, 0 as libc::c_int);
+}
+#[inline]
 pub unsafe extern "C" fn JS_NewCFunctionLen(
     mut ctx: *mut JSContext,
     mut func: Option<JSCFunction>,
@@ -521,15 +746,6 @@ pub unsafe extern "C" fn JS_NewCFunctionLen(
         JS_CFUNC_generic,
         0 as libc::c_int,
     );
-}
-#[inline]
-pub unsafe extern "C" fn JS_NewCFunction(
-    mut ctx: *mut JSContext,
-    mut func: Option<JSCFunction>,
-    mut name: *const libc::c_char,
-    mut length: libc::c_int,
-) -> JSValue {
-    return JS_NewCFunction2(ctx, func, name, length, JS_CFUNC_generic, 0 as libc::c_int);
 }
 #[inline]
 pub unsafe extern "C" fn JS_NewCFunctionMagic(
@@ -604,7 +820,13 @@ pub unsafe extern "C" fn JS_MakeUNINITIALIZED() -> JSValue {
 }
 #[inline]
 pub unsafe extern "C" fn _to_keep_symbols(mut flags: libc::c_int) -> libc::c_int {
-    return (flags & JS_PROP_CONFIGURABLE & JS_PROP_WRITABLE & JS_PROP_ENUMERABLE != 0
+    let mut a: JSAtomEnum = JS_ATOM_END;
+    return (a as libc::c_uint
+        & flags as libc::c_uint
+        & JS_PROP_CONFIGURABLE as libc::c_uint
+        & JS_PROP_WRITABLE as libc::c_uint
+        & JS_PROP_ENUMERABLE as libc::c_uint
+        != 0
         && JS_PROP_LENGTH
             & JS_PROP_TMASK
             & JS_PROP_NORMAL

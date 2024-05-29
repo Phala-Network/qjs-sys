@@ -42,12 +42,13 @@ impl Class {
         if self
             .methods
             .iter()
-            .find(|m| m.attrs.fn_type == FnType::Constructor)
-            .is_none()
+            .filter(|m| m.attrs.fn_type == FnType::Constructor)
+            .count()
+            > 1
         {
             return Err(syn::Error::new_spanned(
                 self.name.clone(),
-                "Missing constructor method",
+                "Multiple constructors are not allowed",
             ));
         }
         Ok(())

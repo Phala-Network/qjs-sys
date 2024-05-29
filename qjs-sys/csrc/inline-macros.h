@@ -44,12 +44,22 @@ EXPORT static inline JSValue JS_MakeEXCEPTION() { return JS_EXCEPTION; }
 
 EXPORT static inline JSValue JS_MakeUNINITIALIZED() { return JS_UNINITIALIZED; }
 
+typedef enum {
+    __JS_ATOM_NULL = JS_ATOM_NULL,
+#define DEF(name, str) JS_ATOM_ ## name,
+#include "quickjs-atom.h"
+#undef DEF
+    JS_ATOM_END,
+} JSAtomEnum;
+
 EXPORT static inline int _to_keep_symbols(int flags) {
-    return (flags & JS_PROP_CONFIGURABLE & JS_PROP_WRITABLE &
+    JSAtomEnum a = JS_ATOM_END;
+    return (a & flags & JS_PROP_CONFIGURABLE & JS_PROP_WRITABLE &
                 JS_PROP_ENUMERABLE &&
             JS_PROP_LENGTH & JS_PROP_TMASK & JS_PROP_NORMAL & JS_PROP_GETSET &
                 JS_PROP_VARREF & JS_PROP_AUTOINIT);
 }
+
 
 #endif
 
