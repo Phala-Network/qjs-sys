@@ -567,6 +567,7 @@ impl Value {
                 setter.leak(),
                 0,
             );
+            c::JS_FreeAtom(ctx.as_ptr(), prop);
             if ret < 0 {
                 return Err(Error::Custom(format!(
                     "Failed to define property getter/setter `{key}`: {}",
