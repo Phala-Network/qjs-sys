@@ -75,13 +75,10 @@ impl<T> Clone for Native<T> {
     }
 }
 
-impl<T: 'static> FromJsValue for Native<T> {
+impl<T: NativeClass> FromJsValue for Native<T> {
     fn from_js_value(value: Value) -> Result<Self> {
         if !value.is_opaque_object_of::<Guard<T>>() {
-            return Err(js::Error::Custom(format!(
-                "expected {}",
-                crate::type_name::<T>()
-            )));
+            return Err(js::Error::Expect(T::CLASS_NAME));
         }
         Ok(Self {
             inner: value,
