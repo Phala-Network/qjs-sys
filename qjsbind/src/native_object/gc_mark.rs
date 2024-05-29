@@ -1,4 +1,4 @@
-use crate::{c, Native};
+use crate::{c, Native, Value};
 
 pub trait GcMark {
     fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc);
@@ -22,9 +22,7 @@ impl_gc_mark_for! {
 
 impl<T> GcMark for Native<T> {
     fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
-        unsafe {
-            c::JS_MarkValue(rt, *self.inner.raw_value(), mark_fn);
-        }
+        self.inner.gc_mark(rt, mark_fn)
     }
 }
 
@@ -43,6 +41,18 @@ where
     fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
         for value in self {
             value.gc_mark(rt, mark_fn);
+        }
+    }
+}
+
+impl GcMark for Value {
+    fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
+        let Ok(ctx) = self.context() else {
+            return;
+        };
+        unsafe {
+            c::JS_MarkValue(rt, *self.raw_value(), mark_fn);
+            c::JS_MarkContext(rt, ctx.as_ptr(), mark_fn);
         }
     }
 }
