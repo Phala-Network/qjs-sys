@@ -104,6 +104,7 @@ impl ToTokens for Class {
         });
 
         tokens.extend(quote! {
+            impl crate_js::GcMark for #name {}
             impl crate_js::NativeClass for #name {
                 const CLASS_NAME: &'static str = #class_name_str;
                 fn constructor_object(ctx: &crate_js::Context) -> crate_js::Result<crate_js::Value> {

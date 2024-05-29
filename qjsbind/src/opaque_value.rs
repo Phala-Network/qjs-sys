@@ -71,7 +71,11 @@ impl<T> RefMut<'_, T> {
     }
 }
 
-pub fn new_opaque_object<T: 'static>(ctx: &js::Context, value: T) -> Value {
+pub fn new_opaque_object<T: 'static>(
+    ctx: &js::Context,
+    value: T,
+    gc_mark: c::JSClassGCMark,
+) -> Value {
     extern "C" fn free_opaque<T>(
         _rt: *mut c::JSRuntime,
         data: *mut ::core::ffi::c_void,
@@ -92,6 +96,7 @@ pub fn new_opaque_object<T: 'static>(ctx: &js::Context, value: T) -> Value {
             ctx.as_ptr(),
             data as *mut _,
             Some(free_opaque::<T>),
+            gc_mark,
             tag as _,
         )
     };
@@ -99,10 +104,10 @@ pub fn new_opaque_object<T: 'static>(ctx: &js::Context, value: T) -> Value {
 }
 
 pub fn is_opaque_object_of<T: 'static>(value: &Value) -> bool {
-    let Value::Other { value, ctx } = value else {
+    let Value::Other { value, ctx: _ } = value else {
         return false;
     };
-    let ptr = unsafe { c::JS_OpaqueObjectDataGet(ctx.as_ptr(), *value, type_id::<T>() as _) };
+    let ptr = unsafe { c::JS_OpaqueObjectDataGet(*value, type_id::<T>() as _) };
     !ptr.is_null()
 }
 
@@ -112,10 +117,14 @@ pub fn opaque_object_get_data<T: 'static>(value: &Value) -> Ref<'_, T> {
         type_id::<T>(),
         core::any::type_name::<T>()
     );
-    let Value::Other { value, ctx } = value else {
+    let Value::Other { value, ctx: _ } = value else {
         return Ref::none();
     };
-    let ptr = unsafe { c::JS_OpaqueObjectDataGet(ctx.as_ptr(), *value, type_id::<T>() as _) };
+    opaque_object_get_data_raw(value)
+}
+
+pub fn opaque_object_get_data_raw<T: 'static>(value: &c::JSValue) -> Ref<'_, T> {
+    let ptr = unsafe { c::JS_OpaqueObjectDataGet(*value, type_id::<T>() as _) };
     if ptr.is_null() {
         return Ref::none();
     }
@@ -131,10 +140,10 @@ pub fn opaque_object_get_data_mut<T: 'static>(value: &Value) -> RefMut<'_, T> {
         type_id::<T>(),
         core::any::type_name::<T>()
     );
-    let Value::Other { value, ctx } = value else {
+    let Value::Other { value, ctx: _ } = value else {
         return RefMut::none();
     };
-    let ptr = unsafe { c::JS_OpaqueObjectDataGet(ctx.as_ptr(), *value, type_id::<T>() as _) };
+    let ptr = unsafe { c::JS_OpaqueObjectDataGet(*value, type_id::<T>() as _) };
     if ptr.is_null() {
         return RefMut::none();
     }
@@ -150,11 +159,11 @@ pub fn opaque_object_take_data<T: 'static>(value: &Value) -> Option<T> {
         type_id::<T>(),
         core::any::type_name::<T>()
     );
-    let Value::Other { value, ctx } = value else {
+    let Value::Other { value, ctx: _ } = value else {
         return None;
     };
     unsafe {
-        let ptr = c::JS_OpaqueObjectDataGet(ctx.as_ptr(), *value, type_id::<T>() as _);
+        let ptr = c::JS_OpaqueObjectDataGet(*value, type_id::<T>() as _);
         if ptr.is_null() {
             return None;
         }

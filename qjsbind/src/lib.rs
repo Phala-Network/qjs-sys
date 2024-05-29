@@ -13,7 +13,7 @@ pub use eval::{eval, Code};
 pub use host_function::{call_host_function, Function, HostFunction};
 pub use js_string::JsString;
 pub use js_u8array::JsUint8Array;
-pub use native_object::{Native, NativeClass, IntoNativeObject};
+pub use native_object::{GcMark, IntoNativeObject, Native, NativeClass};
 pub use qjs_sys as sys;
 pub use qjs_sys::c;
 pub use qjsbind_derive::{host_call, qjsbind, FromJsValue, ToJsValue};

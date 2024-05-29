@@ -1,16 +1,23 @@
-use crate as js;
+use crate::{
+    self as js,
+    opaque_value::{new_opaque_object, opaque_object_get_data_raw},
+};
 
 use core::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
-use js::{Context, FromJsValue, Result, ToJsValue, Value};
-use qjs_sys::c;
+use js::{c, Context, FromJsValue, Result, ToJsValue, Value};
 
-pub trait NativeClass: 'static {
+pub trait GcMark {
+    fn gc_mark(&self, _rt: *mut c::JSRuntime, _mark_fn: c::JS_MarkFunc) {
+        let todo = "rm the default impl gc mark";
+    }
+}
+
+pub trait NativeClass: GcMark + 'static {
     const CLASS_NAME: &'static str;
     fn constructor_object(ctx: &Context) -> Result<Value>;
-    fn constructor_ptr() -> c::JsCFunction;
     fn register(ctx: &Context) -> Result<()> {
         Self::constructor_object(ctx)?;
         Ok(())
@@ -75,6 +82,16 @@ impl<T> Clone for Native<T> {
     }
 }
 
+impl<T: NativeClass> GcMark for Native<T> {
+    fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
+        let data = self.inner.opaque_object_data::<Guard<T>>();
+        let Some(data) = data.get() else {
+            return;
+        };
+        data.0.gc_mark(rt, mark_fn);
+    }
+}
+
 impl<T: NativeClass> FromJsValue for Native<T> {
     fn from_js_value(value: Value) -> Result<Self> {
         if !value.is_opaque_object_of::<Guard<T>>() {
@@ -97,7 +114,16 @@ impl<T: NativeClass> Native<T> {
     pub fn new(ctx: &Context, value: T) -> Result<Self> {
         let constructor = T::constructor_object(ctx)?;
         let proto = constructor.get_property("prototype")?;
-        let object = Value::new_opaque_object(ctx, Guard(value));
+        extern "C" fn gc_mark<T: NativeClass>(
+            rt: *mut c::JSRuntime,
+            value: c::JSValue,
+            mark_fn: c::JS_MarkFunc,
+        ) {
+            let data = opaque_object_get_data_raw::<Guard<T>>(&value);
+            let data = data.get().expect("Native object ref should never be None");
+            data.0.gc_mark(rt, mark_fn);
+        }
+        let object = new_opaque_object(ctx, Guard(value), Some(gc_mark::<T>));
         let _ = object.set_prototype(&proto);
         Ok(Self {
             inner: object,

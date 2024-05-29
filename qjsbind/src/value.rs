@@ -141,7 +141,7 @@ impl Value {
     }
 
     pub fn new_opaque_object<T: 'static>(ctx: &js::Context, value: T) -> Self {
-        new_opaque_object(ctx, value)
+        new_opaque_object(ctx, value, None)
     }
 
     pub fn opaque_object_data<T: 'static>(&self) -> Ref<'_, T> {
