@@ -555,11 +555,11 @@ impl Value {
     ) -> Result<(), Error> {
         let ctx = self.context()?;
         let getter = match getter {
-            Some(getter) => ctx.new_function(key, getter, 0, c::JS_CFUNC_getter),
+            Some(getter) => ctx.new_function(key, getter, 0, c::JS_CFUNC_generic),
             None => Value::undefined(),
         };
         let setter = match setter {
-            Some(setter) => ctx.new_function(key, setter, 1, c::JS_CFUNC_setter),
+            Some(setter) => ctx.new_function(key, setter, 1, c::JS_CFUNC_generic),
             None => Value::undefined(),
         };
         unsafe {

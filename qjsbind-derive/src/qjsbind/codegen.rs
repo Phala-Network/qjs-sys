@@ -242,7 +242,7 @@ impl DerivedProperty {
             let setter_fn = self.setter_fn_name(class);
             tokens.extend(quote_spanned! { setter.span() =>
                 #[crate_js::host_call(with_context)]
-                fn #setter_fn(_ctx: crate_js::Context, mut this_value: crate_js::Native<#{&class.name}>, value: #{&self.ty}) {
+                fn #setter_fn(_ctx: crate_js::Context, this_value: crate_js::Native<#{&class.name}>, value: #{&self.ty}) {
                     this_value.borrow_mut().#{&self.name} = value;
                 }
             });
@@ -292,7 +292,7 @@ impl Method {
             MethodType::Setter(marker) => {
                 tokens.extend(quote_spanned! { marker.span() =>
                     #[crate_js::host_call(with_context)]
-                    fn #fn_name(_ctx: crate_js::Context, mut this_value: crate_js::Native<#class_name>, #(#args),*) #{&self.return_ty} {
+                    fn #fn_name(_ctx: crate_js::Context, this_value: crate_js::Native<#class_name>, #(#args),*) #{&self.return_ty} {
                         this_value.borrow_mut().#name(#(#args_idents),*)
                     }
                 });
