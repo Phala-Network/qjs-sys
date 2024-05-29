@@ -57,7 +57,10 @@ pub fn eval(ctx: &js::Context, script: &Code) -> Result<Value, String> {
             is_bytecode: 1,
         },
     };
-
+    if code.code_len == 0 {
+        // Empty String or Vec in Rust would get a invalid ptr of address 0x1
+        return Ok(Value::undefined());
+    }
     let ret = unsafe { c::js_eval_code(ctx.as_ptr(), &code, &mut callbacks) };
     if ret == 0 {
         userdata.output
