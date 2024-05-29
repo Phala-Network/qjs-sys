@@ -104,7 +104,13 @@ impl ToTokens for Class {
         });
 
         tokens.extend(quote! {
-            impl crate_js::GcMark for #name {}
+            impl crate_js::GcMark for #name {
+                fn gc_mark(&self, rt: *mut crate_js::c::JSRuntime, mark_fn: crate_js::c::JS_MarkFunc) {
+                    #(for field in self.gc_mark_fields.iter()) {
+                        self.#field.gc_mark(rt, mark_fn)
+                    }
+                }
+            }
             impl crate_js::NativeClass for #name {
                 const CLASS_NAME: &'static str = #class_name_str;
                 fn constructor_object(ctx: &crate_js::Context) -> crate_js::Result<crate_js::Value> {

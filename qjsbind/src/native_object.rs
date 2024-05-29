@@ -10,9 +10,7 @@ use core::{
 use js::{c, Context, FromJsValue, Result, ToJsValue, Value};
 
 pub trait GcMark {
-    fn gc_mark(&self, _rt: *mut c::JSRuntime, _mark_fn: c::JS_MarkFunc) {
-        let todo = "rm the default impl gc mark";
-    }
+    fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc);
 }
 
 pub trait NativeClass: GcMark + 'static {
@@ -84,11 +82,9 @@ impl<T> Clone for Native<T> {
 
 impl<T: NativeClass> GcMark for Native<T> {
     fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
-        let data = self.inner.opaque_object_data::<Guard<T>>();
-        let Some(data) = data.get() else {
-            return;
-        };
-        data.0.gc_mark(rt, mark_fn);
+        unsafe {
+            c::JS_MarkValue(rt, *self.inner.raw_value(), mark_fn);
+        }
     }
 }
 

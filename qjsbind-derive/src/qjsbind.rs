@@ -22,6 +22,7 @@ struct Class {
     constructor: Option<Constructor>,
     derived_properties: Vec<DerivedProperty>,
     methods: Vec<Method>,
+    gc_mark_fields: Vec<Ident>,
     attrs: ClassAttrs,
 }
 
@@ -40,6 +41,7 @@ struct FieldAttrs {
     js_name: Option<LitStr>,
     is_getter: bool,
     is_setter: bool,
+    gc_mark: bool,
 }
 
 struct Constructor {

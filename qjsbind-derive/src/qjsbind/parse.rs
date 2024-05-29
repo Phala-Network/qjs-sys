@@ -23,9 +23,13 @@ impl Class {
         let attrs = ClassAttrs::from_attributes(&qjs_attrs)?;
 
         let mut derived_properties = Vec::new();
+        let mut gc_mark_fields = Vec::new();
 
         for field in &mut item_struct.fields.iter_mut() {
             if let Some(derived_prop) = DerivedProperty::from_field(field)? {
+                if derived_prop.attrs.gc_mark {
+                    gc_mark_fields.push(derived_prop.name.clone());
+                }
                 derived_properties.push(derived_prop);
             }
         }
@@ -35,6 +39,7 @@ impl Class {
             derived_properties,
             methods: Vec::new(),
             attrs,
+            gc_mark_fields,
             constructor: None,
         }))
     }
@@ -96,15 +101,11 @@ impl DerivedProperty {
             return Ok(None);
         };
         let attrs = FieldAttrs::from_attributes(&qjs_attrs)?;
-        if attrs.is_getter || attrs.is_setter {
-            let Some(name) = field.ident.clone() else {
-                return Err(syn::Error::new_spanned(field, "Expected named field"));
-            };
-            let ty = field.ty.clone();
-            Ok(Some(Self { name, ty, attrs }))
-        } else {
-            Ok(None)
-        }
+        let Some(name) = field.ident.clone() else {
+            return Err(syn::Error::new_spanned(field, "Expected named field"));
+        };
+        let ty = field.ty.clone();
+        Ok(Some(Self { name, ty, attrs }))
     }
 }
 
@@ -113,6 +114,7 @@ impl FieldAttrs {
         let mut js_name = None;
         let mut is_getter = false;
         let mut is_setter = false;
+        let mut gc_mark = false;
 
         for attr in attrs {
             if attr.path().is_ident("qjs") {
@@ -121,6 +123,8 @@ impl FieldAttrs {
                         is_getter = true;
                     } else if meta.path.is_ident("setter") {
                         is_setter = true;
+                    } else if meta.path.is_ident("gc_mark") {
+                        gc_mark = true;
                     } else if meta.path.is_ident("js_name") {
                         js_name = Some(meta.value()?.parse::<LitStr>()?);
                     } else {
@@ -135,6 +139,7 @@ impl FieldAttrs {
             js_name,
             is_getter,
             is_setter,
+            gc_mark,
         })
     }
 }
