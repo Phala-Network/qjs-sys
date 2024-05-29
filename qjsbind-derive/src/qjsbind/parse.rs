@@ -1,4 +1,4 @@
-use syn::{FnArg, Pat};
+use syn::{FnArg, Pat, Type};
 
 use super::*;
 
@@ -35,22 +35,11 @@ impl Class {
             derived_properties,
             methods: Vec::new(),
             attrs,
+            constructor: None,
         }))
     }
 
     fn validate(&self) -> Result<()> {
-        if self
-            .methods
-            .iter()
-            .filter(|m| m.attrs.fn_type == FnType::Constructor)
-            .count()
-            > 1
-        {
-            return Err(syn::Error::new_spanned(
-                self.name.clone(),
-                "Multiple constructors are not allowed",
-            ));
-        }
         Ok(())
     }
 }
@@ -150,52 +139,51 @@ impl FieldAttrs {
     }
 }
 
+enum FnItem {
+    Constructor(Constructor),
+    Method(Method),
+}
+
+fn parse_fn_item(item_fn: &mut ImplItemFn) -> Result<Option<FnItem>> {
+    let Some(qjs_attrs) = extract_qjs_attrs!(item_fn) else {
+        return Ok(None);
+    };
+    match MethodAttrs::from_attributes(&qjs_attrs)? {
+        Some(attrs) => Method::from_item_fn(item_fn, attrs)
+            .map(FnItem::Method)
+            .map(Some),
+        // Currently, None means it's a constructor
+        None => Constructor::from_item_fn(item_fn)
+            .map(FnItem::Constructor)
+            .map(Some),
+    }
+}
+
 impl Method {
-    fn from_item_fn(item_fn: &mut ImplItemFn) -> Result<Option<Self>> {
-        let Some(qjs_attrs) = extract_qjs_attrs!(item_fn) else {
-            return Ok(None);
-        };
-        let attrs = FnAttrs::from_attributes(&qjs_attrs)?;
+    fn from_item_fn(item_fn: &ImplItemFn, attrs: MethodAttrs) -> Result<Self> {
         let name = item_fn.sig.ident.clone();
         let mut is_mut_self = false;
         let mut inputs = item_fn.sig.inputs.iter();
-        if attrs.fn_type != FnType::Constructor {
-            let Some(first) = inputs.next() else {
-                return Err(syn::Error::new_spanned(
-                    name,
-                    "Expected at least one argument",
-                ));
-            };
-            let FnArg::Receiver(celf) = first else {
-                return Err(syn::Error::new_spanned(
-                    first,
-                    "Expected a receiver argument",
-                ));
-            };
-            if celf.mutability.is_some() {
-                is_mut_self = true;
-            }
+        let Some(first) = inputs.next() else {
+            return Err(syn::Error::new_spanned(
+                name,
+                "Expected at least one argument",
+            ));
+        };
+        let FnArg::Receiver(celf) = first else {
+            return Err(syn::Error::new_spanned(
+                first,
+                "Expected a receiver argument",
+            ));
+        };
+        if celf.mutability.is_some() {
+            is_mut_self = true;
         }
-        let mut args = vec![];
-        for arg in inputs {
-            let FnArg::Typed(pat) = arg else {
-                return Err(syn::Error::new_spanned(arg, "Expected a typed argument"));
-            };
-            let ident = match &*pat.pat {
-                Pat::Ident(ident) => ident.ident.clone(),
-                _ => {
-                    return Err(syn::Error::new_spanned(
-                        pat.pat.clone(),
-                        "Expected an identifier",
-                    ))
-                }
-            };
-            args.push((ident, *pat.ty.clone()));
-        }
+        let args = parse_fn_args(inputs)?;
         let return_ty = item_fn.sig.output.clone();
         // validate
         match attrs.fn_type {
-            FnType::Getter => {
+            MethodType::Getter => {
                 if is_mut_self {
                     return Err(syn::Error::new_spanned(
                         name,
@@ -209,7 +197,7 @@ impl Method {
                     ));
                 }
             }
-            FnType::Setter => {
+            MethodType::Setter => {
                 if !is_mut_self {
                     return Err(syn::Error::new_spanned(
                         name,
@@ -223,34 +211,35 @@ impl Method {
                     ));
                 }
             }
-            FnType::Method | FnType::Constructor => (),
+            MethodType::Method => (),
         }
-        Ok(Some(Self {
+        Ok(Self {
             name,
             attrs,
             args,
             return_ty,
             is_mut: is_mut_self,
-        }))
+        })
     }
 }
 
-impl FnAttrs {
-    fn from_attributes(attrs: &[Attribute]) -> Result<Self> {
+impl MethodAttrs {
+    fn from_attributes(attrs: &[Attribute]) -> Result<Option<Self>> {
         let mut js_name = None;
         let mut fn_type = None;
+        let mut is_constructor = false;
 
         for attr in attrs {
             if attr.path().is_ident("qjs") {
                 attr.parse_nested_meta(|meta| {
                     if meta.path.is_ident("method") {
-                        fn_type = Some(FnType::Method);
+                        fn_type = Some(MethodType::Method);
                     } else if meta.path.is_ident("getter") {
-                        fn_type = Some(FnType::Getter);
+                        fn_type = Some(MethodType::Getter);
                     } else if meta.path.is_ident("setter") {
-                        fn_type = Some(FnType::Setter);
+                        fn_type = Some(MethodType::Setter);
                     } else if meta.path.is_ident("constructor") {
-                        fn_type = Some(FnType::Constructor);
+                        is_constructor = true;
                     } else if meta.path.is_ident("js_name") {
                         js_name = Some(meta.value()?.parse::<LitStr>()?);
                     } else {
@@ -261,6 +250,17 @@ impl FnAttrs {
             }
         }
 
+        if is_constructor && fn_type.is_some() {
+            return Err(syn::Error::new_spanned(
+                attrs[0].clone(),
+                "Expected exactly one of `getter`, `setter`, `method`, or `constructor`",
+            ));
+        }
+
+        if is_constructor {
+            return Ok(None);
+        }
+
         let Some(fn_type) = fn_type else {
             return Err(syn::Error::new_spanned(
                 attrs[0].clone(),
@@ -268,7 +268,35 @@ impl FnAttrs {
             ));
         };
 
-        Ok(Self { js_name, fn_type })
+        Ok(Some(Self { js_name, fn_type }))
+    }
+}
+
+fn parse_fn_args<'a>(inputs: impl Iterator<Item = &'a FnArg>) -> Result<Vec<(Ident, Type)>> {
+    let mut args = vec![];
+    for arg in inputs {
+        let FnArg::Typed(pat) = arg else {
+            return Err(syn::Error::new_spanned(arg, "Expected a typed argument"));
+        };
+        let ident = match &*pat.pat {
+            Pat::Ident(ident) => ident.ident.clone(),
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    pat.pat.clone(),
+                    "Expected an identifier",
+                ))
+            }
+        };
+        args.push((ident, *pat.ty.clone()));
+    }
+    Ok(args)
+}
+
+impl Constructor {
+    fn from_item_fn(item_fn: &ImplItemFn) -> Result<Self> {
+        let name = item_fn.sig.ident.clone();
+        let args = parse_fn_args(item_fn.sig.inputs.iter())?;
+        Ok(Self { name, args })
     }
 }
 
@@ -288,7 +316,7 @@ impl Mod {
                         if item_impl.trait_.is_some() {
                             continue;
                         }
-                        let syn::Type::Path(ty) = item_impl.self_ty.as_ref() else {
+                        let Type::Path(ty) = item_impl.self_ty.as_ref() else {
                             continue;
                         };
                         let Some(ident) = ty.path.get_ident() else {
@@ -301,10 +329,17 @@ impl Mod {
                         for item in &mut item_impl.items {
                             match item {
                                 syn::ImplItem::Fn(item_method) => {
-                                    let Some(method) = Method::from_item_fn(item_method)? else {
+                                    let Some(method) = parse_fn_item(item_method)? else {
                                         continue;
                                     };
-                                    for_class.methods.push(method);
+                                    match method {
+                                        FnItem::Constructor(constructor) => {
+                                            for_class.constructor = Some(constructor);
+                                        }
+                                        FnItem::Method(method) => {
+                                            for_class.methods.push(method);
+                                        }
+                                    }
                                 }
                                 _ => {}
                             }

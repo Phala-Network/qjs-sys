@@ -19,6 +19,7 @@ struct Mod {
 
 struct Class {
     name: Ident,
+    constructor: Option<Constructor>,
     derived_properties: Vec<DerivedProperty>,
     methods: Vec<Method>,
     attrs: ClassAttrs,
@@ -41,25 +42,29 @@ struct FieldAttrs {
     is_setter: bool,
 }
 
+struct Constructor {
+    name: Ident,
+    args: Vec<(syn::Ident, syn::Type)>,
+}
+
 struct Method {
     name: Ident,
     args: Vec<(syn::Ident, syn::Type)>,
     return_ty: syn::ReturnType,
     is_mut: bool,
-    attrs: FnAttrs,
+    attrs: MethodAttrs,
 }
 
-struct FnAttrs {
+struct MethodAttrs {
     js_name: Option<LitStr>,
-    fn_type: FnType,
+    fn_type: MethodType,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FnType {
+enum MethodType {
     Getter,
     Setter,
     Method,
-    Constructor,
 }
 
 pub(crate) fn patch(config: TokenStream, input: TokenStream) -> TokenStream {
