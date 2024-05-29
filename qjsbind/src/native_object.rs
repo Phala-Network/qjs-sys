@@ -129,6 +129,10 @@ impl<T: NativeClass> Native<T> {
             r: self.inner.opaque_object_data_mut(),
         }
     }
+
+    pub fn js_value(&self) -> Value {
+        self.inner.clone()
+    }
 }
 
 impl Context {

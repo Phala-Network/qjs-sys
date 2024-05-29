@@ -2,7 +2,7 @@ use core::ops::Deref;
 
 use alloc::vec::Vec;
 
-use crate::{self as js, FromJsValue, JsString, JsUint8Array, ToJsValue};
+use crate::{self as js, FromJsValue, GcMark, JsString, JsUint8Array, ToJsValue};
 
 use super::{Error, Result, Value};
 
@@ -28,6 +28,12 @@ where
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct AsBytes<T>(pub T);
+impl<T: GcMark> GcMark for AsBytes<T> {
+    fn gc_mark(&self, rt: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
+        self.0.gc_mark(rt, mark_fn);
+    }
+}
+
 impl<T> From<T> for AsBytes<T> {
     fn from(t: T) -> Self {
         Self(t)
@@ -51,6 +57,12 @@ where
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct BytesOrHex<T>(pub T);
+impl<T: GcMark> GcMark for BytesOrHex<T> {
+    fn gc_mark(&self, rt: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
+        self.0.gc_mark(rt, mark_fn);
+    }
+}
+
 impl<T> From<T> for BytesOrHex<T> {
     fn from(t: T) -> Self {
         Self(t)
@@ -77,6 +89,16 @@ pub enum BytesOrString {
     Uint8Array(JsUint8Array),
     String(JsString),
     Bytes(Vec<u8>),
+}
+
+impl GcMark for BytesOrString {
+    fn gc_mark(&self, rt: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
+        match self {
+            Self::Uint8Array(bytes) => bytes.gc_mark(rt, mark_fn),
+            Self::String(hex) => hex.gc_mark(rt, mark_fn),
+            Self::Bytes(_) => {}
+        }
+    }
 }
 
 impl Default for BytesOrString {
@@ -127,6 +149,15 @@ impl ToJsValue for BytesOrString {
 pub enum Bytes {
     Uint8Array(JsUint8Array),
     Bytes(Vec<u8>),
+}
+
+impl GcMark for Bytes {
+    fn gc_mark(&self, ctx: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
+        match self {
+            Self::Uint8Array(bytes) => bytes.gc_mark(ctx, mark_fn),
+            Self::Bytes(_) => {}
+        }
+    }
 }
 
 impl From<Vec<u8>> for Bytes {

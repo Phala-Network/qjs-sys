@@ -4,7 +4,7 @@ use core::{
     ops::Deref,
 };
 
-use crate::{self as js, c, Error, FromJsValue, Result, ToJsValue, Value};
+use crate::{self as js, c, Error, FromJsValue, GcMark, Result, ToJsValue, Value};
 
 /// A wrapper of JS string. When passing a string from JS to Rust, using this type
 /// is more efficient than `String` because it avoids extra memory allocation and copy.
@@ -13,6 +13,12 @@ pub struct JsString {
     value: Value,
     ptr: *const u8,
     len: usize,
+}
+
+impl GcMark for JsString {
+    fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
+        self.value.gc_mark(rt, mark_fn);
+    }
 }
 
 impl Debug for JsString {

@@ -1,4 +1,4 @@
-use js::{Result, ToJsValue};
+use js::{IntoJsValue, Native, Result};
 use rand::RngCore;
 
 fn from_js<T>(value: js::Value) -> Result<T>
@@ -73,7 +73,7 @@ impl js::FromJsValue for CryptAlgorithm {
 #[derive(js::FromJsValue)]
 #[qjs(rename_all = "camelCase")]
 struct EcdhKeyDeriveParams {
-    public: CryptoKey,
+    public: Native<CryptoKey>,
 }
 
 #[allow(dead_code)]
@@ -196,17 +196,35 @@ impl js::ToJsValue for KeyGenAlgorithm {
     }
 }
 
-#[derive(js::FromJsValue, ToJsValue)]
-#[qjs(rename_all = "camelCase")]
-struct CryptoKey {
-    r#type: String,
-    extractable: bool,
-    algorithm: KeyGenAlgorithm,
-    usages: Vec<js::JsString>,
-    _raw: js::Bytes,
+use native_classes::CryptoKey;
+
+#[js::qjsbind]
+mod native_classes {
+    use js::IntoNativeObject as _;
+
+    use super::{KeyGenAlgorithm, Result};
+
+    #[qjs(class(rename_all = "camelCase"))]
+    pub struct CryptoKey {
+        #[qjs(getter)]
+        pub r#type: String,
+        #[qjs(getter)]
+        pub extractable: bool,
+        #[qjs(getter, no_gc)]
+        pub algorithm: KeyGenAlgorithm,
+        #[qjs(getter)]
+        pub usages: Vec<js::JsString>,
+        pub raw: js::Bytes,
+    }
+    impl js::IntoJsValue for CryptoKey {
+        fn into_js_value(self, ctx: &js::Context) -> Result<js::Value> {
+            let native = self.into_native_object(ctx)?;
+            Ok(native.js_value())
+        }
+    }
 }
 
-#[derive(js::FromJsValue, js::ToJsValue)]
+#[derive(IntoJsValue)]
 #[qjs(rename_all = "camelCase")]
 struct CryptoKeyPair {
     public_key: CryptoKey,
@@ -217,6 +235,15 @@ enum CryptoKeyOrPair {
     #[allow(dead_code)]
     Key(CryptoKey),
     Pair(CryptoKeyPair),
+}
+
+impl IntoJsValue for CryptoKeyOrPair {
+    fn into_js_value(self, ctx: &js::Context) -> Result<js::Value> {
+        match self {
+            CryptoKeyOrPair::Key(key) => key.into_js_value(ctx),
+            CryptoKeyOrPair::Pair(pair) => pair.into_js_value(ctx),
+        }
+    }
 }
 
 impl CryptoKeyOrPair {
@@ -232,14 +259,14 @@ impl CryptoKeyOrPair {
             extractable,
             usages: usages.clone(),
             algorithm: algorithm.clone(),
-            _raw: public_key,
+            raw: public_key,
         };
         let private_key = CryptoKey {
             r#type: "private".into(),
             extractable,
             usages: usages,
             algorithm,
-            _raw: priviate_key,
+            raw: priviate_key,
         };
         CryptoKeyOrPair::Pair(CryptoKeyPair {
             public_key,
@@ -248,32 +275,23 @@ impl CryptoKeyOrPair {
     }
 }
 
-impl js::ToJsValue for CryptoKeyOrPair {
-    fn to_js_value(&self, ctx: &js::Context) -> Result<js::Value> {
-        match self {
-            CryptoKeyOrPair::Key(key) => key.to_js_value(ctx),
-            CryptoKeyOrPair::Pair(pair) => pair.to_js_value(ctx),
-        }
-    }
-}
-
 #[js::host_call]
 fn encrypt(
     algorithm: CryptAlgorithm,
-    key: CryptoKey,
+    key: Native<CryptoKey>,
     data: js::BytesOrString,
 ) -> Result<js::Bytes> {
+    let key = key.borrow();
     match algorithm {
         CryptAlgorithm::AesGcm(params) => {
             use aes::cipher::consts::U12;
             use aes_gcm::aead::Aead;
             use aes_gcm::KeyInit;
-
             macro_rules! encrypt_with {
                 ($key_size:ident) => {{
                     let aead =
                         aes_gcm::AesGcm::<aes::$key_size, U12>::new(
-                            aes_gcm::Key::<aes::$key_size>::from_slice(&key._raw),
+                            aes_gcm::Key::<aes::$key_size>::from_slice(&key.raw),
                         );
                     let nonce = aes_gcm::Nonce::from_slice(&params.iv);
                     let ciphertext = aead
@@ -312,9 +330,10 @@ fn encrypt(
 #[js::host_call]
 fn decrypt(
     algorithm: CryptAlgorithm,
-    key: CryptoKey,
+    key: Native<CryptoKey>,
     data: js::BytesOrString,
 ) -> Result<js::Bytes> {
+    let key = key.borrow();
     match algorithm {
         CryptAlgorithm::AesGcm(params) => {
             use aes::cipher::consts::U12;
@@ -324,7 +343,7 @@ fn decrypt(
                 ($key_size:ident) => {{
                     let aead =
                         aes_gcm::AesGcm::<aes::$key_size, U12>::new(
-                            aes_gcm::Key::<aes::$key_size>::from_slice(&key._raw),
+                            aes_gcm::Key::<aes::$key_size>::from_slice(&key.raw),
                         );
                     let nonce = aes_gcm::Nonce::from_slice(&params.iv);
                     let plaintext = aead
@@ -375,7 +394,7 @@ fn derive_aes_key(
             extractable,
             algorithm: KeyGenAlgorithm::Aes(aes_params),
             usages: key_usages,
-            _raw: derived_key.to_vec().into(),
+            raw: derived_key.to_vec().into(),
         })
     } else {
         js_bail!("unsupported derived key algorithm")
@@ -385,11 +404,12 @@ fn derive_aes_key(
 #[js::host_call]
 fn derive_key(
     algorithm: DeriveAlgorithm,
-    base_key: CryptoKey,
+    base_key: Native<CryptoKey>,
     derived_key_algorithm: DeriveKeyGenAlgorithm,
     extractable: bool,
     key_usages: Vec<js::JsString>,
 ) -> Result<CryptoKey> {
+    let base_key = base_key.borrow();
     match algorithm {
         DeriveAlgorithm::Ecdh(params) => {
             let KeyGenAlgorithm::Ec(base_algo) = &base_key.algorithm else {
@@ -401,10 +421,11 @@ fn derive_key(
                         ecdh::diffie_hellman, elliptic_curve::SecretKey, $curve, PublicKey,
                     };
                     // Process keys
-                    let secret_key = SecretKey::<$curve>::from_slice(&base_key._raw)
-                        .map_err(|_| js::Error::Static("Invalid private key"))?;
-                    let public_key = PublicKey::from_sec1_bytes(&params.public._raw.to_vec())
-                        .map_err(|_| js::Error::Static("Invalid public key"))?;
+                    let secret_key = SecretKey::<$curve>::from_slice(&base_key.raw)
+                        .map_err(|_| js::Error::Static("invalid private key"))?;
+                    let public_key =
+                        PublicKey::from_sec1_bytes(&params.public.borrow().raw.to_vec())
+                            .map_err(|_| js::Error::Static("invalid public key"))?;
                     // Perform ECDH & derive key
                     let shared_secret =
                         diffie_hellman(secret_key.to_nonzero_scalar(), public_key.as_affine());
@@ -510,14 +531,15 @@ fn import_key(
         extractable,
         algorithm,
         usages: key_usages,
-        _raw: key_data,
+        raw: key_data,
     })
 }
 
 #[js::host_call]
-fn export_key(fmt: js::JsString, key: CryptoKey) -> Result<js::Bytes> {
+fn export_key(fmt: js::JsString, key: Native<CryptoKey>) -> Result<js::Bytes> {
+    let key = key.borrow();
     match fmt.as_str() {
-        "raw" => Ok(key._raw.clone()),
+        "raw" => Ok(key.raw.clone()),
         _ => js_bail!("unsupported export format: {fmt}"),
     }
 }

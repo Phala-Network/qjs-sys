@@ -29,6 +29,17 @@ pub trait FromJsValue {
     where
         Self: Sized;
 }
+
+pub trait IntoJsValue {
+    fn into_js_value(self, ctx: &js::Context) -> Result<Value>;
+}
+
+impl<T: ToJsValue> IntoJsValue for T {
+    fn into_js_value(self, ctx: &js::Context) -> Result<Value> {
+        self.to_js_value(ctx)
+    }
+}
+
 pub trait ToJsValue {
     fn to_js_value(&self, ctx: &js::Context) -> Result<Value>;
 }

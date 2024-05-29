@@ -2,7 +2,7 @@ use core::ops::Deref;
 
 use alloc::vec::Vec;
 
-use crate::{self as js, c, Error, FromJsValue, Result, ToJsValue, Value};
+use crate::{self as js, c, Error, FromJsValue, GcMark, Result, ToJsValue, Value};
 
 /// A wrapper of JS Uint8Array. When passing a string from JS to Rust, using this type
 /// is more efficient than `Vec<u8>` because it avoids extra memory allocation and copy.
@@ -67,5 +67,11 @@ impl Deref for JsUint8Array {
     type Target = [u8];
     fn deref(&self) -> &Self::Target {
         self.as_bytes()
+    }
+}
+
+impl GcMark for JsUint8Array {
+    fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
+        self.value.gc_mark(rt, mark_fn);
     }
 }

@@ -1,4 +1,4 @@
-use crate::{self as js, c, FromJsValue, ToJsValue, Value};
+use crate::{self as js, c, IntoJsValue, FromJsValue, Value};
 
 pub trait HostFunction {
     fn call(&self, ctx: &js::Context, this_val: c::JSValueConst, args: &[c::JSValue])
@@ -50,11 +50,11 @@ impl<Ctx, This, Args, Ret, F: Default> Default for Function<Ctx, This, Args, Ret
 
 fn convert_result<V, E>(ctx: &js::Context, recult: Result<V, E>) -> c::JSValue
 where
-    V: ToJsValue,
+    V: IntoJsValue,
     E: core::fmt::Debug,
 {
     match recult {
-        Ok(v) => match v.to_js_value(ctx) {
+        Ok(v) => match v.into_js_value(ctx) {
             Ok(v) => v.leak(),
             Err(err) => {
                 let msg = format!(
@@ -81,7 +81,7 @@ macro_rules! impl_host_fn {
             Srv::Error: core::fmt::Debug,
             This: FromJsValue,
             $($arg: FromJsValue,)*
-            Ret: ToJsValue,
+            Ret: IntoJsValue,
         {
             fn call(&self, ctx: &js::Context, this_val: c::JSValueConst, args: &[c::JSValue]) -> c::JSValue {
                 #[allow(non_snake_case)]
@@ -98,7 +98,7 @@ macro_rules! impl_host_fn {
             Err: core::fmt::Debug,
             This: FromJsValue,
             $($arg: FromJsValue,)*
-            Ret: ToJsValue,
+            Ret: IntoJsValue,
         {
             fn call(&self, ctx: &js::Context, this_val: c::JSValueConst, args: &[c::JSValue]) -> c::JSValue {
                 let this_value = match FromJsValue::from_js_value(Value::new_cloned(ctx, this_val)) {
