@@ -145,7 +145,7 @@ impl ToTokens for Class {
                     }
                     let constructor = ctx.new_function(#class_name_str, #{self.constructor_cfn()}, 0, crate_js::c::JS_CFUNC_constructor);
                     let proto = ctx.new_object();
-                    proto.set_property_atom(crate_js::c::JS_ATOM_Symbol_toStringTag, &ctx.new_string(#class_name_str))?;
+                    proto.set_property_atom(crate_js::c::JS_ATOM_Symbol_toStringTag, ctx.new_string(#class_name_str))?;
                     #(#properties)*
                     #(#methods)*
                     constructor.set_property("prototype", &proto)?;
