@@ -1,4 +1,4 @@
-use crate::{self as js, c, IntoJsValue, FromJsValue, Value};
+use crate::{self as js, c, FromJsValue, IntoJsValue, Value};
 
 pub trait HostFunction {
     fn call(&self, ctx: &js::Context, this_val: c::JSValueConst, args: &[c::JSValue])
@@ -6,6 +6,7 @@ pub trait HostFunction {
 }
 
 pub struct Function<Ctx, This, Args, Ret, F> {
+    name: &'static str,
     f: F,
     _phantom: core::marker::PhantomData<(Ctx, This, Args, Ret)>,
 }
@@ -16,6 +17,7 @@ pub struct Function<Ctx, This, Args, Ret, F> {
 /// `ctx` must be a valid pointer to a `JSContext`.
 /// `argv` must be a valid pointer to an array of `argc` `JSValue`s.
 pub unsafe fn call_host_function<Ctx, This, Args, Ret, F>(
+    name: &'static str,
     func: F,
     ctx: *mut c::JSContext,
     this_val: c::JSValueConst,
@@ -27,28 +29,20 @@ where
 {
     let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
     let ctx = js::Context::clone_from_ptr(ctx).expect("calling host function with null context");
-    Function::new(func).call(&ctx, this_val, args)
+    Function::new(name, func).call(&ctx, this_val, args)
 }
 
 impl<Ctx, This, Args, Ret, F> Function<Ctx, This, Args, Ret, F> {
-    pub fn new(f: F) -> Self {
+    pub fn new(name: &'static str, f: F) -> Self {
         Self {
+            name,
             f,
             _phantom: core::marker::PhantomData,
         }
     }
 }
 
-impl<Ctx, This, Args, Ret, F: Default> Default for Function<Ctx, This, Args, Ret, F> {
-    fn default() -> Self {
-        Self {
-            f: Default::default(),
-            _phantom: core::marker::PhantomData,
-        }
-    }
-}
-
-fn convert_result<V, E>(ctx: &js::Context, recult: Result<V, E>) -> c::JSValue
+fn convert_result<V, E>(fname: &str, ctx: &js::Context, recult: Result<V, E>) -> c::JSValue
 where
     V: IntoJsValue,
     E: core::fmt::Debug,
@@ -58,7 +52,7 @@ where
             Ok(v) => v.leak(),
             Err(err) => {
                 let msg = format!(
-                    "failed to convert {} to JsValue: {err:?}",
+                    "[{fname}] failed to convert {} to JsValue: {err:?}",
                     crate::type_name::<V>()
                 );
                 ctx.throw_str(&msg);
@@ -85,7 +79,7 @@ macro_rules! impl_host_fn {
         {
             fn call(&self, ctx: &js::Context, this_val: c::JSValueConst, args: &[c::JSValue]) -> c::JSValue {
                 #[allow(non_snake_case)]
-                Function::new(|srv: Srv, this_value, $($arg: $arg,)*| -> Result<Ret, js::Error> {
+                Function::new(self.name, |srv: Srv, this_value, $($arg: $arg,)*| -> Result<Ret, js::Error> {
                     Ok((self.f)(srv, FromJsValue::from_js_value(this_value)?, $($arg,)*))
                 }).call(ctx, this_val, args)
             }
@@ -104,7 +98,11 @@ macro_rules! impl_host_fn {
                 let this_value = match FromJsValue::from_js_value(Value::new_cloned(ctx, this_val)) {
                     Ok(this_value) => this_value,
                     Err(err) => {
-                        let msg = format!("failed to convert JsValue to {}: {err:?}", crate::type_name::<This>());
+                        let msg = format!(
+                            "[{}] failed to convert JsValue to {}: {err:?}",
+                            self.name,
+                            crate::type_name::<This>(),
+                        );
                         ctx.throw_type_err(&msg);
                         return c::JS_EXCEPTION;
                     }
@@ -114,7 +112,8 @@ macro_rules! impl_host_fn {
                     Ok(ctx) => ctx,
                     Err(e) => {
                         let msg = format!(
-                            "failed to convert JsContext to {}: {:?}",
+                            "[{}] failed to convert JsContext to {}: {:?}",
+                            self.name,
                             crate::type_name::<Srv>(),
                             e
                         );
@@ -131,14 +130,18 @@ macro_rules! impl_host_fn {
                     let $arg = match $arg::from_js_value(value) {
                         Ok(arg) => arg,
                         Err(err) => {
-                            let msg = format!("failed to convert JsValue to {}: {err:?}", crate::type_name::<$arg>());
+                            let msg = format!(
+                                "[{}] failed to convert JsValue to {}: {err:?}",
+                                self.name,
+                                crate::type_name::<$arg>()
+                            );
                             ctx.throw_type_err(&msg);
                             return c::JS_EXCEPTION;
                         }
                     };
                 )*
                 let ret = (self.f)(srv, this_value, $($arg,)*);
-                convert_result(ctx, ret)
+                convert_result(self.name, ctx, ret)
             }
         }
     };

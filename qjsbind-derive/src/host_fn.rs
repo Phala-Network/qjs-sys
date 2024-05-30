@@ -37,6 +37,7 @@ fn patch_or_err(attrs: TokenStream, input: TokenStream) -> syn::Result<TokenStre
         syn::ReturnType::Default => quote! { () },
         syn::ReturnType::Type(_, ty) => quote! { #ty },
     };
+    let fn_name = fn_ident.to_string();
     Ok(quote! {
         pub unsafe extern "C" fn #fn_ident(
             ctx: *mut #crate_qjsbind::c::JSContext,
@@ -47,13 +48,13 @@ fn patch_or_err(attrs: TokenStream, input: TokenStream) -> syn::Result<TokenStre
         {
             #input
             #(if with_context) {
-                #crate_qjsbind::call_host_function(#fn_ident, ctx, this_val, argc, argv)
+                #crate_qjsbind::call_host_function(#fn_name, #fn_ident, ctx, this_val, argc, argv)
             }
             #(else) {
                 fn wrapper(_ctx: #crate_qjsbind::Context, _this: #crate_qjsbind::Value, #args) -> #output {
                     #fn_ident(#(#arg_names),*)
                 }
-                #crate_qjsbind::call_host_function(wrapper, ctx, this_val, argc, argv)
+                #crate_qjsbind::call_host_function(#fn_name, wrapper, ctx, this_val, argc, argv)
             }
         }
     })
