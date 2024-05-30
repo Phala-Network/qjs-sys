@@ -73,6 +73,7 @@ impl<T> RefMut<'_, T> {
 
 pub fn new_opaque_object<T: 'static>(
     ctx: &js::Context,
+    name: Option<&str>,
     value: T,
     gc_mark: c::JSClassGCMark,
 ) -> Value {
@@ -100,7 +101,12 @@ pub fn new_opaque_object<T: 'static>(
             tag as _,
         )
     };
-    Value::new_moved(ctx, js_value)
+    let object = Value::new_moved(ctx, js_value);
+    if let Some(name) = name {
+        let name = ctx.new_string(name);
+        _ = object.set_property_atom(c::JS_ATOM_Symbol_toStringTag, name);
+    }
+    object
 }
 
 pub fn is_opaque_object_of<T: 'static>(value: &Value) -> bool {

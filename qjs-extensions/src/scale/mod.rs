@@ -76,7 +76,11 @@ impl js::FromJsValue for TypeRegistry {
 
 impl js::ToJsValue for TypeRegistry {
     fn to_js_value(&self, ctx: &js::Context) -> js::Result<js::Value> {
-        Ok(js::Value::new_opaque_object(ctx, self.clone()))
+        Ok(js::Value::new_opaque_object(
+            ctx,
+            Some("TypeRegistry"),
+            self.clone(),
+        ))
     }
 }
 

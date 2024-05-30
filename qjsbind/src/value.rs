@@ -32,15 +32,7 @@ pub enum JsValue {
 
 impl core::fmt::Debug for Value {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if self.is_exception() {
-            write!(f, "<JS exception>")
-        } else if self.is_undefined() {
-            write!(f, "<JS undefined>")
-        } else if self.is_null() {
-            write!(f, "<JS null>")
-        } else {
-            write!(f, "<JS value>")
-        }
+        core::fmt::Display::fmt(self, f)
     }
 }
 
@@ -70,7 +62,7 @@ impl core::fmt::Display for Value {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self.to_string_utf8() {
             Some(s) => s.as_str().fmt(f),
-            None => write!(f, "<JS value>"),
+            None => write!(f, "<value>"),
         }
     }
 }
@@ -140,8 +132,8 @@ impl Value {
         }
     }
 
-    pub fn new_opaque_object<T: 'static>(ctx: &js::Context, value: T) -> Self {
-        new_opaque_object(ctx, value, None)
+    pub fn new_opaque_object<T: 'static>(ctx: &js::Context, name: Option<&str>, value: T) -> Self {
+        new_opaque_object(ctx, name, value, None)
     }
 
     pub fn opaque_object_data<T: 'static>(&self) -> Ref<'_, T> {

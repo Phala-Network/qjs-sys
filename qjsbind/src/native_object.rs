@@ -110,7 +110,7 @@ impl<T: NativeClass> Native<T> {
             let data = data.get().expect("Native object ref should never be None");
             data.0.gc_mark(rt, mark_fn);
         }
-        let object = new_opaque_object(ctx, Guard(value), Some(gc_mark::<T>));
+        let object = new_opaque_object(ctx, None, Guard(value), Some(gc_mark::<T>));
         let _ = object.set_prototype(&proto);
         Ok(Self {
             inner: object,
