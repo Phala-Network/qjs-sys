@@ -188,6 +188,26 @@ impl Runtime {
         }
         Ok(ret)
     }
+
+    pub fn enable_dump_exceptions(&self) {
+        unsafe {
+            let flags = c::JS_GetDebugFlags(self.ptr.as_ptr());
+            c::JS_SetDebugFlags(self.ptr.as_ptr(), flags | c::JS_DF_DUMP_EXCEPTIONS);
+        }
+    }
+
+    pub fn enable_dump_undefine_properrties(&self) {
+        unsafe {
+            let flags = c::JS_GetDebugFlags(self.ptr.as_ptr());
+            c::JS_SetDebugFlags(self.ptr.as_ptr(), flags | c::JS_DF_DUMP_UNDEFINED_PROPS);
+        }
+    }
+
+    pub fn set_debug_flags(&self, flags: u32) {
+        unsafe {
+            c::JS_SetDebugFlags(self.ptr.as_ptr(), flags);
+        }
+    }
 }
 
 impl Drop for Runtime {
