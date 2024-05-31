@@ -13,6 +13,7 @@ pub enum RenameAll {
     ScreamingSnakeCase,
     KebabCase,
     ScreamingKebabCase,
+    Keep,
 }
 
 impl RenameAll {
@@ -26,12 +27,14 @@ impl RenameAll {
             "SCREAMING_SNAKE_CASE" => Ok(RenameAll::ScreamingSnakeCase),
             "kebab-case" => Ok(RenameAll::KebabCase),
             "SCREAMING-KEBAB-CASE" => Ok(RenameAll::ScreamingKebabCase),
+            "keep" => Ok(RenameAll::Keep),
             _ => Err(Error::new_spanned(lit, "invalid value")),
         }
     }
     pub fn rename(&self, ident: &Ident) -> Ident {
         let name = ident.to_string();
         let renamed = match self {
+            RenameAll::Keep => name,
             RenameAll::LowerCase | RenameAll::SnakeCase => name.to_ascii_lowercase(),
             RenameAll::UpperCase | RenameAll::ScreamingSnakeCase => name.to_ascii_uppercase(),
             RenameAll::PascalCase => {
@@ -115,18 +118,13 @@ impl<'a> ContainerAttrs<'a> {
             }
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("rename_all") {
+                    ensure_none!(rv.rename_all, meta.path, "duplicate rename_all attribute");
                     let lit: LitStr = meta.value()?.parse()?;
-                    if rv.rename_all.is_some() {
-                        return Err(Error::new_spanned(
-                            meta.path,
-                            "duplicate rename_all attribute",
-                        ));
-                    }
                     rv.rename_all = Some(RenameAll::parse(&lit)?);
                 } else if meta.path.is_ident("default") {
                     rv.allow_default = true;
                 } else {
-                    return Err(Error::new_spanned(meta.path, "unsupported attribute"));
+                    syn_bail!(meta.path, "unsupported attribute");
                 }
                 Ok(())
             })?;
@@ -186,15 +184,11 @@ impl<'a> FieldAttrs<'a> {
             }
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("rename") {
-                    if rv.rename.is_some() {
-                        return Err(Error::new_spanned(meta.path, "duplicate rename attribute"));
-                    }
+                    ensure_none!(rv.rename, meta.path, "duplicate rename attribute");
                     let lit: LitStr = meta.value()?.parse()?;
                     rv.rename = Some(lit.value());
                 } else if meta.path.is_ident("default") {
-                    if rv.default.is_some() {
-                        return Err(Error::new_spanned(meta.path, "duplicate default attribute"));
-                    }
+                    ensure_none!(rv.default, meta.path, "duplicate default attribute");
                     if let Ok(value) = meta.value() {
                         let lit: LitStr = value.parse()?;
                         let path = parse_lit_into_expr_path(&lit)?;
@@ -204,22 +198,16 @@ impl<'a> FieldAttrs<'a> {
                     }
                 } else if meta.path.is_ident("as_bytes") {
                     if rv.bytes_or_hex || rv.as_bytes {
-                        return Err(Error::new_spanned(
-                            meta.path,
-                            "duplicate as_bytes attribute",
-                        ));
+                        syn_bail!(meta.path, "duplicate as_bytes attribute");
                     }
                     rv.as_bytes = true;
                 } else if meta.path.is_ident("bytes_or_hex") {
                     if rv.bytes_or_hex || rv.as_bytes {
-                        return Err(Error::new_spanned(
-                            meta.path,
-                            "duplicate bytes_or_hex attribute",
-                        ));
+                        syn_bail!(meta.path, "duplicate bytes_or_hex attribute");
                     }
                     rv.bytes_or_hex = true;
                 } else {
-                    return Err(Error::new_spanned(meta.path, "unsupported attribute"));
+                    syn_bail!(meta.path, "unsupported attribute");
                 }
                 Ok(())
             })?;

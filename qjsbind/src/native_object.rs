@@ -153,9 +153,13 @@ impl<T: NativeClass> IntoNativeObject for T {
     }
 }
 
-impl<T: NativeClass> IntoNativeObject for Result<T> {
+impl<T, E> IntoNativeObject for Result<T, E>
+where
+    T: NativeClass,
+    crate::Error: From<E>,
+{
     type T = T;
     fn into_native_object(self, ctx: &Context) -> Result<Native<Self::T>> {
-        self?.into_native_object(ctx)
+        Ok(self?.into_native_object(ctx)?)
     }
 }

@@ -48,7 +48,7 @@ impl Class {
 impl ClassAttrs {
     fn from_attributes(attrs: &[Attribute]) -> Result<Self> {
         let mut js_name = None;
-        let mut rename_all = None;
+        let mut rename_all = Some(RenameAll::CamelCase);
         let mut is_class = false;
 
         for attr in attrs {
@@ -56,6 +56,9 @@ impl ClassAttrs {
                 attr.parse_nested_meta(|meta| {
                     if meta.path.is_ident("class") {
                         is_class = true;
+                        if meta.input.is_empty() {
+                            return Ok(());
+                        }
                         meta.parse_nested_meta(|meta| {
                             if meta.path.is_ident("js_name") {
                                 js_name = Some(meta.value()?.parse::<LitStr>()?);
@@ -63,15 +66,12 @@ impl ClassAttrs {
                                 let lit_rename_all = meta.value()?.parse::<LitStr>()?;
                                 rename_all = Some(RenameAll::parse(&lit_rename_all)?);
                             } else {
-                                return Err(syn::Error::new_spanned(
-                                    meta.path,
-                                    "Unknown attribute",
-                                ));
+                                syn_bail!(meta.path, "Unknown attribute");
                             }
                             Ok(())
                         })?;
                     } else {
-                        return Err(syn::Error::new_spanned(meta.path, "Unknown attribute"));
+                        syn_bail!(meta.path, "Unknown attribute");
                     }
                     Ok(())
                 })?;
@@ -79,10 +79,7 @@ impl ClassAttrs {
         }
 
         if !is_class {
-            return Err(syn::Error::new_spanned(
-                attrs[0].clone(),
-                "Expected `class` attribute",
-            ));
+            syn_bail!(attrs[0], "Expected `class` attribute");
         }
         Ok(Self {
             js_name,
@@ -98,7 +95,7 @@ impl DerivedProperty {
         };
         let attrs = FieldAttrs::from_attributes(&qjs_attrs)?;
         let Some(name) = field.ident.clone() else {
-            return Err(syn::Error::new_spanned(field, "Expected named field"));
+            syn_bail!(field, "Expected named field");
         };
         let ty = field.ty.clone();
         Ok(Some(Self { name, ty, attrs }))
@@ -115,9 +112,9 @@ impl FieldAttrs {
         for attr in attrs {
             if attr.path().is_ident("qjs") {
                 attr.parse_nested_meta(|meta| {
-                    let ident = meta.path.get_ident().ok_or_else(|| {
-                        syn::Error::new_spanned(meta.path.clone(), "Expected an identifier")
-                    })?;
+                    let Some(ident) = meta.path.get_ident() else {
+                        syn_bail!(meta.path, "Expected an identifier");
+                    };
                     match ident.to_string().as_str() {
                         "getter" => {
                             getter = Some(ident.clone());
@@ -132,7 +129,7 @@ impl FieldAttrs {
                             js_name = Some(meta.value()?.parse::<LitStr>()?);
                         }
                         _ => {
-                            return Err(syn::Error::new_spanned(meta.path, "Unknown attribute"));
+                            syn_bail!(meta.path, "Unknown attribute");
                         }
                     }
                     Ok(())
@@ -158,12 +155,12 @@ fn parse_fn_item(item_fn: &mut ImplItemFn) -> Result<Option<FnItem>> {
     let Some(qjs_attrs) = extract_qjs_attrs!(item_fn) else {
         return Ok(None);
     };
-    match MethodAttrs::from_attributes(&qjs_attrs)? {
-        Some(attrs) => Method::from_item_fn(item_fn, attrs)
+    match parse_fn_attributes(&qjs_attrs)? {
+        FnAttrs::Method(attrs) => Method::from_item_fn(item_fn, attrs)
             .map(FnItem::Method)
             .map(Some),
         // Currently, None means it's a constructor
-        None => Constructor::from_item_fn(item_fn)
+        FnAttrs::Constructor(attrs) => Constructor::from_item_fn(item_fn, attrs)
             .map(FnItem::Constructor)
             .map(Some),
     }
@@ -175,16 +172,10 @@ impl Method {
         let mut is_mut_self = false;
         let mut inputs = item_fn.sig.inputs.iter();
         let Some(first) = inputs.next() else {
-            return Err(syn::Error::new_spanned(
-                name,
-                "Expected at least one argument",
-            ));
+            syn_bail!(name, "Expected at least one argument");
         };
         let FnArg::Receiver(celf) = first else {
-            return Err(syn::Error::new_spanned(
-                first,
-                "Expected a receiver argument",
-            ));
+            syn_bail!(first, "Expected a receiver argument");
         };
         if celf.mutability.is_some() {
             is_mut_self = true;
@@ -195,30 +186,18 @@ impl Method {
         match &attrs.fn_type {
             MethodType::Getter(marker) => {
                 if is_mut_self {
-                    return Err(syn::Error::new_spanned(
-                        marker.clone(),
-                        "Getter method cannot take `&mut self`",
-                    ));
+                    syn_bail!(marker, "Getter method cannot take `&mut self`");
                 }
                 if !args.is_empty() {
-                    return Err(syn::Error::new_spanned(
-                        marker.clone(),
-                        "Getter method cannot take arguments",
-                    ));
+                    syn_bail!(marker, "Getter method cannot take arguments");
                 }
             }
             MethodType::Setter(marker) => {
                 if !is_mut_self {
-                    return Err(syn::Error::new_spanned(
-                        marker.clone(),
-                        "Setter method must take `&mut self`",
-                    ));
+                    syn_bail!(marker, "Setter method must take `&mut self`");
                 }
                 if args.len() != 1 {
-                    return Err(syn::Error::new_spanned(
-                        marker.clone(),
-                        "Setter method must take exactly one argument",
-                    ));
+                    syn_bail!(marker, "Setter method must take exactly one argument");
                 }
             }
             MethodType::Method(_) => (),
@@ -233,78 +212,80 @@ impl Method {
     }
 }
 
-impl MethodAttrs {
-    fn from_attributes(attrs: &[Attribute]) -> Result<Option<Self>> {
-        let mut js_name = None;
-        let mut fn_type = None;
-        let mut is_constructor = false;
+enum FnAttrs {
+    Constructor(ConstructorAttrs),
+    Method(MethodAttrs),
+}
 
-        for attr in attrs {
-            if attr.path().is_ident("qjs") {
-                attr.parse_nested_meta(|meta| {
-                    let ident = meta.path.get_ident().ok_or_else(|| {
-                        syn::Error::new_spanned(meta.path.clone(), "Expected an identifier")
-                    })?;
-                    match ident.to_string().as_str() {
-                        "method" => {
-                            fn_type = Some(MethodType::Method(ident.clone()));
-                        }
-                        "getter" => {
-                            fn_type = Some(MethodType::Getter(ident.clone()));
-                        }
-                        "setter" => {
-                            fn_type = Some(MethodType::Setter(ident.clone()));
-                        }
-                        "constructor" => {
-                            is_constructor = true;
-                        }
-                        "js_name" => {
-                            js_name = Some(meta.value()?.parse::<LitStr>()?);
-                        }
-                        _ => {
-                            return Err(syn::Error::new_spanned(meta.path, "Unknown attribute"));
-                        }
+fn parse_fn_attributes(attrs: &[Attribute]) -> Result<FnAttrs> {
+    let mut js_name = None;
+    let mut fn_type = None;
+    let mut constructor = None;
+
+    for attr in attrs {
+        if attr.path().is_ident("qjs") {
+            attr.parse_nested_meta(|meta| {
+                let Some(ident) = meta.path.get_ident() else {
+                    syn_bail!(meta.path, "Expected an identifier");
+                };
+                match ident.to_string().as_str() {
+                    "method" => {
+                        fn_type = Some(MethodType::Method(ident.clone()));
                     }
-                    Ok(())
-                })?;
-            }
+                    "getter" => {
+                        fn_type = Some(MethodType::Getter(ident.clone()));
+                    }
+                    "setter" => {
+                        fn_type = Some(MethodType::Setter(ident.clone()));
+                    }
+                    "constructor" => {
+                        constructor = Some(ConstructorAttrs {
+                            token: ident.clone(),
+                        });
+                    }
+                    "js_name" => {
+                        js_name = Some(meta.value()?.parse::<LitStr>()?);
+                    }
+                    _ => {
+                        syn_bail!(meta.path, "Unknown attribute");
+                    }
+                }
+                Ok(())
+            })?;
         }
-
-        if is_constructor && fn_type.is_some() {
-            return Err(syn::Error::new_spanned(
-                attrs[0].clone(),
-                "Expected exactly one of `getter`, `setter`, `method`, or `constructor`",
-            ));
-        }
-
-        if is_constructor {
-            return Ok(None);
-        }
-
-        let Some(fn_type) = fn_type else {
-            return Err(syn::Error::new_spanned(
-                attrs[0].clone(),
-                "Expected exactly one of `getter`, `setter`, `method`, or `constructor`",
-            ));
-        };
-
-        Ok(Some(Self { js_name, fn_type }))
     }
+
+    if constructor.is_some() && fn_type.is_some() {
+        syn_bail!(
+            attrs[0],
+            "Expected exactly one of `getter`, `setter`, `method`, or `constructor`"
+        );
+    }
+
+    if let Some(constructor) = constructor {
+        return Ok(FnAttrs::Constructor(constructor));
+    }
+
+    let Some(fn_type) = fn_type else {
+        syn_bail!(
+            attrs[0],
+            "Expected exactly one of `getter`, `setter`, `method`, or `constructor"
+        );
+    };
+
+    Ok(FnAttrs::Method(MethodAttrs { js_name, fn_type }))
 }
 
 fn parse_fn_args<'a>(inputs: impl Iterator<Item = &'a FnArg>) -> Result<Vec<(Ident, Type)>> {
     let mut args = vec![];
     for arg in inputs {
         let FnArg::Typed(pat) = arg else {
-            return Err(syn::Error::new_spanned(arg, "Expected a typed argument"));
+            syn_bail!(arg, "Expected a typed argument");
         };
         let ident = match &*pat.pat {
             Pat::Ident(ident) => ident.ident.clone(),
             _ => {
-                return Err(syn::Error::new_spanned(
-                    pat.pat.clone(),
-                    "Expected an identifier",
-                ))
+                syn_bail!(pat.pat, "Expected an identifier");
             }
         };
         args.push((ident, *pat.ty.clone()));
@@ -313,10 +294,10 @@ fn parse_fn_args<'a>(inputs: impl Iterator<Item = &'a FnArg>) -> Result<Vec<(Ide
 }
 
 impl Constructor {
-    fn from_item_fn(item_fn: &ImplItemFn) -> Result<Self> {
+    fn from_item_fn(item_fn: &ImplItemFn, attrs: ConstructorAttrs) -> Result<Self> {
         let name = item_fn.sig.ident.clone();
         let args = parse_fn_args(item_fn.sig.inputs.iter())?;
-        Ok(Self { name, args })
+        Ok(Self { name, args, attrs })
     }
 }
 

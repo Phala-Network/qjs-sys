@@ -59,6 +59,11 @@ struct FieldAttrs {
 struct Constructor {
     name: Ident,
     args: Vec<(syn::Ident, Type)>,
+    attrs: ConstructorAttrs,
+}
+
+struct ConstructorAttrs {
+    token: Ident,
 }
 
 struct Method {
@@ -110,10 +115,7 @@ fn patch_or_err(config: TokenStream, input: TokenStream) -> Result<TokenStream> 
     } = the_mod;
 
     let Some((_brace, content)) = content else {
-        return Err(syn::Error::new_spanned(
-            semi,
-            "expected a module with content",
-        ));
+        syn_bail!(semi, "expected a module with content");
     };
 
     Ok(quote! {

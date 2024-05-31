@@ -171,7 +171,7 @@ impl ToTokens for Class {
             let args_idents = c.args.iter().map(|(name, _ty)| {
                 quote! { #name }
             });
-            tokens.extend(quote! {
+            tokens.extend(quote_spanned! { c.attrs.token.span() =>
                 #[crate_js::host_call(with_context)]
                 fn #{self.constructor_cfn()}(
                     ctx: crate_js::Context,
@@ -184,7 +184,7 @@ impl ToTokens for Class {
             });
         } else {
             let not_implemented = format!("{class_name} constructor not implemented");
-            tokens.extend(quote! {
+            tokens.extend(quote_spanned! { class_name.span() =>
                 #[crate_js::host_call(with_context)]
                 fn #{self.constructor_cfn()}(
                     ctx: crate_js::Context,

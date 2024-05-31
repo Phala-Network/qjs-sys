@@ -512,7 +512,7 @@ impl Value {
         self.define_property_value(key, ctx.new_function(key, f, 0, c::JS_CFUNC_generic))
     }
 
-    pub fn define_property_value(&self, key: &str, f: Value) -> Result<(), Error> {
+    pub fn define_property_value(&self, key: &str, value: Value) -> Result<(), Error> {
         unsafe {
             let ctx = self.context()?.as_ptr();
             let name = c::JS_NewAtomLen(ctx, key.as_ptr() as _, key.len() as _);
@@ -520,7 +520,7 @@ impl Value {
                 ctx,
                 *self.raw_value(),
                 name,
-                f.leak(),
+                value.leak(),
                 c::JS_PROP_C_W_E as _,
             );
             c::JS_FreeAtom(ctx, name);
