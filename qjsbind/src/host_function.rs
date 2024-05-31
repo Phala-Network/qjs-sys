@@ -95,11 +95,12 @@ macro_rules! impl_host_fn {
             Ret: IntoJsValue,
         {
             fn call(&self, ctx: &js::Context, this_val: c::JSValueConst, args: &[c::JSValue]) -> c::JSValue {
-                let this_value = match FromJsValue::from_js_value(Value::new_cloned(ctx, this_val)) {
+                let this_val = Value::new_cloned(ctx, this_val);
+                let this_value = match FromJsValue::from_js_value(this_val.clone()) {
                     Ok(this_value) => this_value,
                     Err(err) => {
                         let msg = format!(
-                            "[{}] failed to convert JsValue to {}: {err:?}",
+                            "[{}] failed to convert JsValue({this_val}) to {}: {err:?}",
                             self.name,
                             crate::type_name::<This>(),
                         );
@@ -127,11 +128,11 @@ macro_rules! impl_host_fn {
                 $(
                     let value = Value::new_cloned(ctx, *args.next().unwrap_or(&c::JS_UNDEFINED));
                     #[allow(non_snake_case)]
-                    let $arg = match $arg::from_js_value(value) {
+                    let $arg = match $arg::from_js_value(value.clone()) {
                         Ok(arg) => arg,
                         Err(err) => {
                             let msg = format!(
-                                "[{}] failed to convert JsValue to {}: {err:?}",
+                                "[{}] failed to convert JsValue({value}) to {}: {err:?}",
                                 self.name,
                                 crate::type_name::<$arg>()
                             );
