@@ -26,6 +26,7 @@ p384 = { version = "0.13", optional = true, features = ["ecdh"] }
 p521 = { version = "0.13", optional = true, features = ["ecdh"] }
 rand = { version = "0.8", optional = true }
 uuid = { version = "1", optional = true, features = ["v4"] }
+anyhow = { version = "1.0.86", default-features = false }
 
 [features]
 default = ["base64", "sha1", "sha2", "sha3", "blake2", "hex", "scale", "scale2"]
@@ -34,6 +35,13 @@ std = [
     "js/std",
     "base64/std",
     "parity-scale-codec/std",
+    "anyhow/std",
+    "aes-gcm?/std",
+    "p256?/std",
+    "p384?/std",
+    "p521?/std",
+    "rand?/std",
+    "uuid?/std",
 ]
 scale = [
     "parity-scale-codec",

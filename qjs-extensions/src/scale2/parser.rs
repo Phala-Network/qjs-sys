@@ -453,11 +453,11 @@ fn convert_errors(errors: Vec<Poor>, src: &str) -> js::Error {
         let src = substr(src, (start, end), 30);
         write!(
             &mut report,
-            "Invalid syntax at {start}..{end}: here->`{src}`"
+            "invalid syntax at {start}..{end}: here->`{src}`"
         )
         .unwrap();
     }
-    js::Error::Custom(report.to_string())
+    js::Error::msg(report.to_string())
 }
 
 fn substr(src: &str, range: (usize, usize), range_extension: usize) -> &str {

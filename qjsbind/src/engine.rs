@@ -2,6 +2,7 @@ use core::ptr::NonNull;
 
 use crate::{c, Code, Result, Value};
 use alloc::string::{String, ToString};
+use anyhow::{anyhow, bail};
 use qjs_sys::inline_fns::JSCFunction;
 
 pub struct Context {
@@ -59,6 +60,10 @@ impl Context {
         unsafe { c::JS_ThrowTypeError(self.as_ptr(), cmsg.as_ptr()) };
     }
 
+    pub fn get_exception_error(&self) -> crate::Error {
+        anyhow!("{}", self.get_exception_str())
+    }
+
     pub fn get_exception_str(&self) -> String {
         let ctx_ptr = self.as_ptr();
         unsafe {
@@ -79,9 +84,7 @@ impl Context {
         let mut result = self.get_global_object();
         for seg in full_path.split('.') {
             if result.is_undefined() {
-                return Err(crate::Error::Custom(format!(
-                    "lookup_object: {full_path} is undefined",
-                )));
+                bail!("lookup_object: {full_path} is undefined");
             }
             result = result.get_property(seg)?;
         }
@@ -91,18 +94,16 @@ impl Context {
     pub fn store_object(&self, full_path: &str, obj: Value) -> Result<()> {
         let mut segs: Vec<_> = full_path.split('.').collect();
         let Some(last) = segs.pop() else {
-            return Err(crate::Error::Static(
-                "store_object: full_path must not be empty",
-            ));
+            bail!("store_object: full_path must not be empty");
         };
         let mut parent = self.get_global_object();
         if parent.is_undefined() {
-            return Err(crate::Error::Static("store_object: global is undefined"));
+            bail!("store_object: global is undefined");
         }
         for seg in segs {
             parent = parent.get_property(seg)?;
             if parent.is_undefined() {
-                return Err(crate::Error::Static("store_object: parent is undefined"));
+                bail!("store_object: parent is undefined");
             }
         }
         parent.set_property(last, &obj)?;

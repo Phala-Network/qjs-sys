@@ -94,7 +94,7 @@ fn derive_struct(
 
         Ok(quote! {
             const _: () = {
-                use #crate_qjsbind::{c, Value, FromJsValue, Result, Error, alloc};
+                use #crate_qjsbind::{c, Value, FromJsValue, Result, Error, alloc, ErrorContext as _};
                 impl #impl_generics FromJsValue for #ident #ty_generics #bounded_where_clause {
                     fn from_js_value(val: Value) -> Result<Self> {
                         #(if container_attrs.allow_default()) {
@@ -115,7 +115,7 @@ fn derive_struct(
                                                     } else {
                                                         let field_name = #{&field.field().ident.as_ref().map(|f| f.to_string()).unwrap_or_default()};
                                                         #{field.decoder_fn(&crate_qjsbind)}(field_value)
-                                                            .map_err(|err| Error::Custom(alloc::format!("field {field_name}: {err:?}")))?
+                                                            .context(format!("failed to decode field {field_name}"))?
                                                     }
                                                 }
                                             }

@@ -1,7 +1,8 @@
 use alloc::{format, string::String, sync::Arc, vec::Vec};
+use anyhow::{anyhow, bail, Context};
 use parity_scale_codec::{Compact, Decode, Encode, Output};
 
-use js::{self as js, AsBytes, BytesOrHex, FromJsValue, ToJsValue};
+use js::{self as js, AsBytes, BytesOrHex, FromJsValue, JsResultExt, ToJsValue};
 
 use self::parser::{EnumType, ScaleType};
 
@@ -24,7 +25,7 @@ impl EnumType {
                 return Ok((variant_name.as_str(), *tid, scale_ind.unwrap_or(ind)));
             }
         }
-        Err(js::Error::Custom(format!("Unknown variant {}", name)))
+        bail!("unknown variant {name}")
     }
 
     fn get_variant_by_index(&self, tag: usize) -> js::Result<(&str, Option<usize>)> {
@@ -46,7 +47,7 @@ impl EnumType {
                 }
             }
         }
-        Err(js::Error::Custom(format!("Unknown variant {}", tag)))
+        bail!("unknown variant {tag}")
     }
 }
 
@@ -57,9 +58,7 @@ struct TypeRegistry {
 
 impl TypeRegistry {
     fn get_type(&self, id: usize) -> js::Result<&ScaleType> {
-        self.types
-            .get(id)
-            .ok_or(js::Error::Custom(format!("Unknown type id {id}")))
+        self.types.get(id).ok_or(anyhow!("unknown type id {id}"))
     }
 }
 
@@ -68,7 +67,7 @@ impl js::FromJsValue for TypeRegistry {
         let me = value
             .opaque_object_data::<Self>()
             .get()
-            .ok_or(js::Error::Expect("TypeRegistry"))?
+            .expect_js_value(&value, "TypeRegistry")?
             .clone();
         Ok(me)
     }
@@ -89,7 +88,7 @@ fn to_js_error(errs: Vec<impl core::fmt::Debug>) -> js::Error {
     for err in errs {
         output.push_str(&format!("{err:?}\n"));
     }
-    js::Error::Custom(output)
+    js::Error::msg(output)
 }
 
 #[js::host_call]
@@ -201,11 +200,7 @@ fn encode_value(
             if matches!(t, ScaleType::Primitive(PrimitiveType::U8)) {
                 let result = u8a_or_hex(&value, |bytes| {
                     if bytes.len() != *len {
-                        return Err(js::Error::Custom(format!(
-                            "Expected array of length {}, got {}",
-                            len,
-                            bytes.len()
-                        )));
+                        bail!("expected array of length {len}, got {}", bytes.len());
                     }
                     out.write(bytes);
                     Ok(())
@@ -216,10 +211,7 @@ fn encode_value(
             }
             let actual_len = value.length()?;
             if actual_len != *len {
-                return Err(js::Error::Custom(format!(
-                    "Expected array of length {}, got {}",
-                    len, actual_len
-                )));
+                bail!("expected array of length {len}, got {actual_len}");
             }
             for ind in 0..*len {
                 let sub_value = value.index(ind)?;
@@ -233,10 +225,7 @@ fn encode_value(
                 let key = js::JsString::from_js_value(k)?;
                 if let Ok((_name, tid, ind)) = def.get_variant_by_name(key.as_str()) {
                     let Ok(ind) = u8::try_from(ind) else {
-                        return Err(js::Error::Custom(format!(
-                            "Variant index {} is too large",
-                            ind
-                        )));
+                        bail!("variant index {ind} is too large");
                     };
                     ind.encode_to(out);
                     if let Some(tid) = tid {
@@ -245,14 +234,14 @@ fn encode_value(
                     return Ok(());
                 }
             }
-            Err(js::Error::Custom(format!(
-                "Enum with any variant of {}",
+            bail!(
+                "enum with any variant of {}",
                 def.variants
                     .iter()
                     .map(|(name, _, _)| name.as_str())
                     .collect::<Vec<_>>()
                     .join(", ")
-            )))
+            )
         }
         ScaleType::Struct(fields) => {
             for (name, tid) in fields.iter() {
@@ -307,7 +296,7 @@ fn encode_primitive(value: js::Value, t: &PrimitiveType, out: &mut impl Output) 
 }
 
 fn compactable_err<T>() -> js::Result<T> {
-    Err(js::Error::Expect("A number or () for compact"))
+    Err(anyhow!("A number or () for compact"))
 }
 
 fn encode_compact_primitive(
@@ -351,8 +340,7 @@ fn decode_valude(
             match t {
                 ScaleType::Primitive(t) => decode_compact_primitive(ctx, buf, t),
                 ScaleType::Tuple(t) if t.is_empty() => {
-                    Compact::<()>::decode(buf)
-                        .map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
+                    Compact::<()>::decode(buf).context("unexpected end of buffer")?;
                     Ok(ctx.new_array())
                 }
                 _ => compactable_err(),
@@ -361,12 +349,11 @@ fn decode_valude(
         ScaleType::Seq(tid) => {
             let t = type_registry.get_type(*tid)?;
             if matches!(t, ScaleType::Primitive(PrimitiveType::U8)) {
-                let value = Vec::<u8>::decode(buf)
-                    .map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
+                let value = Vec::<u8>::decode(buf).context("unexpected end of buffer")?;
                 return AsBytes(value).to_js_value(ctx);
             }
             let length = Compact::<u32>::decode(buf)
-                .map_err(|_| js::Error::Static("Unexpected end of buffer"))?
+                .context("unexpected end of buffer")?
                 .0;
             let out = ctx.new_array();
             for _ in 0..length {
@@ -387,7 +374,7 @@ fn decode_valude(
             let t = type_registry.get_type(*tid)?;
             if matches!(t, ScaleType::Primitive(PrimitiveType::U8)) {
                 if buf.len() < *len {
-                    return Err(js::Error::Static("Unexpected end of buffer"));
+                    bail!("failed to decode array, unexpected end of buffer");
                 }
                 let value = buf[..*len].to_vec();
                 *buf = &buf[*len..];
@@ -401,7 +388,7 @@ fn decode_valude(
             Ok(out)
         }
         ScaleType::Enum(variants) => {
-            let tag = u8::decode(buf).map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
+            let tag = u8::decode(buf).context("unexpected end of buffer")?;
             let (variant_name, variant_type) = variants.get_variant_by_index(tag as usize)?;
             let out = ctx.new_object(variant_name);
             if let Some(variant_type) = variant_type {
@@ -430,8 +417,7 @@ fn decode_primitive(
 ) -> js::Result<js::Value> {
     macro_rules! decode_num {
         ($t: ident) => {{
-            let value =
-                <$t>::decode(buf).map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
+            let value = <$t>::decode(buf).context("unexpected end of buffer")?;
             value.to_js_value(ctx)
         }};
     }
@@ -448,7 +434,7 @@ fn decode_primitive(
         PrimitiveType::I128 => decode_num!(i128),
         PrimitiveType::Bool => decode_num!(bool),
         PrimitiveType::Str => String::decode(buf)
-            .map_err(|_| js::Error::Static("Unexpected end of buffer"))?
+            .context("unexpected end of buffer")?
             .to_js_value(ctx),
     }
 }
@@ -460,8 +446,7 @@ fn decode_compact_primitive(
 ) -> js::Result<js::Value> {
     macro_rules! decode_num {
         ($t: ident) => {{
-            let value = Compact::<$t>::decode(buf)
-                .map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
+            let value = Compact::<$t>::decode(buf).context("unexpected end of buffer")?;
             value.0.to_js_value(ctx)
         }};
     }

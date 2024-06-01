@@ -1,5 +1,6 @@
 use crate::{
     self as js,
+    error::expect_js_value,
     opaque_value::{new_opaque_object, opaque_object_get_data_raw},
 };
 
@@ -82,7 +83,7 @@ impl<T> Clone for Native<T> {
 impl<T: NativeClass> FromJsValue for Native<T> {
     fn from_js_value(value: Value) -> Result<Self> {
         if !value.is_opaque_object_of::<Guard<T>>() {
-            return Err(js::Error::Expect(T::CLASS_NAME));
+            return Err(expect_js_value(&value, T::CLASS_NAME));
         }
         Ok(Self {
             inner: value,

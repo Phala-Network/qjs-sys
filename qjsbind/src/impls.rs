@@ -1,8 +1,12 @@
 use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
+use anyhow::anyhow;
 use tinyvec::TinyVec;
 
-use super::{Error, FromArgs, FromJsValue, Result, ToArgs, ToJsValue, Value};
-use crate as js;
+use super::{FromArgs, FromJsValue, Result, ToArgs, ToJsValue, Value};
+use crate::{
+    self as js,
+    error::{expect_js_value, JsResultExt},
+};
 
 impl FromJsValue for Value {
     fn from_js_value(js_value: Value) -> Result<Self> {
@@ -14,7 +18,9 @@ macro_rules! impl_from_for {
     ($t: ident, $decode_fn: ident) => {
         impl FromJsValue for $t {
             fn from_js_value(js_value: Value) -> Result<Self> {
-                js_value.$decode_fn().or(Err(Error::Expect(stringify!($t))))
+                js_value
+                    .$decode_fn()
+                    .expect_js_value(&js_value, stringify!($t))
             }
         }
     };
@@ -41,7 +47,7 @@ impl FromJsValue for () {
         if js_value.is_null() || js_value.is_undefined() {
             Ok(())
         } else {
-            Err(Error::Expect("()"))
+            Err(expect_js_value(&js_value, "()"))
         }
     }
 }
@@ -54,7 +60,7 @@ macro_rules! impl_from_for_tuple {
         {
             fn from_js_value(js_value: Value) -> Result<Self> {
                 let mut iter = iter_values(js_value)?;
-                Ok(($($t::from_js_value(iter.next().ok_or(Error::Expect("tuple"))??)?,)*))
+                Ok(($($t::from_js_value(iter.next().ok_or_else(|| anyhow!("expect tuple"))??)?,)*))
             }
         }
     };
@@ -94,7 +100,7 @@ impl<T: FromJsValue> FromJsValue for Vec<T> {
 fn iter_values<V: FromJsValue>(js_value: Value) -> Result<impl Iterator<Item = Result<V>>> {
     let mut iter = js_value
         .values()
-        .or(Err(Error::Expect("array-like object")))?;
+        .expect_js_value(&js_value, "array-like object")?;
     Ok(core::iter::from_fn(move || -> Option<Result<V>> {
         let value = opt_try!(iter.next()?);
         Some(V::from_js_value(value))
@@ -108,7 +114,7 @@ where
 {
     let mut iter = js_value
         .entries()
-        .or(Err(Error::Expect("map-like object")))?;
+        .expect_js_value(&js_value, "map-like object")?;
     Ok(core::iter::from_fn(move || -> Option<Result<(K, V)>> {
         let (key, value) = opt_try!(iter.next()?);
         let key = match K::from_js_value(key) {
@@ -140,7 +146,7 @@ impl<const N: usize, T: FromJsValue + Default> FromJsValue for [T; N] {
         for _ in 0..N {
             array.push(
                 iter.next()
-                    .ok_or_else(|| Error::ExpectLen(crate::type_name::<T>(), N))??,
+                    .ok_or_else(|| anyhow!("expect [{}: {}]", crate::type_name::<T>(), N))??,
             );
         }
         Ok(array.try_into().ok().expect("BUG: array length mismatch"))

@@ -2,7 +2,9 @@ use core::ops::Deref;
 
 use alloc::vec::Vec;
 
-use crate::{self as js, FromJsValue, GcMark, JsString, JsUint8Array, ToJsValue};
+use crate::{
+    self as js, error::JsResultExt, FromJsValue, GcMark, JsString, JsUint8Array, ToJsValue,
+};
 
 use super::{Error, Result, Value};
 
@@ -15,7 +17,10 @@ where
     Vec<u8>: TryInto<T>,
 {
     let bytes = js_value.decode_bytes()?;
-    bytes.try_into().or(Err(Error::Expect("try from bytes")))
+    bytes
+        .try_into()
+        .ok()
+        .expect_js_value(&js_value, "bytes-like object")
 }
 
 pub fn decode_as_bytes_maybe_hex<T>(js_value: Value) -> Result<T>
@@ -23,7 +28,10 @@ where
     Vec<u8>: TryInto<T>,
 {
     let bytes = js_value.decode_bytes_maybe_hex()?;
-    bytes.try_into().or(Err(Error::Expect("try from bytes")))
+    bytes
+        .try_into()
+        .ok()
+        .expect_js_value(&js_value, "bytes-like object")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -49,6 +57,7 @@ impl<T: AsRef<[u8]>> ToJsValue for AsBytes<T> {
 impl<T> FromJsValue for AsBytes<T>
 where
     Vec<u8>: TryInto<T>,
+    Error: From<<Vec<u8> as TryInto<T>>::Error>,
 {
     fn from_js_value(value: Value) -> Result<Self> {
         Ok(Self(decode_as_bytes(value)?))

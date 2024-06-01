@@ -187,10 +187,10 @@ impl ToTokens for Class {
             tokens.extend(quote_spanned! { class_name.span() =>
                 #[crate_js::host_call(with_context)]
                 fn #{self.constructor_cfn()}(
-                    ctx: crate_js::Context,
+                    _ctx: crate_js::Context,
                     _this_value: crate_js::Value,
                 ) -> crate_js::Result<crate_js::Native<#class_name>> {
-                    Err(crate_js::Error::Static(#not_implemented))
+                    Err(crate_js::Error::msg(#not_implemented))
                 }
             });
         }

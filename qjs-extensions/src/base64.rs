@@ -1,6 +1,7 @@
 use alloc::{string::String, vec::Vec};
+use anyhow::Context;
 use base64::{engine::general_purpose, Engine as _};
-use js::{AsBytes, JsString, BytesOrString, Result};
+use js::{AsBytes, BytesOrString, JsString, Result};
 
 #[js::host_call]
 pub fn encode(data: BytesOrString, pad: bool) -> String {
@@ -16,11 +17,11 @@ pub fn decode(base64_str: JsString, pad: bool) -> Result<AsBytes<Vec<u8>>> {
         general_purpose::STANDARD
             .decode(base64_str.as_str())
             .map(AsBytes)
-            .or(Err(js::Error::Expect("padded base64 string")))
+            .context("invalid base64 string")
     } else {
         general_purpose::STANDARD_NO_PAD
             .decode(base64_str.as_str())
             .map(AsBytes)
-            .or(Err(js::Error::Expect("base64 string")))
+            .context("invalid base64 string")
     }
 }

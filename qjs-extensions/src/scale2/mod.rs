@@ -2,10 +2,11 @@ use alloc::borrow::Cow;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::{format, rc::Rc, vec::Vec};
+use anyhow::{anyhow, bail, Context};
 use core::cell::{Ref, RefCell, RefMut};
 use parity_scale_codec::{Compact, Decode, Encode, Output};
 
-use js::{self as js, AsBytes, BytesOrHex, FromJsValue, ToJsValue};
+use js::{self as js, AsBytes, BytesOrHex, FromJsValue, JsResultExt, ToJsValue};
 
 use self::parser::{Enum, Id, IdInfo, PrimitiveType, String as TinyString, Type, TypeDef};
 
@@ -32,7 +33,7 @@ pub fn setup(obj: &js::Value, ctx: &js::Context) -> js::Result<()> {
             },
         };"#
     )))
-    .map_err(js::Error::Custom)?;
+    .map_err(js::Error::msg)?;
     ctx.get_global_object()
         .get_property("ScaleCodec")?
         .set_property("scl", obj)?;
@@ -58,7 +59,7 @@ impl Enum {
                 return Ok((variant_name, tid.clone(), scale_ind.unwrap_or(ind as _)));
             }
         }
-        Err(js::Error::Custom(format!("Unknown variant {}", name)))
+        bail!("unknown variant {name}")
     }
 
     fn get_variant_by_index(&self, tag: u8) -> js::Result<(TinyString, Option<Id>)> {
@@ -80,7 +81,7 @@ impl Enum {
                 }
             }
         }
-        Err(js::Error::Custom(format!("Unknown variant {}", tag)))
+        bail!("unknown variant {tag}")
     }
 }
 
@@ -132,10 +133,7 @@ impl<'a> GenericLookup<'a> {
             IdInfo::Name(name) => {
                 if let Some(id) = self.get(name.as_str()) {
                     if !tid.type_args.is_empty() {
-                        return Err(js::Error::Custom(format!(
-                            "Generic type {} can not have type arguments",
-                            name
-                        )));
+                        bail!("generic type {name} can not have type arguments");
                     }
                     return Ok(Cow::Owned(id.clone()));
                 }
@@ -274,12 +272,12 @@ impl Registry {
 
     fn resolve_generic<'a>(&self, tid: &Id, def: &'a TypeDef) -> js::Result<Cow<'a, Type>> {
         if def.name.type_params.len() != tid.type_args.len() {
-            return Err(js::Error::Custom(format!(
-                "Type {} expected {} type parameters, got {}",
+            bail!(
+                "type {} expected {} type parameters, got {}",
                 def.name,
                 def.name.type_params.len(),
                 tid.type_args.len()
-            )));
+            );
         }
         if tid.type_args.is_empty() {
             return Ok(Cow::Borrowed(&def.ty));
@@ -294,18 +292,16 @@ impl Registry {
                 let Some(id) = self.lookup.get(name) else {
                     return match Type::primitive(name.as_str()) {
                         Some(prim) => Ok(Cow::Borrowed(prim)),
-                        None => Err(js::Error::Custom(format!("Unknown type {name}"))),
+                        None => bail!("unknown type {name}"),
                     };
                 };
                 self.types
                     .get(*id)
-                    .ok_or(js::Error::Custom(format!("Unknown type id of {name}")))?
+                    .ok_or(anyhow!("unknown type id of {name}"))?
             }
             IdInfo::Num(id) => {
                 let ind = self.id2ind(*id);
-                self.types
-                    .get(ind)
-                    .ok_or(js::Error::Custom(format!("Unknown type id {id}")))?
+                self.types.get(ind).ok_or(anyhow!("unknown type id {id}"))?
             }
             IdInfo::Type(ty) => return Ok(Cow::Borrowed(ty)),
         };
@@ -354,7 +350,7 @@ impl js::FromJsValue for TypeRegistry {
         let me = value
             .opaque_object_data::<Self>()
             .get()
-            .ok_or(js::Error::Expect("TypeRegistry"))?
+            .expect_js_value(&value, "TypeRegistry")?
             .clone();
         Ok(me)
     }
@@ -362,7 +358,11 @@ impl js::FromJsValue for TypeRegistry {
 
 impl js::ToJsValue for TypeRegistry {
     fn to_js_value(&self, ctx: &js::Context) -> js::Result<js::Value> {
-        Ok(js::Value::new_opaque_object(ctx, Some("TypeRegistry"), self.clone()))
+        Ok(js::Value::new_opaque_object(
+            ctx,
+            Some("TypeRegistry"),
+            self.clone(),
+        ))
     }
 }
 
@@ -488,11 +488,7 @@ fn encode_value(
             if matches!(t.as_ref(), Type::Primitive(PrimitiveType::U8)) {
                 let result = u8a_or_hex(&value, |bytes| {
                     if bytes.len() != len {
-                        return Err(js::Error::Custom(format!(
-                            "Expected array of length {}, got {}",
-                            len,
-                            bytes.len()
-                        )));
+                        bail!("expected array of length {len}, got {}", bytes.len());
                     }
                     out.write(bytes);
                     Ok(())
@@ -503,10 +499,7 @@ fn encode_value(
             }
             let actual_len = value.length()?;
             if actual_len != len {
-                return Err(js::Error::Custom(format!(
-                    "Expected array of length {}, got {}",
-                    len, actual_len
-                )));
+                bail!("expected array of length {len}, got {actual_len}");
             }
             for ind in 0..len {
                 let sub_value = value.index(ind)?;
@@ -520,9 +513,8 @@ fn encode_value(
                     0u8.encode_to(out);
                     return Ok(());
                 } else {
-                    let ind = u8::try_from(ind).or(Err(js::Error::Custom(format!(
-                        "Variant index {ind} is too large",
-                    ))))?;
+                    let ind =
+                        u8::try_from(ind).or(Err(anyhow!("variant index {ind} is too large")))?;
                     ind.encode_to(out);
                     return encode_value(value, ty, registry, out);
                 }
@@ -532,10 +524,7 @@ fn encode_value(
                 let key = js::JsString::from_js_value(k)?;
                 if let Ok((_name, ty, ind)) = def.get_variant_by_name(key.as_str()) {
                     let Ok(ind) = u8::try_from(ind) else {
-                        return Err(js::Error::Custom(format!(
-                            "Variant index {} is too large",
-                            ind
-                        )));
+                        bail!("variant index {} is too large", ind);
                     };
                     ind.encode_to(out);
                     if let Some(ty) = ty {
@@ -544,14 +533,14 @@ fn encode_value(
                     return Ok(());
                 }
             }
-            Err(js::Error::Custom(format!(
-                "Expect enum with any variant of {}",
+            bail!(
+                "expect enum with any variant of {}",
                 def.variants
                     .iter()
                     .map(|(name, _, _)| name.as_str())
                     .collect::<Vec<_>>()
                     .join(", ")
-            )))
+            )
         }
         Type::Struct(fields) => {
             for (name, ty) in fields.iter() {
@@ -606,7 +595,7 @@ fn encode_primitive(value: js::Value, t: &PrimitiveType, out: &mut impl Output) 
 }
 
 fn compactable_err<T>() -> js::Result<T> {
-    Err(js::Error::Expect("A number or () for compact"))
+    Err(anyhow!("a number or () for compact"))
 }
 
 fn encode_compact_primitive(
@@ -684,8 +673,7 @@ fn decode_valude(
             match tid.as_ref() {
                 Type::Primitive(ty) => decode_compact_primitive(ctx, buf, ty),
                 Type::Tuple(tids) if tids.is_empty() => {
-                    Compact::<()>::decode(buf)
-                        .map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
+                    Compact::<()>::decode(buf).context("failed to decode compact tuple")?;
                     Ok(ctx.new_array())
                 }
                 _ => compactable_err(),
@@ -694,12 +682,11 @@ fn decode_valude(
         Type::Seq(ty) => {
             let t = registry.resolve_type(ty, false)?;
             if matches!(t.as_ref(), Type::Primitive(PrimitiveType::U8)) {
-                let value = Vec::<u8>::decode(buf)
-                    .map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
+                let value = Vec::<u8>::decode(buf).context("failed to decode sequence")?;
                 return AsBytes(value).to_js_value(ctx);
             }
             let length = Compact::<u32>::decode(buf)
-                .map_err(|_| js::Error::Static("Unexpected end of buffer"))?
+                .context("failed to decode sequence length")?
                 .0;
             let out = ctx.new_array();
             for _ in 0..length {
@@ -721,7 +708,7 @@ fn decode_valude(
             let t = registry.resolve_type(ty, false)?;
             if matches!(t.as_ref(), Type::Primitive(PrimitiveType::U8)) {
                 if buf.len() < len {
-                    return Err(js::Error::Static("Unexpected end of buffer"));
+                    bail!("unexpected end of buffer")
                 }
                 let value = buf[..len].to_vec();
                 *buf = &buf[len..];
@@ -735,16 +722,14 @@ fn decode_valude(
             Ok(out)
         }
         Type::Enum(def) => {
-            let tag = u8::decode(buf).map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
+            let tag = u8::decode(buf).context("failed to decode enum tag")?;
             if let Some((ty, ind)) = def.is_option_and_some_def() {
                 if tag == 0 {
                     return Ok(js::Value::Null);
                 } else if tag as u32 == ind {
                     return decode_valude(ctx, buf, ty, registry);
                 } else {
-                    return Err(js::Error::Custom(format!(
-                        "Unexpected variant index {tag} for Option<T>"
-                    )));
+                    bail!("unexpected variant index {tag} for Option<T>");
                 }
             }
             let (variant_name, variant_type) = def.get_variant_by_index(tag)?;
@@ -775,8 +760,7 @@ fn decode_primitive(
 ) -> js::Result<js::Value> {
     macro_rules! decode_num {
         ($t: ident) => {{
-            let value =
-                <$t>::decode(buf).map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
+            let value = <$t>::decode(buf).context("unexpected end of buffer")?;
             value.to_js_value(ctx)
         }};
     }
@@ -793,7 +777,7 @@ fn decode_primitive(
         PrimitiveType::I128 => decode_num!(i128),
         PrimitiveType::Bool => decode_num!(bool),
         PrimitiveType::Str => String::decode(buf)
-            .map_err(|_| js::Error::Static("Unexpected end of buffer"))?
+            .context("unexpected end of buffer")?
             .to_js_value(ctx),
     }
 }
@@ -805,8 +789,7 @@ fn decode_compact_primitive(
 ) -> js::Result<js::Value> {
     macro_rules! decode_num {
         ($t: ident) => {{
-            let value = Compact::<$t>::decode(buf)
-                .map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
+            let value = Compact::<$t>::decode(buf).context("unexpected end of buffer")?;
             value.0.to_js_value(ctx)
         }};
     }

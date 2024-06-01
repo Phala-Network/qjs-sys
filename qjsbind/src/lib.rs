@@ -8,7 +8,7 @@ pub use as_bytes::{
     BytesOrString,
 };
 pub use engine::{Context, Runtime};
-pub use error::{Error, Result};
+pub use error::{Error, Result, JsResultExt, Context as ErrorContext};
 pub use eval::{eval, Code};
 pub use host_function::{call_host_function, Function, HostFunction};
 pub use js_string::JsString;

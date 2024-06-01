@@ -1,36 +1,28 @@
-use alloc::string::{String, ToString};
-use core::fmt::Display;
+pub use anyhow::{Context, Error, Result};
 
-pub type Result<T, E = Error> = core::result::Result<T, E>;
-
-#[derive(Debug)]
-pub enum Error {
-    Custom(String),
-    Static(&'static str),
-    Expect(&'static str),
-    ExpectLen(String, usize),
-    JsException(String),
-    RuntimeDropped,
+pub trait JsResultExt {
+    type T;
+    fn expect_js_value(self, value: &crate::Value, tobe: &str) -> Result<Self::T>;
 }
 
-impl Display for Error {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Error::Custom(s) => f.write_str(s),
-            Error::Static(s) => f.write_str(s),
-            Error::Expect(s) => write!(f, "expect {}", s),
-            Error::JsException(e) => f.write_str(e),
-            Error::ExpectLen(s, l) => write!(f, "expect [{s};{l}]"),
-            Error::RuntimeDropped => f.write_str("runtime has been dropped"),
-        }
+impl<T, E> JsResultExt for Result<T, E>
+where
+    Error: From<E>,
+{
+    type T = T;
+    fn expect_js_value(self, value: &crate::Value, tobe: &str) -> Result<T> {
+        self.map_err(Error::from)
+            .context(format!("expect {tobe}, got {}", value.get_name()))
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
-
-impl From<Error> for String {
-    fn from(value: Error) -> Self {
-        value.to_string()
+impl<T> JsResultExt for Option<T> {
+    type T = T;
+    fn expect_js_value(self, value: &crate::Value, tobe: &str) -> Result<Self::T> {
+        self.context(format!("expect {tobe}, got {}", value.get_name()))
     }
+}
+
+pub fn expect_js_value(value: &crate::Value, tobe: &str) -> Error {
+    Error::msg(format!("expect {tobe}, got {}", value.get_name()))
 }

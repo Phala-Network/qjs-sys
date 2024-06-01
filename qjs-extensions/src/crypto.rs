@@ -1,17 +1,12 @@
 use js::{IntoJsValue, Native, Result};
 use rand::RngCore;
+use anyhow::{bail, Context};
 
 fn from_js<T>(value: js::Value) -> Result<T>
 where
     T: js::FromJsValue,
 {
     T::from_js_value(value)
-}
-
-macro_rules! js_bail {
-    ($($arg:tt)*) => {
-        return Err(js::Error::Custom(format!($($arg)*)))
-    };
 }
 
 #[derive(js::FromJsValue, Debug)]
@@ -65,7 +60,7 @@ impl js::FromJsValue for CryptAlgorithm {
             "AES-CBC" => Ok(AesCbc(from_js(value)?)),
             "AES-CTR" => Ok(AesCtr(from_js(value)?)),
             "RSA-OAEP" => Ok(RsaOaep(from_js(value)?)),
-            _ => js_bail!("unsupported algorithm: {}", base.name),
+            _ => bail!("unsupported algorithm: {}", base.name),
         }
     }
 }
@@ -108,7 +103,7 @@ impl js::FromJsValue for DeriveAlgorithm {
             "ECDH" => Ok(Ecdh(from_js(value)?)),
             "HKDF" => Ok(Hkdf(from_js(value)?)),
             "PBKDF2" => Ok(Pbkdf2(from_js(value)?)),
-            _ => js_bail!("unsupported algorithm: {}", base.name),
+            _ => bail!("unsupported algorithm: {}", base.name),
         }
     }
 }
@@ -142,7 +137,7 @@ impl js::FromJsValue for DeriveKeyGenAlgorithm {
             "AES-CBC" | "AES-CTR" | "AES-GCM" | "AES-KW" => Ok(Aes(from_js(value)?)),
             "HKDF" => Ok(Hkdf(from_js(value)?)),
             "PBKDF2" => Ok(Pbkdf2(from_js(value)?)),
-            _ => js_bail!("unsupported algorithm: {}", base.name),
+            _ => bail!("unsupported algorithm: {}", base.name),
         }
     }
 }
@@ -180,7 +175,7 @@ impl js::FromJsValue for KeyGenAlgorithm {
             "ECDSA" | "ECDH" => Ok(Ec(from_js(value)?)),
             "HMAC" => Ok(Hmac(from_js(value)?)),
             "AES-CBC" | "AES-CTR" | "AES-GCM" | "AES-KW" => Ok(Aes(from_js(value)?)),
-            _ => js_bail!("unsupported algorithm: {}", base.name),
+            _ => bail!("unsupported algorithm: {}", base.name),
         }
     }
 }
@@ -296,34 +291,34 @@ fn encrypt(
                     let nonce = aes_gcm::Nonce::from_slice(&params.iv);
                     let ciphertext = aead
                         .encrypt(nonce, data.as_ref())
-                        .map_err(|_| js::Error::Static("encryption failed"))?;
+                        .context("encryption failed")?;
                     ciphertext
                 }};
             }
             if params.additional_data.is_some() {
-                js_bail!("additional data is not supported");
+                bail!("additional data is not supported");
             }
             if params.tag_length.is_some() {
-                js_bail!("tag length is not supported");
+                bail!("tag length is not supported");
             }
             if key.r#type.as_str() != "secret" {
-                js_bail!("key must be a secret key");
+                bail!("key must be a secret key");
             }
             if params.iv.len() != 12 {
-                js_bail!("iv must be 12 bytes long");
+                bail!("iv must be 12 bytes long");
             }
             let KeyGenAlgorithm::Aes(key_algo) = &key.algorithm else {
-                js_bail!("not a valid AES key algorithm");
+                bail!("not a valid AES key algorithm");
             };
             let ciphertext = match key_algo.length {
                 128 => encrypt_with!(Aes128),
                 192 => encrypt_with!(Aes192),
                 256 => encrypt_with!(Aes256),
-                _ => js_bail!("key must be 16, 24, or 32 bytes long"),
+                _ => bail!("key must be 16, 24, or 32 bytes long"),
             };
             Ok(ciphertext.into())
         }
-        _ => js_bail!("unsupported encryption algorithm"),
+        _ => bail!("unsupported encryption algorithm"),
     }
 }
 
@@ -348,31 +343,31 @@ fn decrypt(
                     let nonce = aes_gcm::Nonce::from_slice(&params.iv);
                     let plaintext = aead
                         .decrypt(nonce, data.as_ref())
-                        .map_err(|_| js::Error::Static("decryption failed"))?;
+                        .context("decryption failed")?;
                     plaintext
                 }};
             }
             if params.additional_data.is_some() {
-                js_bail!("additional data is not supported");
+                bail!("additional data is not supported");
             }
             if params.tag_length.is_some() {
-                js_bail!("tag length is not supported");
+                bail!("tag length is not supported");
             }
             if params.iv.len() != 12 {
-                js_bail!("iv must be 12 bytes long");
+                bail!("iv must be 12 bytes long");
             }
             let KeyGenAlgorithm::Aes(key_algo) = &key.algorithm else {
-                js_bail!("not a valid AES key algorithm");
+                bail!("not a valid AES key algorithm");
             };
             let plaintext = match key_algo.length {
                 128 => decrypt_with!(Aes128),
                 192 => decrypt_with!(Aes192),
                 256 => decrypt_with!(Aes256),
-                _ => js_bail!("key must be 16, 24, or 32 bytes long"),
+                _ => bail!("key must be 16, 24, or 32 bytes long"),
             };
             Ok(plaintext.into())
         }
-        _ => js_bail!("unsupported decryption algorithm"),
+        _ => bail!("unsupported decryption algorithm"),
     }
 }
 
@@ -387,7 +382,7 @@ fn derive_aes_key(
         // Use the shared secret to generate AES key
         let key_len = aes_params.length / 8;
         let Some(derived_key) = &shared_secret_bytes.get(..key_len) else {
-            js_bail!("shared secret is too short");
+            bail!("shared secret is too short");
         };
         Ok(CryptoKey {
             r#type: "secret".into(),
@@ -397,7 +392,7 @@ fn derive_aes_key(
             raw: derived_key.to_vec().into(),
         })
     } else {
-        js_bail!("unsupported derived key algorithm")
+        bail!("unsupported derived key algorithm")
     }
 }
 
@@ -413,7 +408,7 @@ fn derive_key(
     match algorithm {
         DeriveAlgorithm::Ecdh(params) => {
             let KeyGenAlgorithm::Ec(base_algo) = &base_key.algorithm else {
-                js_bail!("unsupported base key algorithm");
+                bail!("unsupported base key algorithm");
             };
             macro_rules! derive_aes_key {
                 ($module: ident, $curve: ident) => {{
@@ -422,10 +417,10 @@ fn derive_key(
                     };
                     // Process keys
                     let secret_key = SecretKey::<$curve>::from_slice(&base_key.raw)
-                        .map_err(|_| js::Error::Static("invalid private key"))?;
+                        .context("invalid private key")?;
                     let public_key =
                         PublicKey::from_sec1_bytes(&params.public.borrow().raw.to_vec())
-                            .map_err(|_| js::Error::Static("invalid public key"))?;
+                            .context("invalid public key")?;
                     // Perform ECDH & derive key
                     let shared_secret =
                         diffie_hellman(secret_key.to_nonzero_scalar(), public_key.as_affine());
@@ -441,13 +436,13 @@ fn derive_key(
                 "P-256" => derive_aes_key!(p256, NistP256),
                 "P-384" => derive_aes_key!(p384, NistP384),
                 "P-521" => derive_aes_key!(p521, NistP521),
-                _ => js_bail!(
+                _ => bail!(
                     "unsupported named curve: {}",
                     base_algo.named_curve.as_str()
                 ),
             }
         }
-        _ => js_bail!("unsupported derive algorithm"),
+        _ => bail!("unsupported derive algorithm"),
     }
 }
 
@@ -507,9 +502,9 @@ fn generate_key(
                     algorithm,
                 ))
             }
-            _ => js_bail!("unsupported named curve: {}", params.named_curve),
+            _ => bail!("unsupported named curve: {}", params.named_curve),
         },
-        _ => js_bail!("unsupported key generation algorithm"),
+        _ => bail!("unsupported key generation algorithm"),
     }
 }
 
@@ -522,7 +517,7 @@ fn import_key(
     key_usages: Vec<js::JsString>,
 ) -> Result<CryptoKey> {
     if fmt.as_str() != "raw" {
-        js_bail!("unsupported import format: {fmt}");
+        bail!("unsupported import format: {fmt}");
     }
     use js::FromJsValue;
     let key_data = js::Bytes::from_js_value(key_data)?;
@@ -540,7 +535,7 @@ fn export_key(fmt: js::JsString, key: Native<CryptoKey>) -> Result<js::Bytes> {
     let key = key.borrow();
     match fmt.as_str() {
         "raw" => Ok(key.raw.clone()),
-        _ => js_bail!("unsupported export format: {fmt}"),
+        _ => bail!("unsupported export format: {fmt}"),
     }
 }
 

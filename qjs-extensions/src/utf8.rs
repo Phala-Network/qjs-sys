@@ -2,6 +2,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use anyhow::Context;
 use js::{AsBytes, JsString, JsUint8Array, Result};
 
 #[derive(Debug, js::ToJsValue, Default)]
@@ -30,6 +31,6 @@ pub fn encode_into(data: JsString, buf: JsUint8Array) -> EncodeProgress {
 #[js::host_call]
 pub fn decode(utf8_data: JsUint8Array) -> Result<String> {
     let utf8_data = utf8_data.as_bytes();
-    let utf8_str = core::str::from_utf8(utf8_data).or(Err(js::Error::Expect("utf8 string")))?;
+    let utf8_str = core::str::from_utf8(utf8_data).context("invalid utf-8 data")?;
     Ok(utf8_str.to_string())
 }

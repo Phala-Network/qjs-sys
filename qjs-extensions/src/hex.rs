@@ -1,4 +1,5 @@
 use alloc::{string::String, vec::Vec};
+use anyhow::Context;
 use js::{AsBytes, BytesOrString, JsString, Result};
 
 #[js::host_call]
@@ -15,5 +16,5 @@ pub fn decode(hex_str: JsString) -> Result<AsBytes<Vec<u8>>> {
     let hex_str = hex_str.as_str().trim_start_matches("0x");
     hex::decode(hex_str)
         .map(AsBytes)
-        .or(Err(js::Error::Expect("hex string")))
+        .context("invalid hex string")
 }

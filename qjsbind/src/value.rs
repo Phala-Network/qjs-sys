@@ -2,10 +2,12 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use anyhow::{anyhow, bail, Context};
 use scopeguard::defer;
 
 use crate::{
     self as js,
+    error::{expect_js_value, JsResultExt},
     opaque_value::{is_opaque_object_of, opaque_object_get_data_mut, Ref, RefMut},
 };
 use crate::{
@@ -173,9 +175,9 @@ impl Value {
     #[track_caller]
     pub fn context(&self) -> Result<&js::Context> {
         match self {
-            Self::Undefined => Err(Error::Static("no context for undefined")),
-            Self::Null => Err(Error::Static("no context for null")),
-            Self::Exception => Err(Error::Static("no context for exception")),
+            Self::Undefined => Err(anyhow!("no context for undefined")),
+            Self::Null => Err(anyhow!("no context for null")),
+            Self::Exception => Err(anyhow!("no context for exception")),
             Self::Other { ctx, .. } => Ok(ctx),
         }
     }
@@ -184,18 +186,23 @@ impl Value {
         self.get_property(&ind.to_string())
     }
 
-    pub fn get_property(&self, name: &str) -> Result<Self> {
+    pub fn get_property_atom(&self, prop: c::JSAtom) -> Result<Self> {
         let ctx = self.context()?;
-        let mut name_buf: tinyvec::TinyVec<[u8; 32]> = name.bytes().collect();
-        name_buf.push(0);
-        let value = unsafe {
-            c::JS_GetPropertyStr(ctx.as_ptr(), *self.raw_value(), name_buf.as_ptr() as _)
-        };
+        let value = unsafe { c::JS_GetProperty(ctx.as_ptr(), *self.raw_value(), prop) };
         let value = Self::new_moved(ctx, value);
         if value.is_exception() {
-            Err(Error::JsException(ctx.get_exception_str()))
+            bail!("Error::JsException({})", ctx.get_exception_str())
         } else {
             Ok(value)
+        }
+    }
+
+    pub fn get_property(&self, name: &str) -> Result<Self> {
+        unsafe {
+            let ctx = self.context()?;
+            let atom = c::JS_NewAtomLen(ctx.as_ptr(), name.as_ptr() as _, name.len() as _);
+            scopeguard::defer! { c::JS_FreeAtom(ctx.as_ptr(), atom); }
+            self.get_property_atom(atom)
         }
     }
 
@@ -210,7 +217,7 @@ impl Value {
     pub fn next(&self) -> Result<Option<Self>> {
         let next_fn = self.get_property("next")?;
         if next_fn.is_null() {
-            Err(Error::Expect("iterator"))
+            Err(expect_js_value(self, "iterator"))
         } else {
             let next_val = next_fn.call(self, &[])?;
             let done = next_val.get_property("done")?;
@@ -231,7 +238,7 @@ impl Value {
     pub fn call_method_if_exists(&self, name: &str, args: &[Value]) -> Result<Self> {
         let method = self.get_property(name)?;
         if !method.is_function() {
-            return Err(Error::Expect("function"));
+            return Err(expect_js_value(&method, "function"));
         }
         method.call(self, args)
     }
@@ -251,7 +258,7 @@ impl Value {
         };
         let ret = Self::new_moved(ctx, value);
         if ret.is_exception() {
-            Err(Error::JsException(ctx.get_exception_str()))
+            Err(ctx.get_exception_error())
         } else {
             Ok(ret)
         }
@@ -267,7 +274,7 @@ impl Value {
 
     pub fn entries(&self) -> Result<PairIter> {
         if self.is_undefined() || self.is_null() {
-            return Err(Error::Expect("object for entries"));
+            return Err(expect_js_value(self, "Object"));
         }
         #[allow(non_snake_case)]
         let Object = get_global(self.context()?).get_property("Object")?;
@@ -488,6 +495,26 @@ impl Value {
         }
     }
 
+    pub fn get_name(&self) -> String {
+        if let Some(name) = self
+            .get_property_atom(c::JS_ATOM_Symbol_toStringTag)
+            .ok()
+            .and_then(|v| v.decode_string().ok())
+        {
+            return name;
+        }
+
+        match self {
+            Self::Undefined => "undefined".into(),
+            Self::Null => "null".into(),
+            Self::Exception => "exception".into(),
+            Self::Other { ctx, value } => {
+                let ty = unsafe { c::JS_TypeOf(ctx.as_ptr(), *value) };
+                Value::new_moved(ctx, ty).to_string()
+            }
+        }
+    }
+
     pub fn set_property(&self, key: &str, value: &Value) -> Result<(), Error> {
         let ctx = self.context()?;
         unsafe {
@@ -505,7 +532,7 @@ impl Value {
             if r != 0 {
                 Ok(())
             } else {
-                Err(Error::Custom(format!("Failed to set property: {key}")))
+                bail!("failed to set property: {key}");
             }
         }
     }
@@ -516,7 +543,7 @@ impl Value {
             if r == 1 {
                 Ok(())
             } else {
-                Err(Error::Static("Failed to set prototype"))
+                bail!("failed to set prototype");
             }
         }
     }
@@ -541,9 +568,7 @@ impl Value {
             if r != 0 {
                 Ok(())
             } else {
-                Err(Error::Custom(format!(
-                    "Failed to define property value: {key}"
-                )))
+                bail!("failed to define property {key}");
             }
         }
     }
@@ -566,7 +591,7 @@ impl Value {
             if r != 0 {
                 Ok(())
             } else {
-                Err(Error::Custom(format!("Failed to define property")))
+                bail!("failed to define property atom");
             }
         }
     }
@@ -598,10 +623,10 @@ impl Value {
             );
             c::JS_FreeAtom(ctx.as_ptr(), prop);
             if ret < 0 {
-                return Err(Error::Custom(format!(
-                    "Failed to define property getter/setter `{key}`: {}",
+                bail!(
+                    "failed to define getter/setter `{key}`: {}",
                     ctx.get_exception_str()
-                )));
+                );
             }
         }
         Ok(())
@@ -610,7 +635,7 @@ impl Value {
     pub fn array_push(&self, value: &Value) -> Result<()> {
         _ = self
             .call_method("push", &[value.clone()])
-            .or(Err(Error::Static("Failed to push value to array")))?;
+            .context("failed to push value to array")?;
         Ok(())
     }
 }
@@ -620,37 +645,37 @@ impl Value {
         if self.is_bool() {
             Ok(unsafe { c::JS_ToBool(self.context()?.as_ptr(), *self.raw_value()) != 0 })
         } else {
-            Err(Error::Expect("bool"))
+            Err(expect_js_value(self, "bool"))
         }
     }
     pub fn decode_string(&self) -> Result<String> {
         if self.is_string() {
             Ok(self
                 .to_string_utf8()
-                .ok_or(Error::Expect("string"))?
+                .expect_js_value(self, "string")?
                 .as_str()
                 .into())
         } else {
-            Err(Error::Expect("string"))
+            Err(expect_js_value(self, "string"))
         }
     }
     pub fn decode_i8(&self) -> Result<i8> {
-        self.decode_i64()?.try_into().or(Err(Error::Expect("i8")))
+        self.decode_i64()?.try_into().expect_js_value(self, "i8")
     }
     pub fn decode_u8(&self) -> Result<u8> {
-        self.decode_i64()?.try_into().or(Err(Error::Expect("u8")))
+        self.decode_i64()?.try_into().expect_js_value(self, "u8")
     }
     pub fn decode_i16(&self) -> Result<i16> {
-        self.decode_i64()?.try_into().or(Err(Error::Expect("i16")))
+        self.decode_i64()?.try_into().expect_js_value(self, "i16")
     }
     pub fn decode_u16(&self) -> Result<u16> {
-        self.decode_i64()?.try_into().or(Err(Error::Expect("u16")))
+        self.decode_i64()?.try_into().expect_js_value(self, "u16")
     }
     pub fn decode_i32(&self) -> Result<i32> {
-        self.decode_i64()?.try_into().or(Err(Error::Expect("i32")))
+        self.decode_i64()?.try_into().expect_js_value(self, "i32")
     }
     pub fn decode_u32(&self) -> Result<u32> {
-        self.decode_i64()?.try_into().or(Err(Error::Expect("u32")))
+        self.decode_i64()?.try_into().expect_js_value(self, "u32")
     }
     pub fn decode_i64(&self) -> Result<i64> {
         if self.is_number() || self.is_big_int() {
@@ -662,35 +687,35 @@ impl Value {
                 }
             }
         }
-        Err(Error::Expect("i64"))
+        Err(expect_js_value(self, "i64"))
     }
     pub fn decode_u64(&self) -> Result<u64> {
-        self.decode_number().or(Err(Error::Expect("u64")))
+        self.decode_number().expect_js_value(self, "u64")
     }
     pub fn decode_usize(&self) -> Result<usize> {
         self.decode_u64()
-            .or(Err(Error::Expect("usize")))?
+            .expect_js_value(self, "usize")?
             .try_into()
-            .or(Err(Error::Expect("usize")))
+            .expect_js_value(self, "usize")
     }
     pub fn decode_f32(&self) -> Result<f32> {
-        self.decode_number().or(Err(Error::Expect("f32")))
+        self.decode_number().expect_js_value(self, "f32")
     }
     pub fn decode_f64(&self) -> Result<f64> {
-        self.decode_number().or(Err(Error::Expect("f64")))
+        self.decode_number().expect_js_value(self, "f64")
     }
     pub fn decode_i128(&self) -> Result<i128> {
-        self.decode_number().or(Err(Error::Expect("i128")))
+        self.decode_number().expect_js_value(self, "i128")
     }
     pub fn decode_u128(&self) -> Result<u128> {
-        self.decode_number().or(Err(Error::Expect("u128")))
+        self.decode_number().expect_js_value(self, "u128")
     }
     pub fn decode_number<N: core::str::FromStr>(&self) -> Result<N> {
         // TODO: optimize performance
         if self.is_number() || self.is_big_int() {
-            self.parse().ok_or(Error::Expect("number"))
+            self.parse().expect_js_value(self, "number")
         } else {
-            Err(Error::Expect("number"))
+            Err(expect_js_value(self, "number"))
         }
     }
     pub fn decode_bytes(&self) -> Result<Vec<u8>> {
@@ -705,7 +730,7 @@ impl Value {
                 }
             };
             if ptr.is_null() {
-                return Err(Error::Static("invalid bytes"));
+                return Err(expect_js_value(self, "bytes-like object"));
             }
             let mut v = Vec::with_capacity(len);
             unsafe {
@@ -728,21 +753,25 @@ impl Value {
             }
             #[cfg(not(feature = "treat-hex-as-bytes"))]
             {
-                let s = self.to_string_utf8().ok_or(Error::Expect("string"))?;
+                let s = self
+                    .to_string_utf8()
+                    .expect_js_value(self, "bytes-like object")?;
                 Ok(s.as_str().as_bytes().to_vec())
             }
         } else {
-            Err(Error::Expect("bytes-like value"))
+            Err(expect_js_value(self, "bytes-like object"))
         }
     }
 
     pub fn decode_bytes_maybe_hex(&self) -> Result<Vec<u8>> {
         if self.is_string() {
-            let s = self.to_string_utf8().ok_or(Error::Expect("string"))?;
+            let s = self
+                .to_string_utf8()
+                .expect_js_value(self, "bytes-like object")?;
             let s = s.as_str();
             if s.starts_with("0x") || s.starts_with("0X") {
                 let s = &s[2..];
-                Ok(hex::decode(s).or(Err(Error::Expect("hex string")))?)
+                Ok(hex::decode(s).expect_js_value(self, "bytes-like object")?)
             } else {
                 Ok(s.as_bytes().to_vec())
             }

@@ -4,7 +4,7 @@ use core::{
     ops::Deref,
 };
 
-use crate::{self as js, c, Error, FromJsValue, GcMark, Result, ToJsValue, Value};
+use crate::{self as js, c, error::expect_js_value, FromJsValue, GcMark, Result, ToJsValue, Value};
 
 /// A wrapper of JS string. When passing a string from JS to Rust, using this type
 /// is more efficient than `String` because it avoids extra memory allocation and copy.
@@ -49,14 +49,14 @@ impl JsString {
 
 impl FromJsValue for JsString {
     fn from_js_value(value: Value) -> Result<Self> {
-        let ctx = value.context().or(Err(Error::Expect("Context")))?;
+        let ctx = value.context()?;
         if !value.is_string() {
-            return Err(Error::Expect("string"));
+            return Err(expect_js_value(&value, "string"));
         }
         let mut len = 0;
         let ptr = unsafe { c::JS_ToCStringLen(ctx.as_ptr(), &mut len, *value.raw_value()) };
         if ptr.is_null() {
-            return Err(Error::Expect("string"));
+            return Err(expect_js_value(&value, "string"));
         }
         let js_value = unsafe { c::JS_CStringOuterValue(ctx.as_ptr(), ptr) };
         let value = Value::new_moved(ctx, js_value);
