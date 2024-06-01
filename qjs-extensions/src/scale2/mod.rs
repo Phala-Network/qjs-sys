@@ -660,7 +660,7 @@ fn codec(
     tid: js::Value,
     registry: js::Value,
 ) -> js::Result<js::Value> {
-    let obj = ctx.new_object();
+    let obj = ctx.new_object("ScaleCodec");
     let proto = ctx.get_global_object().get_property("ScaleCodec")?;
     obj.set_prototype(&proto)?;
     obj.set_property("ty", &tid)?;
@@ -748,7 +748,7 @@ fn decode_valude(
                 }
             }
             let (variant_name, variant_type) = def.get_variant_by_index(tag)?;
-            let out = ctx.new_object();
+            let out = ctx.new_object(&variant_name);
             if let Some(variant_type) = variant_type {
                 let sub_value = decode_valude(ctx, buf, &variant_type, registry)?;
                 out.set_property(&variant_name, &sub_value)?;
@@ -758,7 +758,7 @@ fn decode_valude(
             Ok(out)
         }
         Type::Struct(fields) => {
-            let out = ctx.new_object();
+            let out = ctx.new_object("");
             for (name, ty) in fields {
                 let sub_value = decode_valude(ctx, buf, ty, registry)?;
                 out.set_property(name, &sub_value)?;

@@ -2,6 +2,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use scopeguard::defer;
 
 use crate::{
     self as js,
@@ -464,14 +465,27 @@ impl Value {
     pub fn new_array(ctx: &js::Context) -> Self {
         unsafe { Self::new_moved(ctx, c::JS_NewArray(ctx.as_ptr())) }
     }
-    pub fn new_object(ctx: &js::Context) -> Self {
-        unsafe { Self::new_moved(ctx, c::JS_NewObject(ctx.as_ptr())) }
+    pub fn new_object(ctx: &js::Context, name: &str) -> Self {
+        let object = unsafe { Self::new_moved(ctx, c::JS_NewObject(ctx.as_ptr())) };
+        if !name.is_empty() {
+            object.set_name(name).expect("Failed to set object name");
+        }
+        object
     }
 }
 
 impl Value {
     pub fn index_set(&self, ind: usize, value: &Value) -> Result<(), Error> {
         self.set_property(&ind.to_string(), value)
+    }
+
+    pub fn set_name(&self, name: &str) -> Result<(), Error> {
+        unsafe {
+            let ctx = self.context()?.as_ptr();
+            let atom_name = c::JS_NewAtomLen(ctx, name.as_ptr() as _, name.len() as _);
+            defer! { c::JS_FreeAtom(ctx, atom_name); }
+            self.define_property_atom(c::JS_ATOM_Symbol_toStringTag, atom_name, c::JS_PROP_C_W_E)
+        }
     }
 
     pub fn set_property(&self, key: &str, value: &Value) -> Result<(), Error> {
@@ -530,6 +544,29 @@ impl Value {
                 Err(Error::Custom(format!(
                     "Failed to define property value: {key}"
                 )))
+            }
+        }
+    }
+
+    pub fn define_property_atom(
+        &self,
+        key: c::JSAtom,
+        value: c::JSAtom,
+        flags: u32,
+    ) -> Result<(), Error> {
+        unsafe {
+            let ctx = self.context()?.as_ptr();
+            let r = c::JS_DefinePropertyValue(
+                ctx,
+                *self.raw_value(),
+                key,
+                c::JS_AtomToString(ctx, value),
+                flags as _,
+            );
+            if r != 0 {
+                Ok(())
+            } else {
+                Err(Error::Custom(format!("Failed to define property")))
             }
         }
     }

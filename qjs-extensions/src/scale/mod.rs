@@ -403,7 +403,7 @@ fn decode_valude(
         ScaleType::Enum(variants) => {
             let tag = u8::decode(buf).map_err(|_| js::Error::Static("Unexpected end of buffer"))?;
             let (variant_name, variant_type) = variants.get_variant_by_index(tag as usize)?;
-            let out = ctx.new_object();
+            let out = ctx.new_object(variant_name);
             if let Some(variant_type) = variant_type {
                 let sub_value = decode_valude(ctx, buf, variant_type, type_registry)?;
                 out.set_property(variant_name, &sub_value)?;
@@ -413,7 +413,7 @@ fn decode_valude(
             Ok(out)
         }
         ScaleType::Struct(fields) => {
-            let out = ctx.new_object();
+            let out = ctx.new_object("");
             for (name, tid) in fields {
                 let sub_value = decode_valude(ctx, buf, *tid, type_registry)?;
                 out.set_property(name, &sub_value)?;

@@ -260,7 +260,7 @@ impl<const N: usize, T: ToJsValue> ToJsValue for [T; N] {
 
 impl<V: ToJsValue> ToJsValue for BTreeMap<String, V> {
     fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
-        let js_object = Value::new_object(ctx);
+        let js_object = Value::new_object(ctx, "BTMObject");
         for (key, value) in self.iter() {
             js_object.set_property(key, &value.to_js_value(ctx)?)?;
         }

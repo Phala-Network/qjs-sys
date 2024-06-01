@@ -568,8 +568,8 @@ fn setup_subtle(ns: &js::Value) -> Result<()> {
 }
 
 pub fn setup(g: &js::Value) -> Result<()> {
-    let crypto = js::Value::new_object(g.context()?);
-    let subtle = js::Value::new_object(g.context()?);
+    let crypto = g.context()?.new_object("Crypto");
+    let subtle = g.context()?.new_object("SubtleCrypto");
     setup_subtle(&subtle)?;
     crypto.set_property("subtle", &subtle)?;
     crypto.define_property_fn("getRandomValues", get_random_values)?;

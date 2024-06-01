@@ -23,8 +23,8 @@ impl Context {
         crate::get_global(self)
     }
 
-    pub fn new_object(&self) -> Value {
-        Value::new_object(self)
+    pub fn new_object(&self, name: &str) -> Value {
+        Value::new_object(self, name)
     }
 
     pub fn new_array(&self) -> Value {

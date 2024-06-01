@@ -103,8 +103,7 @@ pub fn new_opaque_object<T: 'static>(
     };
     let object = Value::new_moved(ctx, js_value);
     if let Some(name) = name {
-        let name = ctx.new_string(name);
-        _ = object.set_property_atom(c::JS_ATOM_Symbol_toStringTag, name);
+        _ = object.set_name(name);
     }
     object
 }

@@ -61,7 +61,9 @@ fn derive_newtype_struct(
                 use #crate_qjsbind::{c, Value, #trait_name, Result};
                 impl #impl_generics #trait_name for #ident #ty_generics #bounded_where_clause {
                     fn #fn_name(#self_arg, ctx: &#crate_qjsbind::Context) -> Result<Value> {
-                        self.0.#fn_name(ctx)
+                        let value = self.0.#fn_name(ctx);
+                        value.set_name(#{ident.to_string()});
+                        value
                     }
                 }
             };
@@ -147,7 +149,7 @@ fn derive_struct(
                 use #crate_qjsbind::{c, Value, #trait_name, Result};
                 impl #impl_generics #trait_name for #ident #ty_generics #bounded_where_clause {
                     fn #fn_name(#self_arg, ctx: &#crate_qjsbind::Context) -> Result<Value> {
-                        let obj = Value::new_object(ctx);
+                        let obj = ctx.new_object(#{ident.to_string()});
                         #(for field in &attrs) {
                             #(if field.as_bytes() || field.bytes_or_hex()) {
                                 let field_value = #crate_qjsbind::encode_as_bytes(ctx, &self.#{&field.field().ident});
