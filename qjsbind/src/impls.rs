@@ -44,7 +44,7 @@ impl_from_for!(usize, decode_usize);
 
 impl FromJsValue for () {
     fn from_js_value(js_value: Value) -> Result<Self> {
-        if js_value.is_null() || js_value.is_undefined() {
+        if js_value.is_null_or_undefined() {
             Ok(())
         } else {
             Err(expect_js_value(&js_value, "()"))
@@ -77,7 +77,7 @@ impl_from_for_tuple!(A, B, C, D, E, F, G, H, I);
 
 impl<T: FromJsValue> FromJsValue for Option<T> {
     fn from_js_value(js_value: Value) -> Result<Self> {
-        if js_value.is_null() || js_value.is_undefined() {
+        if js_value.is_null_or_undefined() {
             Ok(None)
         } else {
             Ok(Some(T::from_js_value(js_value)?))

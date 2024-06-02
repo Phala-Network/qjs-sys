@@ -1,6 +1,7 @@
 use crate::attrs::trim_rust_raw;
 
 use super::*;
+use proc_macro2::Span;
 use quote::format_ident;
 use syn::spanned::Spanned;
 use template_quote::quote_spanned;
@@ -27,42 +28,54 @@ impl ToTokens for Mod {
 
 impl ToTokens for Class {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let name = &self.name;
-        let (class_name_str, full_class_name_str) = if let Some(js_name) = &self.attrs.js_name {
-            let s = js_name.value();
-            let parts = s.rsplitn(2, ".").collect::<Vec<_>>();
-            if parts.len() == 2 {
-                (parts[0].to_string(), s)
-            } else {
-                (s.clone(), s)
-            }
-        } else {
-            (name.to_string(), name.to_string())
+        let rs_name = &self.name;
+        let class_name_str = match &self.attrs.js_name {
+            Some(js_name) => js_name.value(),
+            None => rs_name.to_string(),
         };
         let mut properties = vec![];
+        let constructor_var = syn::Ident::new("constructor", Span::call_site());
+        let proto_var = syn::Ident::new("proto", Span::call_site());
+        struct Property {
+            is_static: bool,
+            js_name: String,
+            getter: Option<(Ident, Ident)>,
+            setter: Option<(Ident, Ident)>,
+        }
         let mut methods = vec![];
         for field in self.fields.iter() {
             let Some(prop) = &field.qjs_property else {
                 continue;
             };
             let prop_js_name = prop.js_name_str(self);
-            match (&prop.attrs.getter, &prop.attrs.setter) {
+            match (prop.attrs.getter.clone(), prop.attrs.setter.clone()) {
                 (Some(getter), Some(setter)) => {
                     let getter_fn_name = prop.getter_fn_name(self);
                     let setter_fn_name = prop.setter_fn_name(self);
-                    properties.push((
-                        prop_js_name,
-                        Some((getter, getter_fn_name)),
-                        Some((setter, setter_fn_name)),
-                    ));
+                    properties.push(Property {
+                        is_static: false,
+                        js_name: prop_js_name,
+                        getter: Some((getter, getter_fn_name)),
+                        setter: Some((setter, setter_fn_name)),
+                    });
                 }
                 (Some(getter), None) => {
                     let getter_fn_name = prop.getter_fn_name(self);
-                    properties.push((prop_js_name, Some((getter, getter_fn_name)), None));
+                    properties.push(Property {
+                        is_static: false,
+                        js_name: prop_js_name,
+                        getter: Some((getter, getter_fn_name)),
+                        setter: None,
+                    });
                 }
                 (None, Some(setter)) => {
                     let setter_fn_name = prop.setter_fn_name(self);
-                    properties.push((prop_js_name, None, Some((setter, setter_fn_name))));
+                    properties.push(Property {
+                        is_static: false,
+                        js_name: prop_js_name,
+                        getter: None,
+                        setter: Some((setter, setter_fn_name)),
+                    });
                 }
                 (None, None) => {}
             }
@@ -71,46 +84,96 @@ impl ToTokens for Class {
         for method in self.methods.iter() {
             let js_name = method.js_name_str(self);
             let fn_name = method.impl_fn_name(self);
-            match &method.attrs.fn_type {
-                MethodType::Getter(marker) => {
-                    if let Some((_, setter_fn_name, _)) =
-                        properties.iter_mut().find(|(name, _, _)| name == &js_name)
+            let marker_token = method.attrs.marker_token.clone();
+            match method.attrs.fn_type.clone() {
+                MethodType::Getter => {
+                    if method.is_static {
+                        properties.push(Property {
+                            is_static: true,
+                            js_name,
+                            getter: Some((marker_token, fn_name)),
+                            setter: None,
+                        });
+                        continue;
+                    }
+                    if let Some(Property { setter, .. }) =
+                        properties.iter_mut().find(|p| p.js_name == js_name)
                     {
-                        *setter_fn_name = Some((marker, fn_name));
+                        *setter = Some((marker_token, fn_name));
                     } else {
-                        properties.push((js_name, Some((marker, fn_name)), None));
+                        properties.push(Property {
+                            is_static: false,
+                            js_name,
+                            getter: Some((marker_token, fn_name)),
+                            setter: None,
+                        });
                     }
                 }
-                MethodType::Setter(marker) => {
-                    if let Some((_, getter_fn_name, _)) =
-                        properties.iter_mut().find(|(name, _, _)| name == &js_name)
+                MethodType::Setter => {
+                    if method.is_static {
+                        properties.push(Property {
+                            is_static: true,
+                            js_name,
+                            getter: None,
+                            setter: Some((marker_token, fn_name)),
+                        });
+                        continue;
+                    }
+                    if let Some(Property { getter, .. }) =
+                        properties.iter_mut().find(|p| p.js_name == js_name)
                     {
-                        *getter_fn_name = Some((marker, fn_name));
+                        *getter = Some((marker_token, fn_name));
                     } else {
-                        properties.push((js_name, None, Some((marker, fn_name))));
+                        properties.push(Property {
+                            is_static: false,
+                            js_name,
+                            getter: None,
+                            setter: Some((marker_token, fn_name)),
+                        });
                     }
                 }
-                MethodType::Method(marker) => {
-                    methods.push(quote_spanned! { marker.span() =>
-                        proto.define_property_fn(#js_name, #fn_name)?;
+                MethodType::Method => {
+                    let target = if method.is_static {
+                        constructor_var.clone()
+                    } else {
+                        proto_var.clone()
+                    };
+                    methods.push(quote_spanned! { marker_token.span() =>
+                        #target.define_property_fn(#js_name, #fn_name)?;
                     });
+                }
+                MethodType::Constructor => {
+                    // This should never be called
+                    continue;
                 }
             }
         }
 
-        let properties = properties.iter().map(|(name, getter, setter)| {
-            let getter = getter
-                .as_ref()
-                .map(|(marker, ident)| quote_spanned! { marker.span() => Some(#ident) })
-                .unwrap_or(quote! { None });
-            let setter = setter
-                .as_ref()
-                .map(|(marker, ident)| quote_spanned! { marker.span() => Some(#ident) })
-                .unwrap_or(quote! { None });
-            quote! {
-                proto.define_property_getset(#name, #getter, #setter)?;
-            }
-        });
+        let properties = properties.iter().map(
+            |Property {
+                 is_static,
+                 js_name,
+                 getter,
+                 setter,
+             }| {
+                let getter = getter
+                    .as_ref()
+                    .map(|(marker, ident)| quote_spanned! { marker.span() => Some(#ident) })
+                    .unwrap_or(quote! { None });
+                let setter = setter
+                    .as_ref()
+                    .map(|(marker, ident)| quote_spanned! { marker.span() => Some(#ident) })
+                    .unwrap_or(quote! { None });
+                let target = if *is_static {
+                    constructor_var.clone()
+                } else {
+                    proto_var.clone()
+                };
+                quote! {
+                    #target.define_property_getset(#js_name, #getter, #setter)?;
+                }
+            },
+        );
 
         let mark_stmts = self.fields.iter().enumerate().flat_map(|(i, field)| {
             if field.no_gc() {
@@ -131,26 +194,23 @@ impl ToTokens for Class {
         });
 
         tokens.extend(quote! {
-            impl crate_js::GcMark for #name {
+            impl crate_js::GcMark for #rs_name {
                 fn gc_mark(&self, rt: *mut crate_js::c::JSRuntime, mark_fn: crate_js::c::JS_MarkFunc) {
                     #(#mark_stmts)*
                 }
             }
-            impl crate_js::NativeClass for #name {
+            impl crate_js::NativeClass for #rs_name {
                 const CLASS_NAME: &'static str = #class_name_str;
                 fn constructor_object(ctx: &crate_js::Context) -> crate_js::Result<crate_js::Value> {
-                    let obj = ctx.lookup_object(#full_class_name_str)?;
-                    if !obj.is_undefined() {
-                        return Ok(obj);
-                    }
-                    let constructor = ctx.new_function(#class_name_str, #{self.constructor_cfn()}, 0, crate_js::c::JS_CFUNC_constructor);
-                    let proto = ctx.new_object(#class_name_str);
-                    proto.set_name(#class_name_str)?;
-                    #(#properties)*
-                    #(#methods)*
-                    constructor.set_property("prototype", &proto)?;
-                    ctx.store_object(#full_class_name_str, constructor.clone())?;
-                    Ok(constructor)
+                    ctx.get_qjsbind_object(std::any::type_name::<#rs_name>(), || {
+                        let #constructor_var = ctx.new_function(#class_name_str, #{self.constructor_cfn()}, 0, crate_js::c::JS_CFUNC_constructor);
+                        let #proto_var = ctx.new_object(#class_name_str);
+                        #proto_var.set_name(#class_name_str)?;
+                        #(#properties)*
+                        #(#methods)*
+                        #constructor_var.set_property("prototype", &#proto_var)?;
+                        Ok(#constructor_var)
+                    })
                 }
             }
         });
@@ -165,21 +225,19 @@ impl ToTokens for Class {
 
         let class_name = &self.name;
         if let Some(c) = &self.constructor {
-            let args = c.args.iter().map(|(name, ty)| {
-                quote! { #name: #ty }
-            });
-            let args_idents = c.args.iter().map(|(name, _ty)| {
-                quote! { #name }
-            });
-            tokens.extend(quote_spanned! { c.attrs.token.span() =>
+            let args = c.args.args_defs();
+            let args_idents = c.args.args_idents();
+            tokens.extend(quote_spanned! { c.attrs.marker_token.span() =>
                 #[crate_js::host_call(with_context)]
                 fn #{self.constructor_cfn()}(
                     ctx: crate_js::Context,
                     _this_value: crate_js::Value,
                     #(#args),*
                 ) -> crate_js::Result<crate_js::Native<#class_name>> {
-                        use crate_js::IntoNativeObject;
-                        #class_name::#{&c.name}(#(#args_idents),*).into_native_object(&ctx)
+                    #[allow(unused_variables)]
+                    let ctx = ctx;
+                    use crate_js::IntoNativeObject;
+                    #class_name::#{&c.name}(#(#args_idents),*).into_native_object(&ctx)
                 }
             });
         } else {
@@ -207,7 +265,7 @@ impl Class {
         }
     }
     fn constructor_cfn(&self) -> Ident {
-        format_ident!("{}_constructor", self.name)
+        format_ident!("QjsBind_{}_constructor", self.name)
     }
 }
 
@@ -221,10 +279,18 @@ impl DerivedProperty {
     }
 
     fn getter_fn_name(&self, class: &Class) -> Ident {
-        format_ident!("{}_getter__{}", class.name, self.js_name_str(class))
+        format_ident!(
+            "QjsBind_{}_instance_getter__{}",
+            class.name,
+            self.js_name_str(class)
+        )
     }
     fn setter_fn_name(&self, class: &Class) -> Ident {
-        format_ident!("{}_setter__{}", class.name, self.js_name_str(class))
+        format_ident!(
+            "QjsBind_{}_instance_setter__{}",
+            class.name,
+            self.js_name_str(class)
+        )
     }
 
     fn to_tokens(&self, tokens: &mut TokenStream, class: &Class) {
@@ -250,6 +316,31 @@ impl DerivedProperty {
     }
 }
 
+impl Args {
+    fn args_idents(&self) -> impl Iterator<Item = TokenStream> + '_ {
+        self.args.iter().map(|arg| {
+            if let Some(from_context) = &arg.from_context {
+                quote_spanned! {
+                    from_context.span() =>
+                    crate_js::FromJsContext::from_js_context(&ctx)?
+                }
+            } else {
+                quote! { #{&arg.name} }
+            }
+        })
+    }
+
+    fn args_defs(&self) -> impl Iterator<Item = TokenStream> + '_ {
+        self.args.iter().flat_map(|arg| {
+            if arg.from_context.is_some() {
+                None
+            } else {
+                Some(quote! { #{&arg.name}: #{&arg.ty} })
+            }
+        })
+    }
+}
+
 impl Method {
     fn js_name_str(&self, class: &Class) -> String {
         if let Some(js_name) = &self.attrs.js_name {
@@ -262,10 +353,21 @@ impl Method {
     fn impl_fn_name(&self, class: &Class) -> Ident {
         let js_name_str = self.js_name_str(class);
         let class_name = &class.name;
+        let static_str = if self.is_static { "static" } else { "instance" };
         match self.attrs.fn_type {
-            MethodType::Getter(_) => format_ident!("{class_name}_getter__{js_name_str}"),
-            MethodType::Setter(_) => format_ident!("{class_name}_setter__{js_name_str}"),
-            MethodType::Method(_) => format_ident!("{class_name}_method__{js_name_str}"),
+            MethodType::Getter => {
+                format_ident!("QjsBind_{class_name}_{static_str}_getter__{js_name_str}")
+            }
+            MethodType::Setter => {
+                format_ident!("QjsBind_{class_name}_{static_str}_setter__{js_name_str}")
+            }
+            MethodType::Method => {
+                format_ident!("QjsBind_{class_name}_{static_str}_method__{js_name_str}")
+            }
+            MethodType::Constructor => {
+                // This should never be called
+                format_ident!("QjsBind_{class_name}_constructor")
+            }
         }
     }
 
@@ -274,42 +376,25 @@ impl Method {
 
         let fn_name = self.impl_fn_name(class);
         let class_name = &class.name;
-        let args = self.args.iter().map(|(name, ty)| {
-            quote! { #name: #ty }
+        let args = self.args.args_defs();
+        let args_idents = self.args.args_idents();
+
+        tokens.extend(quote_spanned! { self.attrs.marker_token.span() =>
+            #[crate_js::host_call(with_context)]
+            fn #fn_name(ctx: crate_js::Context, this_value: crate_js::Native<#class_name>, #(#args),*) #{&self.return_ty} {
+                #[allow(unused_variables)]
+                let ctx = ctx;
+                #(if self.is_static) {
+                    #class_name::
+                }
+                #(else if self.is_mut) {
+                    this_value.borrow_mut().
+                }
+                #(else) {
+                    this_value.borrow().
+                }
+                    #name(#(#args_idents),*)
+            }
         });
-        let args_idents = self.args.iter().map(|(name, _ty)| {
-            quote! { #name }
-        });
-        match &self.attrs.fn_type {
-            MethodType::Getter(marker) => {
-                tokens.extend(quote_spanned! { marker.span() =>
-                    #[crate_js::host_call(with_context)]
-                    fn #fn_name(_ctx: crate_js::Context, this_value: crate_js::Native<#class_name>, #(#args),*) #{&self.return_ty} {
-                        this_value.borrow().#name()
-                    }
-                });
-            }
-            MethodType::Setter(marker) => {
-                tokens.extend(quote_spanned! { marker.span() =>
-                    #[crate_js::host_call(with_context)]
-                    fn #fn_name(_ctx: crate_js::Context, this_value: crate_js::Native<#class_name>, #(#args),*) #{&self.return_ty} {
-                        this_value.borrow_mut().#name(#(#args_idents),*)
-                    }
-                });
-            }
-            MethodType::Method(marker) => {
-                tokens.extend(quote_spanned! { marker.span() =>
-                    #[crate_js::host_call(with_context)]
-                    fn #fn_name(_ctx: crate_js::Context, this_value: crate_js::Native<#class_name>, #(#args),*) #{&self.return_ty} {
-                        #(if self.is_mut) {
-                            this_value.borrow_mut().#name(#(#args_idents),*)
-                        }
-                        #(else) {
-                            this_value.borrow().#name(#(#args_idents),*)
-                        }
-                    }
-                });
-            }
-        }
     }
 }

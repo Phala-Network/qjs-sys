@@ -5,7 +5,8 @@ use proc_macro2::TokenStream;
 use std::collections::BTreeMap;
 use syn::parse::Parser;
 use syn::{
-    Attribute, Field, Ident, ImplItemFn, Item, ItemMod, ItemStruct, LitStr, Path, Result, Type,
+    Attribute, Field, Ident, ImplItemFn, Item, ItemMod, ItemStruct, LitStr, Path, Receiver, Result,
+    Type,
 };
 use template_quote::{quote, ToTokens};
 
@@ -56,34 +57,55 @@ struct FieldAttrs {
     no_gc: bool,
 }
 
+struct ArgSelf {
+    is_ref: bool,
+    is_mut: bool,
+    token: Receiver,
+}
+
+#[derive(Default)]
+struct Args {
+    receiver: Option<ArgSelf>,
+    args: Vec<Arg>,
+}
+
+struct Arg {
+    name: Ident,
+    ty: Type,
+    from_context: Option<Ident>,
+}
+
 struct Constructor {
     name: Ident,
-    args: Vec<(syn::Ident, Type)>,
+    args: Args,
     attrs: ConstructorAttrs,
 }
 
 struct ConstructorAttrs {
-    token: Ident,
+    marker_token: Ident,
 }
 
 struct Method {
     name: Ident,
-    args: Vec<(syn::Ident, Type)>,
+    args: Args,
     return_ty: syn::ReturnType,
     is_mut: bool,
+    is_static: bool,
     attrs: MethodAttrs,
 }
 
 struct MethodAttrs {
     js_name: Option<LitStr>,
     fn_type: MethodType,
+    marker_token: Ident,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum MethodType {
-    Getter(Ident),
-    Setter(Ident),
-    Method(Ident),
+    Getter,
+    Setter,
+    Method,
+    Constructor,
 }
 
 pub(crate) fn patch(config: TokenStream, input: TokenStream) -> TokenStream {

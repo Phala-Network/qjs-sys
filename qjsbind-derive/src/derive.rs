@@ -98,7 +98,7 @@ fn derive_struct(
                 impl #impl_generics FromJsValue for #ident #ty_generics #bounded_where_clause {
                     fn from_js_value(val: Value) -> Result<Self> {
                         #(if container_attrs.allow_default()) {
-                            if val.is_undefined() || val.is_null() {
+                            if val.is_null_or_undefined() {
                                 return Ok(<Self as Default>::default());
                             }
                         }
@@ -110,7 +110,7 @@ fn derive_struct(
                                         match field.default_fn() {
                                             Some(f) => {
                                                 quote! {
-                                                    if field_value.is_undefined() || field_value.is_null() {
+                                                    if field_value.is_null_or_undefined() {
                                                         #f()
                                                     } else {
                                                         let field_name = #{&field.field().ident.as_ref().map(|f| f.to_string()).unwrap_or_default()};

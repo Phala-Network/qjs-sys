@@ -340,7 +340,7 @@ impl Registry {
 
 impl js::FromJsValue for TypeRegistry {
     fn from_js_value(value: js::Value) -> js::Result<Self> {
-        if value.is_undefined() {
+        if value.is_null_or_undefined() {
             return Ok(Registry::std()?.into());
         }
         if value.is_string() {

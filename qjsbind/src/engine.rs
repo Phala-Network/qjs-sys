@@ -2,7 +2,7 @@ use core::ptr::NonNull;
 
 use crate::{c, Code, Result, Value};
 use alloc::string::{String, ToString};
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, Context as _};
 use qjs_sys::inline_fns::JSCFunction;
 
 pub struct Context {
@@ -80,7 +80,29 @@ impl Context {
         }
     }
 
-    pub fn lookup_object(&self, full_path: &str) -> Result<Value> {
+    pub fn get_qjsbind_object(
+        &self,
+        name: &str,
+        or_default: impl Fn() -> Result<Value>,
+    ) -> Result<Value> {
+        let global = self.get_global_object();
+        let bindings_obj_name = "_QjsBind";
+        let mut bindings = global
+            .get_property(bindings_obj_name)
+            .context("failed to get global _QjsBind object")?;
+        if bindings.is_undefined() {
+            bindings = self.new_object(bindings_obj_name);
+            global.set_property(bindings_obj_name, &bindings)?;
+        }
+        let mut obj = bindings.get_property(name)?;
+        if obj.is_undefined() {
+            obj = or_default()?;
+            bindings.set_property(name, &obj)?;
+        }
+        Ok(obj)
+    }
+
+    pub fn resolve_object(&self, full_path: &str) -> Result<Value> {
         let mut result = self.get_global_object();
         for seg in full_path.split('.') {
             if result.is_undefined() {
@@ -89,25 +111,6 @@ impl Context {
             result = result.get_property(seg)?;
         }
         Ok(result)
-    }
-
-    pub fn store_object(&self, full_path: &str, obj: Value) -> Result<()> {
-        let mut segs: Vec<_> = full_path.split('.').collect();
-        let Some(last) = segs.pop() else {
-            bail!("store_object: full_path must not be empty");
-        };
-        let mut parent = self.get_global_object();
-        if parent.is_undefined() {
-            bail!("store_object: global is undefined");
-        }
-        for seg in segs {
-            parent = parent.get_property(seg)?;
-            if parent.is_undefined() {
-                bail!("store_object: parent is undefined");
-            }
-        }
-        parent.set_property(last, &obj)?;
-        Ok(())
     }
 
     pub fn new_function(

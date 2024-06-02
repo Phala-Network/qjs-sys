@@ -273,7 +273,7 @@ impl Value {
     }
 
     pub fn entries(&self) -> Result<PairIter> {
-        if self.is_undefined() || self.is_null() {
+        if self.is_null_or_undefined() {
             return Err(expect_js_value(self, "Object"));
         }
         #[allow(non_snake_case)]
@@ -336,6 +336,9 @@ impl Value {
     }
     pub fn is_null(&self) -> bool {
         unsafe { c::JS_IsNull(*self.raw_value()) != 0 }
+    }
+    pub fn is_null_or_undefined(&self) -> bool {
+        self.is_null() || self.is_undefined()
     }
     pub fn is_bool(&self) -> bool {
         unsafe { c::JS_IsBool(*self.raw_value()) != 0 }
@@ -781,6 +784,10 @@ impl Value {
     }
     pub fn parse<T: core::str::FromStr>(&self) -> Option<T> {
         self.to_string_utf8()?.as_str().parse::<T>().ok()
+    }
+
+    pub fn decode<T: FromJsValue>(&self) -> Result<T> {
+        T::from_js_value(self.clone())
     }
 }
 

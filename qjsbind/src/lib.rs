@@ -17,7 +17,7 @@ pub use native_object::{GcMark, IntoNativeObject, Native, NativeClass, NoGc};
 pub use qjs_sys as sys;
 pub use qjs_sys::c;
 pub use qjsbind_derive::{host_call, qjsbind, FromJsValue, ToJsValue, IntoJsValue};
-pub use traits::{FromArgs, FromJsValue, OwnedRawArgs, ToArgs, ToJsValue, IntoJsValue};
+pub use traits::{FromArgs, FromJsValue, OwnedRawArgs, ToArgs, ToJsValue, IntoJsValue, FromJsContext};
 pub use utils::{compile, ctx_to_str, ctx_to_string, recursive_to_string};
 pub use value::{get_global, Value};
 

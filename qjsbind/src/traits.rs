@@ -24,6 +24,12 @@ impl OwnedRawArgs {
     }
 }
 
+pub trait FromJsContext {
+    fn from_js_context(ctx: &js::Context) -> Result<Self>
+    where
+        Self: Sized;
+}
+
 pub trait FromJsValue {
     fn from_js_value(js_value: Value) -> Result<Self>
     where
