@@ -1,6 +1,9 @@
 use proc_macro2::TokenStream;
-use syn::parse::Parser;
+use quote::quote_spanned;
+use syn::{parse::Parser, parse_quote, spanned::Spanned, Ident};
 use template_quote::quote;
+
+use crate::attrs::respan;
 
 pub(crate) fn patch(attrs: TokenStream, input: TokenStream) -> TokenStream {
     match patch_or_err(attrs, input) {
@@ -33,29 +36,81 @@ fn patch_or_err(attrs: TokenStream, input: TokenStream) -> syn::Result<TokenStre
             _ => None,
         })
         .collect::<Vec<_>>();
-    let output = match the_fn.sig.output {
-        syn::ReturnType::Default => quote! { () },
-        syn::ReturnType::Type(_, ty) => quote! { #ty },
-    };
+    let ctx_var;
+    let this_var;
+    let mut arg_exprs = Vec::new();
+    let mut args_iter = arg_names.into_iter();
+    if with_context {
+        let Some(ctx) = args_iter.next() else {
+            syn_bail!(args, "missing context argument");
+        };
+        ctx_var = quote_spanned! { ctx.span() => ctx };
+        arg_exprs.push(quote_spanned! { ctx.span() =>  #ctx_var.try_into()? });
+        let Some(this) = args_iter.next() else {
+            syn_bail!(args, "missing this argument");
+        };
+        this_var = quote_spanned! {this.span() => this_value };
+        arg_exprs.push(respan(
+            this.span(),
+            quote! { #crate_qjsbind::FromJsValue::from_js_value(#this_var)? },
+        ));
+    } else {
+        ctx_var = parse_quote!(ctx);
+        this_var = parse_quote!(this_value);
+    }
+    for arg in args_iter {
+        arg_exprs.push(respan(arg.span(), quote! {
+            #crate_qjsbind::FromJsValue::from_js_value(args.next().unwrap_or(#crate_qjsbind::Value::undefined()))?
+        }));
+    }
     let fn_name = fn_ident.to_string();
+    let rv = Ident::new("rv", the_fn.sig.output.span());
     Ok(quote! {
         pub unsafe extern "C" fn #fn_ident(
-            ctx: *mut #crate_qjsbind::c::JSContext,
-            this_val: #crate_qjsbind::c::JSValueConst,
+            c_ctx: *mut #crate_qjsbind::c::JSContext,
+            c_this: #crate_qjsbind::c::JSValueConst,
             argc: core::ffi::c_int,
             argv: *mut #crate_qjsbind::c::JSValue,
         ) -> #crate_qjsbind::c::JSValue
         {
             #input
+            #[allow(unused_variables)]
+            let #ctx_var = #crate_qjsbind::Context::clone_from_ptr(c_ctx).expect("calling host function with null context");
+            let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
+            let mut args = args.into_iter().map(|v| #crate_qjsbind::Value::new_cloned(&ctx, *v));
             #(if with_context) {
-                #crate_qjsbind::call_host_function(#fn_name, #fn_ident, ctx, this_val, argc, argv)
+                let #this_var = #crate_qjsbind::Value::new_cloned(&ctx, c_this);
             }
             #(else) {
-                fn wrapper(_ctx: #crate_qjsbind::Context, _this: #crate_qjsbind::Value, #args) -> #output {
-                    #fn_ident(#(#arg_names),*)
-                }
-                #crate_qjsbind::call_host_function(#fn_name, wrapper, ctx, this_val, argc, argv)
+                let _ = c_this;
             }
+            let #rv: #crate_qjsbind::Result<_> = {
+                #(if with_context) {
+
+                let ctx = ctx.clone();
+
+                }
+                (move|| { Ok(#fn_ident(#(#arg_exprs),*)) })()
+            };
+            #crate_qjsbind::convert_host_call_result(#fn_name, &#ctx_var, #rv)
         }
     })
+}
+
+#[test]
+fn show_tokens() {
+    let tokens = quote! {
+        fn QjsBind_CryptoKey_constructor(
+            ctx: crate_js::Context,
+            _this_value: crate_js::Value,
+            inner: CryptoKey,
+        ) -> crate_js::Result<crate_js::Native<CryptoKey>> {
+            #[allow(unused_variables)]
+            let ctx = ctx;
+            use crate_js::IntoNativeObject;
+            CryptoKey::new(inner).into_native_object(&ctx)
+        }
+    };
+    let patched = patch(quote!(with_context), tokens);
+    insta::assert_display_snapshot!(rustfmt_snippet::rustfmt(&patched.to_string()).unwrap());
 }

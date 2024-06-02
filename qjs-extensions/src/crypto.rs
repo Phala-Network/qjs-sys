@@ -1,6 +1,6 @@
-use js::{IntoJsValue, Native, Result};
-use rand::RngCore;
 use anyhow::{bail, Context};
+use js::{Native, Result, ToJsValue};
+use rand::RngCore;
 
 fn from_js<T>(value: js::Value) -> Result<T>
 where
@@ -195,9 +195,7 @@ use native_classes::CryptoKey;
 
 #[js::qjsbind]
 mod native_classes {
-    use js::IntoNativeObject as _;
-
-    use super::{KeyGenAlgorithm, Result};
+    use super::KeyGenAlgorithm;
 
     #[qjs(class(rename_all = "camelCase"))]
     pub struct CryptoKey {
@@ -211,44 +209,39 @@ mod native_classes {
         pub usages: Vec<js::JsString>,
         pub raw: js::Bytes,
     }
-    impl js::IntoJsValue for CryptoKey {
-        fn into_js_value(self, ctx: &js::Context) -> Result<js::Value> {
-            let native = self.into_native_object(ctx)?;
-            Ok(native.js_value())
-        }
-    }
 }
 
-#[derive(IntoJsValue)]
+#[derive(ToJsValue)]
 #[qjs(rename_all = "camelCase")]
 struct CryptoKeyPair {
-    public_key: CryptoKey,
-    private_key: CryptoKey,
+    public_key: Native<CryptoKey>,
+    private_key: Native<CryptoKey>,
 }
 
 enum CryptoKeyOrPair {
     #[allow(dead_code)]
-    Key(CryptoKey),
+    Key(Native<CryptoKey>),
     Pair(CryptoKeyPair),
 }
 
-impl IntoJsValue for CryptoKeyOrPair {
-    fn into_js_value(self, ctx: &js::Context) -> Result<js::Value> {
+impl ToJsValue for CryptoKeyOrPair {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<js::Value> {
         match self {
-            CryptoKeyOrPair::Key(key) => key.into_js_value(ctx),
-            CryptoKeyOrPair::Pair(pair) => pair.into_js_value(ctx),
+            CryptoKeyOrPair::Key(key) => key.to_js_value(ctx),
+            CryptoKeyOrPair::Pair(pair) => pair.to_js_value(ctx),
         }
     }
 }
 
 impl CryptoKeyOrPair {
     fn from_pair_raw(
+        ctx: js::Context,
         priviate_key: js::Bytes,
         public_key: js::Bytes,
         extractable: bool,
         usages: Vec<js::JsString>,
         algorithm: KeyGenAlgorithm,
-    ) -> Self {
+    ) -> js::Result<Self> {
         let public_key = CryptoKey {
             r#type: "public".into(),
             extractable,
@@ -263,10 +256,10 @@ impl CryptoKeyOrPair {
             algorithm,
             raw: priviate_key,
         };
-        CryptoKeyOrPair::Pair(CryptoKeyPair {
-            public_key,
-            private_key,
-        })
+        Ok(CryptoKeyOrPair::Pair(CryptoKeyPair {
+            public_key: Native::new(&ctx, public_key)?,
+            private_key: Native::new(&ctx, private_key)?,
+        }))
     }
 }
 
@@ -396,16 +389,18 @@ fn derive_aes_key(
     }
 }
 
-#[js::host_call]
+#[js::host_call(with_context)]
 fn derive_key(
+    ctx: js::Context,
+    _this_value: js::Value,
     algorithm: DeriveAlgorithm,
     base_key: Native<CryptoKey>,
     derived_key_algorithm: DeriveKeyGenAlgorithm,
     extractable: bool,
     key_usages: Vec<js::JsString>,
-) -> Result<CryptoKey> {
+) -> Result<Native<CryptoKey>> {
     let base_key = base_key.borrow();
-    match algorithm {
+    let key = match algorithm {
         DeriveAlgorithm::Ecdh(params) => {
             let KeyGenAlgorithm::Ec(base_algo) = &base_key.algorithm else {
                 bail!("unsupported base key algorithm");
@@ -429,7 +424,7 @@ fn derive_key(
                         derived_key_algorithm,
                         extractable,
                         key_usages,
-                    )
+                    )?
                 }};
             }
             match base_algo.named_curve.as_str() {
@@ -443,11 +438,14 @@ fn derive_key(
             }
         }
         _ => bail!("unsupported derive algorithm"),
-    }
+    };
+    Native::new(&ctx, key)
 }
 
-#[js::host_call]
+#[js::host_call(with_context)]
 fn generate_key(
+    ctx: js::Context,
+    _this: js::Value,
     algorithm: KeyGenAlgorithm,
     extractable: bool,
     key_usages: Vec<js::JsString>,
@@ -465,13 +463,14 @@ fn generate_key(
 
                 let private_key_bytes = secret_key.to_bytes().to_vec();
                 let public_key_bytes = public_key.to_encoded_point(false).as_bytes().to_vec();
-                Ok(CryptoKeyOrPair::from_pair_raw(
+                CryptoKeyOrPair::from_pair_raw(
+                    ctx,
                     private_key_bytes.into(),
                     public_key_bytes.into(),
                     extractable,
                     key_usages,
                     algorithm,
-                ))
+                )
             }
             "P-384" => {
                 let secret_key = SecretKeyP384::random(&mut rand::rngs::OsRng);
@@ -479,13 +478,14 @@ fn generate_key(
 
                 let private_key_bytes = secret_key.to_bytes().to_vec();
                 let public_key_bytes = public_key.to_encoded_point(false).as_bytes().to_vec();
-                Ok(CryptoKeyOrPair::from_pair_raw(
+                CryptoKeyOrPair::from_pair_raw(
+                    ctx,
                     private_key_bytes.into(),
                     public_key_bytes.into(),
                     extractable,
                     key_usages,
                     algorithm,
-                ))
+                )
             }
             "P-521" => {
                 let secret_key = SecretKeyP521::random(&mut rand::rngs::OsRng);
@@ -494,13 +494,14 @@ fn generate_key(
                 let private_key_bytes = secret_key.to_bytes().to_vec();
                 let public_key_bytes = public_key.to_encoded_point(false).as_bytes().to_vec();
 
-                Ok(CryptoKeyOrPair::from_pair_raw(
+                CryptoKeyOrPair::from_pair_raw(
+                    ctx,
                     private_key_bytes.into(),
                     public_key_bytes.into(),
                     extractable,
                     key_usages,
                     algorithm,
-                ))
+                )
             }
             _ => bail!("unsupported named curve: {}", params.named_curve),
         },
@@ -508,26 +509,29 @@ fn generate_key(
     }
 }
 
-#[js::host_call]
+#[js::host_call(with_context)]
 fn import_key(
+    ctx: js::Context,
+    _this: js::Value,
     fmt: js::JsString,
     key_data: js::Value,
     algorithm: KeyGenAlgorithm,
     extractable: bool,
     key_usages: Vec<js::JsString>,
-) -> Result<CryptoKey> {
+) -> Result<Native<CryptoKey>> {
     if fmt.as_str() != "raw" {
         bail!("unsupported import format: {fmt}");
     }
     use js::FromJsValue;
     let key_data = js::Bytes::from_js_value(key_data)?;
-    Ok(CryptoKey {
+    let key = CryptoKey {
         r#type: "secret".into(),
         extractable,
         algorithm,
         usages: key_usages,
         raw: key_data,
-    })
+    };
+    Native::new(&ctx, key)
 }
 
 #[js::host_call]

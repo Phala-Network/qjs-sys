@@ -663,22 +663,40 @@ impl Value {
         }
     }
     pub fn decode_i8(&self) -> Result<i8> {
-        self.decode_i64()?.try_into().expect_js_value(self, "i8")
+        self.decode_i64()?
+            .try_into()
+            .ok()
+            .expect_js_value(self, "i8")
     }
     pub fn decode_u8(&self) -> Result<u8> {
-        self.decode_i64()?.try_into().expect_js_value(self, "u8")
+        self.decode_i64()?
+            .try_into()
+            .ok()
+            .expect_js_value(self, "u8")
     }
     pub fn decode_i16(&self) -> Result<i16> {
-        self.decode_i64()?.try_into().expect_js_value(self, "i16")
+        self.decode_i64()?
+            .try_into()
+            .ok()
+            .expect_js_value(self, "i16")
     }
     pub fn decode_u16(&self) -> Result<u16> {
-        self.decode_i64()?.try_into().expect_js_value(self, "u16")
+        self.decode_i64()?
+            .try_into()
+            .ok()
+            .expect_js_value(self, "u16")
     }
     pub fn decode_i32(&self) -> Result<i32> {
-        self.decode_i64()?.try_into().expect_js_value(self, "i32")
+        self.decode_i64()?
+            .try_into()
+            .ok()
+            .expect_js_value(self, "i32")
     }
     pub fn decode_u32(&self) -> Result<u32> {
-        self.decode_i64()?.try_into().expect_js_value(self, "u32")
+        self.decode_i64()?
+            .try_into()
+            .ok()
+            .expect_js_value(self, "u32")
     }
     pub fn decode_i64(&self) -> Result<i64> {
         if self.is_number() || self.is_big_int() {
@@ -699,6 +717,7 @@ impl Value {
         self.decode_u64()
             .expect_js_value(self, "usize")?
             .try_into()
+            .ok()
             .expect_js_value(self, "usize")
     }
     pub fn decode_f32(&self) -> Result<f32> {
@@ -774,7 +793,9 @@ impl Value {
             let s = s.as_str();
             if s.starts_with("0x") || s.starts_with("0X") {
                 let s = &s[2..];
-                Ok(hex::decode(s).expect_js_value(self, "bytes-like object")?)
+                Ok(hex::decode(s)
+                    .ok()
+                    .expect_js_value(self, "bytes-like object")?)
             } else {
                 Ok(s.as_bytes().to_vec())
             }

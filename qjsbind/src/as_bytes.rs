@@ -6,7 +6,7 @@ use crate::{
     self as js, error::JsResultExt, FromJsValue, GcMark, JsString, JsUint8Array, ToJsValue,
 };
 
-use super::{Error, Result, Value};
+use super::{Result, Value};
 
 pub fn encode_as_bytes<T: AsRef<[u8]>>(ctx: &js::Context, data: &T) -> Result<Value> {
     Ok(Value::from_bytes(ctx, data.as_ref()))
@@ -57,7 +57,6 @@ impl<T: AsRef<[u8]>> ToJsValue for AsBytes<T> {
 impl<T> FromJsValue for AsBytes<T>
 where
     Vec<u8>: TryInto<T>,
-    Error: From<<Vec<u8> as TryInto<T>>::Error>,
 {
     fn from_js_value(value: Value) -> Result<Self> {
         Ok(Self(decode_as_bytes(value)?))

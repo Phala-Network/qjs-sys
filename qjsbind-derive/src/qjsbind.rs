@@ -1,7 +1,8 @@
 //! This module contains the `qjsbind` attribute macro implementation.
 //!
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
+use syn::spanned::Spanned;
 use std::collections::BTreeMap;
 use syn::parse::Parser;
 use syn::{
@@ -36,6 +37,9 @@ struct ClassField {
 impl ClassField {
     fn no_gc(&self) -> bool {
         self.qjs_property.as_ref().map_or(false, |p| p.attrs.no_gc)
+    }
+    fn span(&self) -> Span {
+        self.field.span()
     }
 }
 
@@ -147,4 +151,27 @@ fn patch_or_err(config: TokenStream, input: TokenStream) -> Result<TokenStream> 
             #qjs_mod
         }
     })
+}
+
+#[test]
+fn show_tokens() {
+    let tokens = quote! {
+        mod native_classes {
+            use js::IntoNativeObject as _;
+
+            use super::{KeyGenAlgorithm, Result};
+
+            #[qjs(class(rename_all = "camelCase"))]
+            pub struct CryptoKey {}
+
+            impl CryptoKey {
+                #[qjs(constructor)]
+                pub fn new(inner: CryptoKey) -> Result<Self> {
+                    Ok(inner)
+                }
+            }
+        }
+    };
+    let patched = patch(quote!(js_crate = js), tokens);
+    insta::assert_display_snapshot!(rustfmt_snippet::rustfmt(&patched.to_string()).unwrap());
 }

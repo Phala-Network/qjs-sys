@@ -86,12 +86,15 @@ pub struct ContainerAttrs<'a> {
     allow_default: bool,
 }
 
-fn respan(stream: proc_macro2::TokenStream, span: proc_macro2::Span) -> proc_macro2::TokenStream {
+pub(crate) fn respan(
+    span: proc_macro2::Span,
+    stream: proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
     stream
         .into_iter()
         .map(|mut token| {
             if let proc_macro2::TokenTree::Group(g) = &mut token {
-                *g = proc_macro2::Group::new(g.delimiter(), respan(g.stream(), span));
+                *g = proc_macro2::Group::new(g.delimiter(), respan(span, g.stream()));
             }
             token.set_span(span);
             token
@@ -101,7 +104,7 @@ fn respan(stream: proc_macro2::TokenStream, span: proc_macro2::Span) -> proc_mac
 
 fn parse_lit_into_expr_path(lit: &LitStr) -> Result<ExprPath> {
     let token_stream = syn::parse_str(&lit.value())?;
-    syn::parse2(respan(token_stream, lit.span()))
+    syn::parse2(respan(lit.span(), token_stream))
 }
 
 impl<'a> ContainerAttrs<'a> {

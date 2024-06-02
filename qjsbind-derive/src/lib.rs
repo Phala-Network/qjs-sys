@@ -51,6 +51,12 @@ pub fn qjsbind(attrs: TokenStream, input: TokenStream) -> TokenStream {
     .into()
 }
 
+#[cfg(test)]
+fn find_crate_name(origin: &str) -> syn::Result<syn::Ident> {
+    Ok(syn::Ident::new(origin, proc_macro2::Span::call_site()))
+}
+
+#[cfg(not(test))]
 fn find_crate_name(origin: &str) -> syn::Result<syn::Ident> {
     use proc_macro2::Span;
     use proc_macro_crate::{crate_name, FoundCrate};

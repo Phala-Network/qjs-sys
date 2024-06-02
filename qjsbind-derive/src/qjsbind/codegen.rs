@@ -37,6 +37,7 @@ impl ToTokens for Class {
         let constructor_var = syn::Ident::new("constructor", Span::call_site());
         let proto_var = syn::Ident::new("proto", Span::call_site());
         struct Property {
+            span: Span,
             is_static: bool,
             js_name: String,
             getter: Option<(Ident, Ident)>,
@@ -53,6 +54,7 @@ impl ToTokens for Class {
                     let getter_fn_name = prop.getter_fn_name(self);
                     let setter_fn_name = prop.setter_fn_name(self);
                     properties.push(Property {
+                        span: field.span(),
                         is_static: false,
                         js_name: prop_js_name,
                         getter: Some((getter, getter_fn_name)),
@@ -62,6 +64,7 @@ impl ToTokens for Class {
                 (Some(getter), None) => {
                     let getter_fn_name = prop.getter_fn_name(self);
                     properties.push(Property {
+                        span: field.span(),
                         is_static: false,
                         js_name: prop_js_name,
                         getter: Some((getter, getter_fn_name)),
@@ -71,6 +74,7 @@ impl ToTokens for Class {
                 (None, Some(setter)) => {
                     let setter_fn_name = prop.setter_fn_name(self);
                     properties.push(Property {
+                        span: field.span(),
                         is_static: false,
                         js_name: prop_js_name,
                         getter: None,
@@ -89,6 +93,7 @@ impl ToTokens for Class {
                 MethodType::Getter => {
                     if method.is_static {
                         properties.push(Property {
+                            span: method.name.span(),
                             is_static: true,
                             js_name,
                             getter: Some((marker_token, fn_name)),
@@ -102,6 +107,7 @@ impl ToTokens for Class {
                         *setter = Some((marker_token, fn_name));
                     } else {
                         properties.push(Property {
+                            span: method.name.span(),
                             is_static: false,
                             js_name,
                             getter: Some((marker_token, fn_name)),
@@ -112,6 +118,7 @@ impl ToTokens for Class {
                 MethodType::Setter => {
                     if method.is_static {
                         properties.push(Property {
+                            span: method.name.span(),
                             is_static: true,
                             js_name,
                             getter: None,
@@ -125,6 +132,7 @@ impl ToTokens for Class {
                         *getter = Some((marker_token, fn_name));
                     } else {
                         properties.push(Property {
+                            span: method.name.span(),
                             is_static: false,
                             js_name,
                             getter: None,
@@ -151,6 +159,7 @@ impl ToTokens for Class {
 
         let properties = properties.iter().map(
             |Property {
+                 span,
                  is_static,
                  js_name,
                  getter,
@@ -169,7 +178,7 @@ impl ToTokens for Class {
                 } else {
                     proto_var.clone()
                 };
-                quote! {
+                quote_spanned! { span.clone() =>
                     #target.define_property_getset(#js_name, #getter, #setter)?;
                 }
             },
@@ -193,7 +202,7 @@ impl ToTokens for Class {
             })
         });
 
-        tokens.extend(quote! {
+        tokens.extend(quote_spanned! { rs_name.span() =>
             impl crate_js::GcMark for #rs_name {
                 fn gc_mark(&self, rt: *mut crate_js::c::JSRuntime, mark_fn: crate_js::c::JS_MarkFunc) {
                     #(#mark_stmts)*
@@ -325,7 +334,7 @@ impl Args {
                     crate_js::FromJsContext::from_js_context(&ctx)?
                 }
             } else {
-                quote! { #{&arg.name} }
+                quote_spanned! { arg.name.span() =>  #{&arg.name} }
             }
         })
     }
@@ -335,7 +344,7 @@ impl Args {
             if arg.from_context.is_some() {
                 None
             } else {
-                Some(quote! { #{&arg.name}: #{&arg.ty} })
+                Some(quote_spanned! { arg.name.span() =>  #{&arg.name}: #{&arg.ty} })
             }
         })
     }
@@ -385,6 +394,7 @@ impl Method {
                 #[allow(unused_variables)]
                 let ctx = ctx;
                 #(if self.is_static) {
+                    let _ = this_value;
                     #class_name::
                 }
                 #(else if self.is_mut) {

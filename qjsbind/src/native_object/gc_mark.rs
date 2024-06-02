@@ -16,8 +16,13 @@ macro_rules! impl_gc_mark_for {
 
 impl_gc_mark_for! {
     i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool, char,
-    String, std::ffi::CString, std::ffi::OsString, std::ffi::OsStr,
-    std::path::PathBuf, std::path::Path, std::time::Duration, std::time::Instant
+    alloc::string::String, alloc::ffi::CString
+}
+
+#[cfg(feature = "std")]
+impl_gc_mark_for! {
+    std::ffi::OsString, std::ffi::OsStr, std::path::PathBuf, std::path::Path,
+    std::time::Duration, std::time::Instant
 }
 
 impl<T> GcMark for Native<T> {
@@ -34,7 +39,7 @@ impl<T: GcMark> GcMark for Option<T> {
     }
 }
 
-impl<T> GcMark for Vec<T>
+impl<T> GcMark for alloc::vec::Vec<T>
 where
     T: GcMark,
 {
@@ -72,14 +77,14 @@ impl<T> From<T> for NoGc<T> {
         Self(value)
     }
 }
-impl<T> std::ops::Deref for NoGc<T> {
+impl<T> core::ops::Deref for NoGc<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl<T> std::ops::DerefMut for NoGc<T> {
+impl<T> core::ops::DerefMut for NoGc<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
