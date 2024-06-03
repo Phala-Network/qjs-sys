@@ -1,3 +1,7 @@
+#![allow(dead_code)]
+#[warn(dead_code)]
+const TODO: &str = "Remove the warning suppression.";
+
 use anyhow::{bail, Context};
 use js::{Native, Result, ToJsValue};
 use rand::RngCore;
