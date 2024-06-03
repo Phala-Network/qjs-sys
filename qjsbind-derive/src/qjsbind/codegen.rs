@@ -3,15 +3,11 @@ use crate::attrs::trim_rust_raw;
 use super::*;
 use proc_macro2::Span;
 use quote::format_ident;
-use syn::spanned::Spanned;
 use template_quote::quote_spanned;
 
 impl ToTokens for Mod {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let crate_js = self.js_crate.clone().unwrap_or_else(|| {
-            let js_crate = crate::find_crate_name("qjsbind").expect("qjsbind crate not found");
-            syn::parse_quote!(:: #js_crate)
-        });
+        let crate_js = &self.js_crate;
         let classes = self.classes.values();
         tokens.extend(quote! {
             mod qjsbind_generated {
@@ -184,37 +180,15 @@ impl ToTokens for Class {
             },
         );
 
-        let mark_stmts = self.fields.iter().enumerate().flat_map(|(i, field)| {
-            if field.no_gc() {
-                return None;
-            }
-            let name = match &field.field.ident {
-                Some(ident) => {
-                    quote! {#ident}
-                }
-                None => {
-                    let ind = syn::Index::from(i);
-                    quote! {#ind}
-                }
-            };
-            Some(quote_spanned! { field.field.span() =>
-                self.#name.gc_mark(rt, mark_fn);
-            })
-        });
-
         tokens.extend(quote_spanned! { rs_name.span() =>
-            impl crate_js::GcMark for #rs_name {
-                fn gc_mark(&self, rt: *mut crate_js::c::JSRuntime, mark_fn: crate_js::c::JS_MarkFunc) {
-                    #(#mark_stmts)*
-                }
+            impl crate_js::Named for #rs_name {
+                const CLASS_NAME: &'static str = #class_name_str;
             }
             impl crate_js::NativeClass for #rs_name {
-                const CLASS_NAME: &'static str = #class_name_str;
                 fn constructor_object(ctx: &crate_js::Context) -> crate_js::Result<crate_js::Value> {
                     ctx.get_qjsbind_object(std::any::type_name::<#rs_name>(), || {
                         let #constructor_var = ctx.new_function(#class_name_str, #{self.constructor_cfn()}, 0, crate_js::c::JS_CFUNC_constructor);
                         let #proto_var = ctx.new_object(#class_name_str);
-                        #proto_var.set_name(#class_name_str)?;
                         #(#properties)*
                         #(#methods)*
                         #constructor_var.set_property("prototype", &#proto_var)?;
@@ -274,7 +248,7 @@ impl Class {
         }
     }
     fn constructor_cfn(&self) -> Ident {
-        format_ident!("QjsBind_{}_constructor", self.name)
+        format_ident!("qjsbind_{}_constructor", self.name)
     }
 }
 
@@ -289,14 +263,14 @@ impl DerivedProperty {
 
     fn getter_fn_name(&self, class: &Class) -> Ident {
         format_ident!(
-            "QjsBind_{}_instance_getter__{}",
+            "qjsbind_instance_getter__{}_{}",
             class.name,
             self.js_name_str(class)
         )
     }
     fn setter_fn_name(&self, class: &Class) -> Ident {
         format_ident!(
-            "QjsBind_{}_instance_setter__{}",
+            "qjsbind_instance_setter__{}_{}",
             class.name,
             self.js_name_str(class)
         )
@@ -365,17 +339,17 @@ impl Method {
         let static_str = if self.is_static { "static" } else { "instance" };
         match self.attrs.fn_type {
             MethodType::Getter => {
-                format_ident!("QjsBind_{class_name}_{static_str}_getter__{js_name_str}")
+                format_ident!("qjsbind_{static_str}_getter__{class_name}_{js_name_str}")
             }
             MethodType::Setter => {
-                format_ident!("QjsBind_{class_name}_{static_str}_setter__{js_name_str}")
+                format_ident!("qjsbind_{static_str}_setter__{class_name}_{js_name_str}")
             }
             MethodType::Method => {
-                format_ident!("QjsBind_{class_name}_{static_str}_method__{js_name_str}")
+                format_ident!("qjsbind_{static_str}_method__{class_name}_{js_name_str}")
             }
             MethodType::Constructor => {
                 // This should never be called
-                format_ident!("QjsBind_{class_name}_constructor")
+                format_ident!("qjsbind_{class_name}_constructor")
             }
         }
     }

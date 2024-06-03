@@ -13,8 +13,23 @@ use js::{c, Context, FromJsValue, Result, ToJsValue, Value};
 pub use gc_mark::{GcMark, NoGc};
 mod gc_mark;
 
-pub trait NativeClass: GcMark + 'static {
+pub trait Named {
     const CLASS_NAME: &'static str;
+}
+
+#[macro_export(local_inner_macros)]
+macro_rules! impl_named {
+    ($t:ty as $name:expr) => {
+        impl $crate::Named for $t {
+            const CLASS_NAME: &'static str = $name;
+        }
+    };
+    ($t:ty) => {
+        impl_named!($t, stringify!($t));
+    };
+}
+
+pub trait NativeClass: GcMark + Named + 'static {
     fn constructor_object(ctx: &Context) -> Result<Value>;
     fn register(ctx: &Context) -> Result<()> {
         Self::constructor_object(ctx)?;
@@ -24,11 +39,11 @@ pub trait NativeClass: GcMark + 'static {
 
 struct Guard<T>(T);
 
-pub struct Ref<'a, T> {
+pub struct NativeValueRef<'a, T> {
     r: super::opaque_value::Ref<'a, Guard<T>>,
 }
 
-impl<T> Deref for Ref<'_, T> {
+impl<T> Deref for NativeValueRef<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -40,11 +55,11 @@ impl<T> Deref for Ref<'_, T> {
     }
 }
 
-pub struct RefMut<'a, T> {
+pub struct NativeValueRefMut<'a, T> {
     r: super::opaque_value::RefMut<'a, Guard<T>>,
 }
 
-impl<T> Deref for RefMut<'_, T> {
+impl<T> Deref for NativeValueRefMut<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -56,7 +71,7 @@ impl<T> Deref for RefMut<'_, T> {
     }
 }
 
-impl<T> DerefMut for RefMut<'_, T> {
+impl<T> DerefMut for NativeValueRefMut<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self
             .r
@@ -80,7 +95,7 @@ impl<T> Clone for Native<T> {
     }
 }
 
-impl<T: NativeClass> FromJsValue for Native<T> {
+impl<T: GcMark + Named + 'static> FromJsValue for Native<T> {
     fn from_js_value(value: Value) -> Result<Self> {
         if !value.is_opaque_object_of::<Guard<T>>() {
             return Err(expect_js_value(&value, T::CLASS_NAME));
@@ -98,35 +113,15 @@ impl<T: 'static> ToJsValue for Native<T> {
     }
 }
 
-impl<T: NativeClass> Native<T> {
-    pub fn new(ctx: &Context, value: T) -> Result<Self> {
-        let constructor = T::constructor_object(ctx)?;
-        let proto = constructor.get_property("prototype")?;
-        extern "C" fn gc_mark<T: NativeClass>(
-            rt: *mut c::JSRuntime,
-            value: c::JSValue,
-            mark_fn: c::JS_MarkFunc,
-        ) {
-            let data = opaque_object_get_data_raw::<Guard<T>>(&value);
-            let data = data.get().expect("Native object ref should never be None");
-            data.0.gc_mark(rt, mark_fn);
-        }
-        let object = new_opaque_object(ctx, None, Guard(value), Some(gc_mark::<T>));
-        let _ = object.set_prototype(&proto);
-        Ok(Self {
-            inner: object,
-            _marker: PhantomData,
-        })
-    }
-
-    pub fn borrow(&self) -> Ref<'_, T> {
-        Ref {
+impl<T: 'static> Native<T> {
+    pub fn borrow(&self) -> NativeValueRef<'_, T> {
+        NativeValueRef {
             r: self.inner.opaque_object_data(),
         }
     }
 
-    pub fn borrow_mut(&self) -> RefMut<'_, T> {
-        RefMut {
+    pub fn borrow_mut(&self) -> NativeValueRefMut<'_, T> {
+        NativeValueRefMut {
             r: self.inner.opaque_object_data_mut(),
         }
     }
@@ -136,9 +131,42 @@ impl<T: NativeClass> Native<T> {
     }
 }
 
+impl<T: GcMark + 'static> Native<T> {
+    pub fn new_gc_obj(ctx: &Context, opaque_value: T) -> Result<Self> {
+        extern "C" fn gc_mark<T: GcMark + 'static>(
+            rt: *mut c::JSRuntime,
+            value: c::JSValue,
+            mark_fn: c::JS_MarkFunc,
+        ) {
+            let data = opaque_object_get_data_raw::<Guard<T>>(&value);
+            let data = data.get().expect("Native object ref should never be None");
+            data.0.gc_mark(rt, mark_fn);
+        }
+        let object = new_opaque_object(ctx, None, Guard(opaque_value), Some(gc_mark::<T>));
+        Ok(Self {
+            inner: object,
+            _marker: PhantomData,
+        })
+    }
+}
+
+impl<T: NativeClass> Native<T> {
+    pub fn new(ctx: &Context, value: T) -> Result<Self> {
+        let constructor = T::constructor_object(ctx)?;
+        let proto = constructor.get_property("prototype")?;
+        let object = Self::new_gc_obj(ctx, value)?;
+        _ = object.inner.set_prototype(&proto);
+        Ok(object)
+    }
+}
+
 impl Context {
     pub fn new_native<T: NativeClass>(&self, value: T) -> Result<Native<T>> {
         Native::new(self, value)
+    }
+
+    pub fn new_gc_opaque<T: GcMark + 'static>(&self, value: T) -> Result<Native<T>> {
+        Native::new_gc_obj(self, value)
     }
 }
 

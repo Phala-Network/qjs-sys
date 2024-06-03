@@ -203,7 +203,8 @@ mod native_classes {
         pub r#type: String,
         #[qjs(getter)]
         pub extractable: bool,
-        #[qjs(getter, no_gc)]
+        #[qjs(getter)]
+        #[gc(skip)]
         pub algorithm: KeyGenAlgorithm,
         #[qjs(getter)]
         pub usages: Vec<js::JsString>,

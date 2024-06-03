@@ -1,0 +1,49 @@
+---
+source: qjsbind-derive/src/qjsbind.rs
+expression: "rustfmt_snippet::rustfmt(&patched.to_string()).unwrap()"
+---
+mod native_classes {
+    use super::{KeyGenAlgorithm, Result};
+    use js::IntoNativeObject as _;
+    #[derive(js :: GcMark)]
+    pub struct CryptoKey {}
+    impl CryptoKey {
+        pub fn new(inner: CryptoKey) -> Result<Self> {
+            Ok(inner)
+        }
+    }
+    mod qjsbind_generated {
+        #![allow(non_snake_case)]
+        use super::*;
+        use js as crate_js;
+        impl crate_js::Named for CryptoKey {
+            const CLASS_NAME: &'static str = "CryptoKey";
+        }
+        impl crate_js::NativeClass for CryptoKey {
+            fn constructor_object(ctx: &crate_js::Context) -> crate_js::Result<crate_js::Value> {
+                ctx.get_qjsbind_object(std::any::type_name::<CryptoKey>(), || {
+                    let constructor = ctx.new_function(
+                        "CryptoKey",
+                        qjsbind_CryptoKey_constructor,
+                        0,
+                        crate_js::c::JS_CFUNC_constructor,
+                    );
+                    let proto = ctx.new_object("CryptoKey");
+                    constructor.set_property("prototype", &proto)?;
+                    Ok(constructor)
+                })
+            }
+        }
+        #[crate_js::host_call(with_context)]
+        fn qjsbind_CryptoKey_constructor(
+            ctx: crate_js::Context,
+            _this_value: crate_js::Value,
+            inner: CryptoKey,
+        ) -> crate_js::Result<crate_js::Native<CryptoKey>> {
+            #[allow(unused_variables)]
+            let ctx = ctx;
+            use crate_js::IntoNativeObject;
+            CryptoKey::new(inner).into_native_object(&ctx)
+        }
+    }
+}

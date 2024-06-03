@@ -6,6 +6,7 @@ mod macros;
 mod attrs;
 mod bound;
 mod derive;
+mod derive_gc_mark;
 mod host_fn;
 mod qjsbind;
 
@@ -29,6 +30,14 @@ pub fn derive_to_js_value(input: TokenStream) -> TokenStream {
 pub fn derive_from_js_value(input: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(input as syn::DeriveInput);
     derive::derive(&mut input, true, false)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+#[proc_macro_derive(GcMark, attributes(gc))]
+pub fn derive_gc_mark(input: TokenStream) -> TokenStream {
+    let mut input = parse_macro_input!(input as syn::DeriveInput);
+    derive_gc_mark::derive(&mut input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }

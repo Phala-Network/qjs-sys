@@ -13,11 +13,13 @@ pub use eval::{eval, Code};
 pub use host_function::convert_host_call_result;
 pub use js_string::JsString;
 pub use js_u8array::JsUint8Array;
-pub use native_object::{GcMark, IntoNativeObject, Native, NativeClass, NoGc};
+pub use native_object::{
+    GcMark, IntoNativeObject, Named, Native, NativeClass, NativeValueRef, NativeValueRefMut, NoGc,
+};
 pub use qjs_sys as sys;
 pub use qjs_sys::c;
-pub use qjsbind_derive::{host_call, qjsbind, FromJsValue, ToJsValue};
-pub use traits::{FromArgs, FromJsValue, OwnedRawArgs, ToArgs, ToJsValue, FromJsContext};
+pub use qjsbind_derive::{host_call, qjsbind, FromJsValue, ToJsValue, GcMark};
+pub use traits::{FromArgs, FromJsContext, FromJsValue, OwnedRawArgs, ToArgs, ToJsValue};
 pub use utils::{compile, ctx_to_str, ctx_to_string, recursive_to_string};
 pub use value::{get_global, Value};
 

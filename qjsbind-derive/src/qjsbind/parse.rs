@@ -15,10 +15,13 @@ macro_rules! extract_qjs_attrs {
 }
 
 impl Class {
-    fn from_struct(item_struct: &mut ItemStruct) -> Result<Option<Self>> {
+    fn from_struct(item_struct: &mut ItemStruct, js_crate: &syn::Path) -> Result<Option<Self>> {
         let Some(qjs_attrs) = extract_qjs_attrs!(item_struct) else {
             return Ok(None);
         };
+        item_struct
+            .attrs
+            .push(syn::parse_quote!(#[derive(#js_crate::GcMark)]));
         let name = item_struct.ident.clone();
         let attrs = ClassAttrs::from_attributes(&qjs_attrs)?;
 
@@ -113,7 +116,6 @@ impl FieldAttrs {
         let mut js_name = None;
         let mut getter = None;
         let mut setter = None;
-        let mut no_gc = false;
 
         for attr in attrs {
             if attr.path().is_ident("qjs") {
@@ -127,9 +129,6 @@ impl FieldAttrs {
                         }
                         "setter" => {
                             setter = Some(ident.clone());
-                        }
-                        "no_gc" => {
-                            no_gc = true;
                         }
                         "js_name" => {
                             ensure_none!(js_name, meta.path, "duplicate `js_name` attribute");
@@ -148,7 +147,6 @@ impl FieldAttrs {
             js_name,
             getter,
             setter,
-            no_gc,
         })
     }
 }
@@ -331,12 +329,16 @@ impl Constructor {
 
 impl Mod {
     pub(crate) fn from_mod(item_mod: &mut ItemMod, js_crate: Option<Path>) -> Result<Self> {
+        let js_crate = match js_crate {
+            Some(js_crate) => js_crate,
+            None => crate::find_crate_name("qjsbind")?.into(),
+        };
         let mut classes = BTreeMap::new();
         if let Some((_, ref mut items)) = item_mod.content {
             for item in items {
                 match item {
                     Item::Struct(item_struct) => {
-                        let Some(class) = Class::from_struct(item_struct)? else {
+                        let Some(class) = Class::from_struct(item_struct, &js_crate)? else {
                             continue;
                         };
                         classes.insert(class.name.to_string(), class);

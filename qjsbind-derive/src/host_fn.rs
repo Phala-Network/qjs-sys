@@ -100,7 +100,7 @@ fn patch_or_err(attrs: TokenStream, input: TokenStream) -> syn::Result<TokenStre
 #[test]
 fn show_tokens() {
     let tokens = quote! {
-        fn QjsBind_CryptoKey_constructor(
+        fn qjsbind_CryptoKey_constructor(
             ctx: crate_js::Context,
             _this_value: crate_js::Value,
             inner: CryptoKey,
@@ -112,5 +112,5 @@ fn show_tokens() {
         }
     };
     let patched = patch(quote!(with_context), tokens);
-    insta::assert_display_snapshot!(rustfmt_snippet::rustfmt(&patched.to_string()).unwrap());
+    insta::assert_snapshot!(rustfmt_snippet::rustfmt(&patched.to_string()).unwrap());
 }

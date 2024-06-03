@@ -1,0 +1,43 @@
+---
+source: qjsbind-derive/src/host_fn.rs
+assertion_line: 115
+expression: "rustfmt_snippet::rustfmt(&patched.to_string()).unwrap()"
+---
+pub unsafe extern "C" fn qjsbind_CryptoKey_constructor(
+    c_ctx: *mut qjsbind::c::JSContext,
+    c_this: qjsbind::c::JSValueConst,
+    argc: core::ffi::c_int,
+    argv: *mut qjsbind::c::JSValue,
+) -> qjsbind::c::JSValue {
+    fn qjsbind_CryptoKey_constructor(
+        ctx: crate_js::Context,
+        _this_value: crate_js::Value,
+        inner: CryptoKey,
+    ) -> crate_js::Result<crate_js::Native<CryptoKey>> {
+        #[allow(unused_variables)]
+        let ctx = ctx;
+        use crate_js::IntoNativeObject;
+        CryptoKey::new(inner).into_native_object(&ctx)
+    }
+    #[allow(unused_variables)]
+    let ctx =
+        qjsbind::Context::clone_from_ptr(c_ctx).expect("calling host function with null context");
+    let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
+    let mut args = args
+        .into_iter()
+        .map(|v| qjsbind::Value::new_cloned(&ctx, *v));
+    let this_value = qjsbind::Value::new_cloned(&ctx, c_this);
+    let rv: qjsbind::Result<_> = {
+        let ctx = ctx.clone();
+        (move || {
+            Ok(qjsbind_CryptoKey_constructor(
+                ctx.try_into()?,
+                qjsbind::FromJsValue::from_js_value(this_value)?,
+                qjsbind::FromJsValue::from_js_value(
+                    args.next().unwrap_or(qjsbind::Value::undefined()),
+                )?,
+            ))
+        })()
+    };
+    qjsbind::convert_host_call_result("qjsbind_CryptoKey_constructor", &ctx, rv)
+}

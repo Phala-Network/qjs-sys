@@ -1,6 +1,6 @@
 use core::ptr::NonNull;
 
-use crate::{c, Code, Result, Value};
+use crate::{c, Code, Result, ToJsValue, Value};
 use alloc::string::{String, ToString};
 use anyhow::{anyhow, bail, Context as _};
 use qjs_sys::inline_fns::JSCFunction;
@@ -80,11 +80,11 @@ impl Context {
         }
     }
 
-    pub fn get_qjsbind_object(
-        &self,
-        name: &str,
-        or_default: impl Fn() -> Result<Value>,
-    ) -> Result<Value> {
+    pub fn get_qjsbind_object<F, V>(&self, name: &str, or_default: F) -> Result<Value>
+    where
+        F: Fn() -> Result<V>,
+        V: ToJsValue,
+    {
         let global = self.get_global_object();
         let bindings_obj_name = "_QjsBind";
         let mut bindings = global
@@ -96,7 +96,7 @@ impl Context {
         }
         let mut obj = bindings.get_property(name)?;
         if obj.is_undefined() {
-            obj = or_default()?;
+            obj = or_default()?.to_js_value(self)?;
             bindings.set_property(name, &obj)?;
         }
         Ok(obj)

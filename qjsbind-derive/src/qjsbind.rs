@@ -17,7 +17,7 @@ mod codegen;
 mod parse;
 
 struct Mod {
-    js_crate: Option<Path>,
+    js_crate: Path,
     classes: BTreeMap<String, Class>,
 }
 
@@ -35,9 +35,6 @@ struct ClassField {
 }
 
 impl ClassField {
-    fn no_gc(&self) -> bool {
-        self.qjs_property.as_ref().map_or(false, |p| p.attrs.no_gc)
-    }
     fn span(&self) -> Span {
         self.field.span()
     }
@@ -58,7 +55,6 @@ struct FieldAttrs {
     js_name: Option<LitStr>,
     getter: Option<Ident>,
     setter: Option<Ident>,
-    no_gc: bool,
 }
 
 struct ArgSelf {
@@ -173,5 +169,5 @@ fn show_tokens() {
         }
     };
     let patched = patch(quote!(js_crate = js), tokens);
-    insta::assert_display_snapshot!(rustfmt_snippet::rustfmt(&patched.to_string()).unwrap());
+    insta::assert_snapshot!(rustfmt_snippet::rustfmt(&patched.to_string()).unwrap());
 }
