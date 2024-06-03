@@ -622,7 +622,7 @@ impl Value {
                 prop,
                 getter.leak(),
                 setter.leak(),
-                0,
+                c::JS_PROP_C_W_E as _,
             );
             c::JS_FreeAtom(ctx.as_ptr(), prop);
             if ret < 0 {
