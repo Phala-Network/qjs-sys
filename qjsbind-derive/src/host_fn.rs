@@ -45,7 +45,9 @@ fn patch_or_err(attrs: TokenStream, input: TokenStream) -> syn::Result<TokenStre
             syn_bail!(args, "missing context argument");
         };
         ctx_var = quote_spanned! { ctx.span() => ctx };
-        arg_exprs.push(quote_spanned! { ctx.span() =>  #ctx_var.try_into()? });
+        arg_exprs.push(quote_spanned! { ctx.span() =>
+             #ctx_var.try_into().ok().context("failed to convert context")?
+        });
         let Some(this) = args_iter.next() else {
             syn_bail!(args, "missing this argument");
         };
@@ -100,17 +102,21 @@ fn patch_or_err(attrs: TokenStream, input: TokenStream) -> syn::Result<TokenStre
 #[test]
 fn show_tokens() {
     let tokens = quote! {
-        fn qjsbind_CryptoKey_constructor(
-            ctx: crate_js::Context,
-            _this_value: crate_js::Value,
-            inner: CryptoKey,
-        ) -> crate_js::Result<crate_js::Native<CryptoKey>> {
-            #[allow(unused_variables)]
-            let ctx = ctx;
-            use crate_js::IntoNativeObject;
-            CryptoKey::new(inner).into_native_object(&ctx)
-        }
-    };
+    fn codec(
+        ctx: js::Context,
+        _this: js::Value,
+        tid: js::Value,
+        registry: js::Value,
+    ) -> js::Result<js::Value> {
+        let obj = ctx.new_object("ScaleCodec");
+        let proto = ctx.get_global_object().get_property("ScaleCodec")?;
+        obj.set_prototype(&proto)?;
+        obj.set_property("ty", &tid)?;
+        obj.set_property("registry", &registry)?;
+        obj.set_property("isArray", &js::Value::from_bool(&ctx, tid.is_array()))?;
+        Ok(obj)
+    }
+        };
     let patched = patch(quote!(with_context), tokens);
     insta::assert_snapshot!(rustfmt_snippet::rustfmt(&patched.to_string()).unwrap());
 }

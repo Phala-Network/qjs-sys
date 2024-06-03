@@ -1,3 +1,5 @@
+use js::AnyError;
+
 use crate::{self as js, c, ToJsValue, Value};
 
 mod private {
@@ -21,16 +23,16 @@ where
 impl<T, E> private::Sealed for Result<T, E>
 where
     T: HostCallOutput,
-    js::Error: From<E>,
+    E: AnyError,
 {
 }
 impl<T, E> HostCallOutput for Result<T, E>
 where
     T: HostCallOutput,
-    js::Error: From<E>,
+    E: AnyError,
 {
     fn into_js_value(self, ctx: &js::Context) -> js::Result<Value> {
-        self?.into_js_value(ctx)
+        self.map_err(js::Error::msg)?.into_js_value(ctx)
     }
 }
 

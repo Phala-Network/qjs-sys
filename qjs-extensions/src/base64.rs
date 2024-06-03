@@ -1,7 +1,6 @@
 use alloc::{string::String, vec::Vec};
-use anyhow::Context;
 use base64::{engine::general_purpose, Engine as _};
-use js::{AsBytes, BytesOrString, JsString, Result};
+use js::{AsBytes, BytesOrString, ErrorContext, JsString, Result};
 
 #[js::host_call]
 pub fn encode(data: BytesOrString, pad: bool) -> String {

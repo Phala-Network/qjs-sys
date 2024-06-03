@@ -2,8 +2,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use anyhow::Context;
-use js::{AsBytes, JsString, JsUint8Array, Result};
+use js::{AsBytes, ErrorContext, JsString, JsUint8Array, Result};
 
 #[derive(Debug, js::ToJsValue, Default)]
 pub struct EncodeProgress {

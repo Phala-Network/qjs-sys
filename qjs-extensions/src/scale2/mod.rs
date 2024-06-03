@@ -2,11 +2,11 @@ use alloc::borrow::Cow;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::{format, rc::Rc, vec::Vec};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, bail};
 use core::cell::{Ref, RefCell, RefMut};
 use parity_scale_codec::{Compact, Decode, Encode, Output};
 
-use js::{self as js, AsBytes, BytesOrHex, FromJsValue, JsResultExt, ToJsValue};
+use js::{self as js, AsBytes, BytesOrHex, ErrorContext, FromJsValue, JsResultExt, ToJsValue};
 
 use self::parser::{Enum, Id, IdInfo, PrimitiveType, String as TinyString, Type, TypeDef};
 

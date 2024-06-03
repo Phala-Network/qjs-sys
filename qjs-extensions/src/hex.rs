@@ -1,6 +1,5 @@
 use alloc::{string::String, vec::Vec};
-use anyhow::Context;
-use js::{AsBytes, BytesOrString, JsString, Result};
+use js::{AsBytes, BytesOrString, JsString, Result, ErrorContext};
 
 #[js::host_call]
 pub fn encode(data: BytesOrString, add_prefix: Option<bool>) -> String {
