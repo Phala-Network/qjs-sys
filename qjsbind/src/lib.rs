@@ -8,7 +8,9 @@ pub use as_bytes::{
     BytesOrString,
 };
 pub use engine::{Context, Runtime};
-pub use error::{Context as ErrorContext, Error, JsResultExt, Result, AnyError};
+pub use error::{
+    no_std_context::NoStdContext, AnyError, Context as ErrorContext, Error, JsResultExt, Result,
+};
 pub use eval::{eval, Code};
 pub use host_function::convert_host_call_result;
 pub use js_string::JsString;
@@ -18,7 +20,7 @@ pub use native_object::{
 };
 pub use qjs_sys as sys;
 pub use qjs_sys::c;
-pub use qjsbind_derive::{host_call, qjsbind, FromJsValue, ToJsValue, GcMark};
+pub use qjsbind_derive::{host_call, qjsbind, FromJsValue, GcMark, ToJsValue};
 pub use traits::{FromArgs, FromJsContext, FromJsValue, OwnedRawArgs, ToArgs, ToJsValue};
 pub use utils::{compile, ctx_to_str, ctx_to_string, recursive_to_string};
 pub use value::{get_global, Value};

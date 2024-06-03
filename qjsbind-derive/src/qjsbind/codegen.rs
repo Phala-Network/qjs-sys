@@ -97,10 +97,10 @@ impl ToTokens for Class {
                         });
                         continue;
                     }
-                    if let Some(Property { setter, .. }) =
+                    if let Some(Property { getter, .. }) =
                         properties.iter_mut().find(|p| p.js_name == js_name)
                     {
-                        *setter = Some((marker_token, fn_name));
+                        *getter = Some((marker_token, fn_name));
                     } else {
                         properties.push(Property {
                             span: method.name.span(),
@@ -122,10 +122,10 @@ impl ToTokens for Class {
                         });
                         continue;
                     }
-                    if let Some(Property { getter, .. }) =
+                    if let Some(Property { setter, .. }) =
                         properties.iter_mut().find(|p| p.js_name == js_name)
                     {
-                        *getter = Some((marker_token, fn_name));
+                        *setter = Some((marker_token, fn_name));
                     } else {
                         properties.push(Property {
                             span: method.name.span(),
@@ -161,21 +161,36 @@ impl ToTokens for Class {
                  getter,
                  setter,
              }| {
-                let getter = getter
+                let getter_tokens = getter
                     .as_ref()
                     .map(|(marker, ident)| quote_spanned! { marker.span() => Some(#ident) })
                     .unwrap_or(quote! { None });
-                let setter = setter
-                    .as_ref()
-                    .map(|(marker, ident)| quote_spanned! { marker.span() => Some(#ident) })
-                    .unwrap_or(quote! { None });
+                let setter_tokens = match setter.as_ref() {
+                    Some((marker, ident)) => quote_spanned! { marker.span() => Some(#ident) },
+                    None => {
+                        if let Some(getter) = getter {
+                            let error_msg = format!("property `{js_name}` is read-only");
+                            quote_spanned! { getter.0.span() =>
+                                {
+                                    #[crate_js::host_call]
+                                    fn _ro_setter(_value: crate_js::Value) -> crate_js::Result<()> {
+                                        Err(crate_js::Error::msg(#error_msg))
+                                    }
+                                    Some(_ro_setter)
+                                }
+                            }
+                        } else {
+                            quote! { None }
+                        }
+                    }
+                };
                 let target = if *is_static {
                     constructor_var.clone()
                 } else {
                     proto_var.clone()
                 };
                 quote_spanned! { span.clone() =>
-                    #target.define_property_getset(#js_name, #getter, #setter)?;
+                    #target.define_property_getset(#js_name, #getter_tokens, #setter_tokens)?;
                 }
             },
         );

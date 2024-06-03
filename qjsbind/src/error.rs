@@ -6,8 +6,8 @@ pub use anyhow::{Error, Result};
 pub use anyhow::Context;
 #[cfg(not(feature = "std"))]
 pub use no_std_context::NoStdContext as Context;
-#[cfg(not(feature = "std"))]
-mod no_std_context {
+
+pub mod no_std_context {
     use super::*;
 
     pub trait NoStdContext<T, E> {

@@ -1,0 +1,50 @@
+---
+source: qjsbind-derive/src/host_fn.rs
+assertion_line: 121
+expression: "rustfmt_snippet::rustfmt(&patched.to_string()).unwrap()"
+---
+pub unsafe extern "C" fn codec(
+    c_ctx: *mut qjsbind::c::JSContext,
+    c_this: qjsbind::c::JSValueConst,
+    argc: core::ffi::c_int,
+    argv: *mut qjsbind::c::JSValue,
+) -> qjsbind::c::JSValue {
+    fn codec(
+        ctx: js::Context,
+        _this: js::Value,
+        tid: js::Value,
+        registry: js::Value,
+    ) -> js::Result<js::Value> {
+        let obj = ctx.new_object("ScaleCodec");
+        let proto = ctx.get_global_object().get_property("ScaleCodec")?;
+        obj.set_prototype(&proto)?;
+        obj.set_property("ty", &tid)?;
+        obj.set_property("registry", &registry)?;
+        obj.set_property("isArray", &js::Value::from_bool(&ctx, tid.is_array()))?;
+        Ok(obj)
+    }
+    #[allow(unused_variables)]
+    let ctx =
+        qjsbind::Context::clone_from_ptr(c_ctx).expect("calling host function with null context");
+    let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
+    let mut args = args
+        .into_iter()
+        .map(|v| qjsbind::Value::new_cloned(&ctx, *v));
+    let this_value = qjsbind::Value::new_cloned(&ctx, c_this);
+    let rv: qjsbind::Result<_> = {
+        let ctx = ctx.clone();
+        (move || {
+            Ok(codec(
+                qjsbind::ErrorContext::context(ctx.try_into().ok(), "failed to convert context")?,
+                qjsbind::FromJsValue::from_js_value(this_value)?,
+                qjsbind::FromJsValue::from_js_value(
+                    args.next().unwrap_or(qjsbind::Value::undefined()),
+                )?,
+                qjsbind::FromJsValue::from_js_value(
+                    args.next().unwrap_or(qjsbind::Value::undefined()),
+                )?,
+            ))
+        })()
+    };
+    qjsbind::convert_host_call_result("codec", &ctx, rv)
+}
