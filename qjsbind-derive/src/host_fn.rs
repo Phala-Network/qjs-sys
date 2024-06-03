@@ -46,7 +46,7 @@ fn patch_or_err(attrs: TokenStream, input: TokenStream) -> syn::Result<TokenStre
         };
         ctx_var = quote_spanned! { ctx.span() => ctx };
         arg_exprs.push(quote_spanned! { ctx.span() =>
-             #ctx_var.try_into().ok().context("failed to convert context")?
+             #crate_qjsbind::ErrorContext::context(#ctx_var.try_into().ok(), "failed to convert context")?
         });
         let Some(this) = args_iter.next() else {
             syn_bail!(args, "missing this argument");

@@ -114,8 +114,11 @@ fn derive_struct(
                                                         #f()
                                                     } else {
                                                         let field_name = #{&field.field().ident.as_ref().map(|f| f.to_string()).unwrap_or_default()};
-                                                        #{field.decoder_fn(&crate_qjsbind)}(field_value)
-                                                            .context(format!("failed to decode field {field_name}"))?
+                                                        #{
+                                                            field.decoder_fn(&crate_qjsbind)
+                                                        }
+                                                            (field_value)
+                                                                .context(#crate_qjsbind::alloc::format!("failed to decode field {field_name}"))?
                                                     }
                                                 }
                                             }

@@ -1,7 +1,7 @@
 use alloc::borrow::Cow;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
-use alloc::{format, rc::Rc, vec::Vec};
+use alloc::{rc::Rc, vec::Vec};
 use anyhow::{anyhow, bail};
 use core::cell::{Ref, RefCell, RefMut};
 use parity_scale_codec::{Compact, Decode, Encode, Output};
