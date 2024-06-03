@@ -172,7 +172,7 @@ impl<T: NativeClass> Native<T> {
 }
 
 impl Context {
-    pub fn new_native<T: NativeClass>(&self, value: T) -> Result<Native<T>> {
+    pub fn wrap_native<T: NativeClass>(&self, value: T) -> Result<Native<T>> {
         Native::new(self, value)
     }
 
