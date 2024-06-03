@@ -379,11 +379,19 @@ impl Method {
 
         tokens.extend(quote_spanned! { self.attrs.marker_token.span() =>
             #[crate_js::host_call(with_context)]
-            fn #fn_name(ctx: crate_js::Context, this_value: crate_js::Native<#class_name>, #(#args),*) #{&self.return_ty} {
+            fn #fn_name(
+                ctx: crate_js::Context,
+                #(if self.is_static) {
+                _this_value: crate_js::Value,
+                }
+                #(else) {
+                this_value: crate_js::Native<#class_name>,
+                }
+                #(#args),*
+            ) #{&self.return_ty} {
                 #[allow(unused_variables)]
                 let ctx = ctx;
                 #(if self.is_static) {
-                    let _ = this_value;
                     #class_name::
                 }
                 #(else if self.is_mut) {
