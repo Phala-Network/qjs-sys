@@ -30,6 +30,12 @@ pub trait FromJsContext {
         Self: Sized;
 }
 
+impl FromJsContext for js::Context {
+    fn from_js_context(ctx: &js::Context) -> Result<Self> {
+        Ok(ctx.clone())
+    }
+}
+
 pub trait FromJsValue {
     fn from_js_value(js_value: Value) -> Result<Self>
     where
