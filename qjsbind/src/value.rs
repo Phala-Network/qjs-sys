@@ -702,6 +702,9 @@ impl Value {
             .expect_js_value(self, "u32")
     }
     pub fn decode_i64(&self) -> Result<i64> {
+        if self.is_bool() {
+            return Ok(self.decode_bool()? as i64);
+        }
         if self.is_number() || self.is_big_int() {
             let mut v = 0;
             unsafe {
@@ -736,6 +739,10 @@ impl Value {
         self.decode_number().expect_js_value(self, "u128")
     }
     pub fn decode_number<N: core::str::FromStr>(&self) -> Result<N> {
+        if self.is_bool() {
+            let n = if self.decode_bool()? { "1" } else { "0" };
+            return n.parse().ok().expect_js_value(self, "number");
+        }
         // TODO: optimize performance
         if self.is_number() || self.is_big_int() {
             self.parse().expect_js_value(self, "number")
