@@ -50,6 +50,10 @@ impl<T> Ref<'_, T> {
     pub fn get(&self) -> Option<&T> {
         self.cell.as_ref()?.as_ref()
     }
+
+    pub fn is_none(&self) -> bool {
+        self.cell.is_none()
+    }
 }
 
 #[derive(Default)]
@@ -60,6 +64,10 @@ pub struct RefMut<'a, T> {
 impl<T> RefMut<'_, T> {
     fn none() -> Self {
         Self { cell: None }
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.cell.is_none()
     }
 
     pub fn get(&self) -> Option<&T> {
@@ -135,26 +143,23 @@ pub fn opaque_object_get_data_raw<T: 'static>(value: &c::JSValue) -> Ref<'_, T> 
     }
     let cell = unsafe { &*(ptr as *const Cell<T>) };
     Ref {
-        cell: Some(cell.cell.borrow()),
+        cell: cell.cell.try_borrow().ok(),
     }
 }
 
-pub fn opaque_object_get_data_mut<T: 'static>(value: &Value) -> RefMut<'_, T> {
+pub fn opaque_object_get_data_mut<T: 'static>(value: &c::JSValue) -> RefMut<'_, T> {
     debug!(
         "opaque_object_get_data_mut TID={}, T={:?}",
         type_id::<T>(),
         core::any::type_name::<T>()
     );
-    let Value::Other { value, ctx: _ } = value else {
-        return RefMut::none();
-    };
     let ptr = unsafe { c::JS_OpaqueObjectDataGet(*value, type_id::<T>() as _) };
     if ptr.is_null() {
         return RefMut::none();
     }
     let cell = unsafe { &mut *(ptr as *mut Cell<T>) };
     RefMut {
-        cell: Some(cell.cell.borrow_mut()),
+        cell: cell.cell.try_borrow_mut().ok(),
     }
 }
 

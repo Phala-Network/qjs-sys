@@ -182,15 +182,20 @@ impl Method {
         }
         let is_static = args.receiver.is_none();
         let return_ty = item_fn.sig.output.clone();
+        let arg_count = args
+            .args
+            .iter()
+            .filter(|a| a.from_context.is_none())
+            .count();
         // validate
         match &attrs.fn_type {
             MethodType::Getter => {
-                if !args.args.is_empty() {
+                if arg_count != 0 {
                     syn_bail!(attrs.marker_token, "getter method cannot take arguments");
                 }
             }
             MethodType::Setter => {
-                if args.args.len() != 1 {
+                if arg_count != 1 {
                     syn_bail!(
                         attrs.marker_token,
                         "setter method must take exactly one argument"

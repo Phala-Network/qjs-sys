@@ -144,7 +144,7 @@ impl Value {
     }
 
     pub fn opaque_object_data_mut<T: 'static>(&self) -> RefMut<'_, T> {
-        opaque_object_get_data_mut(self)
+        opaque_object_get_data_mut(self.raw_value())
     }
 
     pub fn opaque_object_take_data<T: 'static>(&self) -> Option<T> {

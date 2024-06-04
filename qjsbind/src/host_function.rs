@@ -32,7 +32,8 @@ where
     E: AnyError,
 {
     fn into_js_value(self, ctx: &js::Context) -> js::Result<Value> {
-        self.map_err(js::Error::msg)?.into_js_value(ctx)
+        self.map_err(|err| js::Error::msg(format!("{err:?}")))?
+            .into_js_value(ctx)
     }
 }
 

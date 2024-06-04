@@ -16,7 +16,7 @@ pub struct JsString {
 }
 
 impl GcMark for JsString {
-    fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
+    fn gc_mark(&mut self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
         self.value.gc_mark(rt, mark_fn);
     }
 }

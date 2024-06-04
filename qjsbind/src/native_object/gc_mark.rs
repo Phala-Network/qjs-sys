@@ -1,14 +1,14 @@
 use crate::{c, Native, Value};
 
 pub trait GcMark {
-    fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc);
+    fn gc_mark(&mut self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc);
 }
 
 macro_rules! impl_gc_mark_for {
     ($($t:ty),*) => {
         $(
             impl GcMark for $t {
-                fn gc_mark(&self, _rt: *mut c::JSRuntime, _mark_fn: c::JS_MarkFunc) {}
+                fn gc_mark(&mut self, _rt: *mut c::JSRuntime, _mark_fn: c::JS_MarkFunc) {}
             }
         )*
     };
@@ -26,13 +26,13 @@ impl_gc_mark_for! {
 }
 
 impl<T> GcMark for Native<T> {
-    fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
+    fn gc_mark(&mut self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
         self.inner.gc_mark(rt, mark_fn)
     }
 }
 
 impl<T: GcMark> GcMark for Option<T> {
-    fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
+    fn gc_mark(&mut self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
         if let Some(value) = self {
             value.gc_mark(rt, mark_fn);
         }
@@ -43,7 +43,7 @@ impl<T> GcMark for alloc::vec::Vec<T>
 where
     T: GcMark,
 {
-    fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
+    fn gc_mark(&mut self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
         for value in self {
             value.gc_mark(rt, mark_fn);
         }
@@ -51,7 +51,13 @@ where
 }
 
 impl GcMark for Value {
-    fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
+    fn gc_mark(&mut self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
+        self.gc_mark_ro(rt, mark_fn)
+    }
+}
+
+impl Value {
+    pub fn gc_mark_ro(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
         let Ok(ctx) = self.context() else {
             return;
         };
@@ -65,7 +71,7 @@ impl GcMark for Value {
 /// A wrapper type that does not participate in JS garbage collection.
 pub struct NoGc<T>(pub T);
 impl<T> GcMark for NoGc<T> {
-    fn gc_mark(&self, _rt: *mut c::JSRuntime, _mark_fn: c::JS_MarkFunc) {}
+    fn gc_mark(&mut self, _rt: *mut c::JSRuntime, _mark_fn: c::JS_MarkFunc) {}
 }
 impl<T> NoGc<T> {
     pub fn new(value: T) -> Self {

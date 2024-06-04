@@ -1,7 +1,7 @@
 use crate::{
     self as js,
     error::expect_js_value,
-    opaque_value::{new_opaque_object, opaque_object_get_data_raw},
+    opaque_value::{new_opaque_object, opaque_object_get_data_mut},
 };
 
 use core::{
@@ -43,6 +43,12 @@ pub struct NativeValueRef<'a, T> {
     r: super::opaque_value::Ref<'a, Guard<T>>,
 }
 
+impl<T> NativeValueRef<'_, T> {
+    pub fn is_none(&self) -> bool {
+        self.r.is_none()
+    }
+}
+
 impl<T> Deref for NativeValueRef<'_, T> {
     type Target = T;
 
@@ -57,6 +63,12 @@ impl<T> Deref for NativeValueRef<'_, T> {
 
 pub struct NativeValueRefMut<'a, T> {
     r: super::opaque_value::RefMut<'a, Guard<T>>,
+}
+
+impl<T> NativeValueRefMut<'_, T> {
+    pub fn is_none(&self) -> bool {
+        self.r.is_none()
+    }
 }
 
 impl<T> Deref for NativeValueRefMut<'_, T> {
@@ -144,8 +156,10 @@ impl<T: GcMark + Named + 'static> Native<T> {
             value: c::JSValue,
             mark_fn: c::JS_MarkFunc,
         ) {
-            let data = opaque_object_get_data_raw::<Guard<T>>(&value);
-            let data = data.get().expect("Native object ref should never be None");
+            let mut data = opaque_object_get_data_mut::<Guard<T>>(&value);
+            let data = data
+                .get_mut()
+                .expect("Native object ref should never be None");
             data.0.gc_mark(rt, mark_fn);
         }
         let object = new_opaque_object(

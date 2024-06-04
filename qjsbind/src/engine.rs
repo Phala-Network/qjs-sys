@@ -41,11 +41,11 @@ impl Context {
     }
 
     pub fn throw(&self, err: impl core::fmt::Display) {
-        self.throw_str(&err.to_string());
+        self.throw_str(&format!("{err:#}", ));
     }
 
     pub fn throw_dbg(&self, err: impl core::fmt::Debug) {
-        self.throw_str(&format!("{:?}", err));
+        self.throw_str(&format!("{err:#?}"));
     }
 
     pub fn throw_str(&self, err: &str) {
