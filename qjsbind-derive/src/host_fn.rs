@@ -76,8 +76,10 @@ fn patch_or_err(attrs: TokenStream, input: TokenStream) -> syn::Result<TokenStre
         ) -> #crate_qjsbind::c::JSValue
         {
             #input
+            #crate_qjsbind::log::trace!(target: "js::ocall", "host function {} called, argc={argc}", #fn_name);
             #[allow(unused_variables)]
             let #ctx_var = #crate_qjsbind::Context::clone_from_ptr(c_ctx).expect("calling host function with null context");
+            let _pause_gc = #ctx_var.pause_gc();
             let args = if argc > 0 {
                 unsafe { core::slice::from_raw_parts(argv, argc as usize) }
             } else {

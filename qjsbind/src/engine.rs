@@ -5,6 +5,29 @@ use alloc::string::{String, ToString};
 use anyhow::{anyhow, bail, Context as _};
 use qjs_sys::inline_fns::JSCFunction;
 
+pub struct PauseGc {
+    ctx: Context,
+}
+
+impl PauseGc {
+    pub fn new(ctx: Context) -> Self {
+        unsafe {
+            let rt = c::JS_GetRuntime(ctx.as_ptr());
+            c::JS_PauseGC(rt);
+        }
+        PauseGc { ctx }
+    }
+}
+
+impl Drop for PauseGc {
+    fn drop(&mut self) {
+        unsafe {
+            let rt = c::JS_GetRuntime(self.ctx.as_ptr());
+            c::JS_ResumeGC(rt);
+        }
+    }
+}
+
 pub struct Context {
     pub(crate) ptr: NonNull<c::JSContext>,
 }
@@ -41,7 +64,7 @@ impl Context {
     }
 
     pub fn throw(&self, err: impl core::fmt::Display) {
-        self.throw_str(&format!("{err:#}", ));
+        self.throw_str(&format!("{err:#}"));
     }
 
     pub fn throw_dbg(&self, err: impl core::fmt::Debug) {
@@ -132,6 +155,10 @@ impl Context {
             )
         };
         Value::new_moved(self, f)
+    }
+
+    pub fn pause_gc(&self) -> PauseGc {
+        PauseGc::new(self.clone())
     }
 }
 

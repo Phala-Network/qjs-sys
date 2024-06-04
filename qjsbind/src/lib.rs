@@ -25,6 +25,7 @@ pub use qjsbind_derive::{host_call, qjsbind, FromJsValue, GcMark, ToJsValue};
 pub use traits::{FromArgs, FromJsContext, FromJsValue, OwnedRawArgs, ToArgs, ToJsValue};
 pub use utils::{compile, ctx_to_str, ctx_to_string, recursive_to_string};
 pub use value::{get_global, Value};
+pub use log;
 
 #[macro_use]
 mod macros;
