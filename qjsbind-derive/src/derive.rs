@@ -94,7 +94,7 @@ fn derive_struct(
 
         Ok(quote! {
             const _: () = {
-                use #crate_qjsbind::{c, Value, FromJsValue, Result, Error, alloc, ErrorContext as _};
+                use #crate_qjsbind::{c, Value, FromJsValue, Result, Error, alloc};
                 impl #impl_generics FromJsValue for #ident #ty_generics #bounded_where_clause {
                     fn from_js_value(val: Value) -> Result<Self> {
                         #(if container_attrs.allow_default()) {
@@ -107,24 +107,25 @@ fn derive_struct(
                                 #{&field.field().ident}: {
                                     let field_value = val.get_property(#{field.js_name(&container_attrs)})?;
                                     #{
+                                        let field_name = &field.field().ident.as_ref().map(|f| f.to_string()).unwrap_or_default();
+                                        let err_msg = format!("failed to decode field {}", field_name);
+                                        let decoding_expr = quote! {
+                                            #crate_qjsbind::ErrorContext::context(
+                                                #{field.decoder_fn(&crate_qjsbind)}(field_value),
+                                                #err_msg,
+                                            )?
+                                        };
                                         match field.default_fn() {
                                             Some(f) => {
                                                 quote! {
                                                     if field_value.is_null_or_undefined() {
                                                         #f()
                                                     } else {
-                                                        let field_name = #{&field.field().ident.as_ref().map(|f| f.to_string()).unwrap_or_default()};
-                                                        #{
-                                                            field.decoder_fn(&crate_qjsbind)
-                                                        }
-                                                            (field_value)
-                                                                .context(#crate_qjsbind::alloc::format!("failed to decode field {field_name}"))?
+                                                        #decoding_expr
                                                     }
                                                 }
                                             }
-                                            None => quote! {
-                                                #{field.decoder_fn(&crate_qjsbind)}(field_value)?
-                                            },
+                                            None => decoding_expr,
                                         }
                                     }
                                 },
