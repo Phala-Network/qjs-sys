@@ -125,13 +125,7 @@ impl Deref for JsArrayBuffer {
 }
 
 impl GcMark for JsArrayBuffer {
-    fn gc_mark(&mut self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
-        self.gc_mark_ro(rt, mark_fn)
-    }
-}
-
-impl JsArrayBuffer {
-    pub fn gc_mark_ro(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
-        self.value.gc_mark_ro(rt, mark_fn)
+    fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
+        self.value.gc_mark(rt, mark_fn)
     }
 }

@@ -54,17 +54,17 @@ fn derive_struct(
         const _: () = {
             use #crate_qjsbind::{c, Value, GcMark};
             impl #impl_generics GcMark for #{&input.ident} #ty_generics #bounded_where_clause {
-                fn gc_mark(&mut self, rt: *mut c::JSRuntime, mrk: c::JS_MarkFunc) {
+                fn gc_mark(&self, rt: *mut c::JSRuntime, mrk: c::JS_MarkFunc) {
                     #[allow(unused_variables)]
                     let (rt, mrk) = (rt, mrk);
                     #(for (i, (field, attrs)) in fields.iter().enumerate()) {
                         #(if !attrs.no_gc) {
                             #{
                                 if let Some(ident) = &field.ident {
-                                    quote_spanned!{ field.span() => GcMark::gc_mark(&mut self.#ident, rt, mrk); }
+                                    quote_spanned!{ field.span() => GcMark::gc_mark(&self.#ident, rt, mrk); }
                                 } else {
                                     let ind = syn::Index::from(i);
-                                    quote_spanned! { field.span() => GcMark::gc_mark(&mut self.#ind, rt, mrk); }
+                                    quote_spanned! { field.span() => GcMark::gc_mark(&self.#ind, rt, mrk); }
                                 }
                             }
                         }

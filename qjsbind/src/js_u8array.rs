@@ -71,7 +71,7 @@ impl Deref for JsUint8Array {
 }
 
 impl GcMark for JsUint8Array {
-    fn gc_mark(&mut self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
+    fn gc_mark(&self, rt: *mut c::JSRuntime, mark_fn: c::JS_MarkFunc) {
         self.value.gc_mark(rt, mark_fn);
     }
 }

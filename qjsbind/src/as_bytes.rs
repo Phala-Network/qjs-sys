@@ -37,7 +37,7 @@ where
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct AsBytes<T>(pub T);
 impl<T: GcMark> GcMark for AsBytes<T> {
-    fn gc_mark(&mut self, rt: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
+    fn gc_mark(&self, rt: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
         self.0.gc_mark(rt, mark_fn);
     }
 }
@@ -66,7 +66,7 @@ where
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct BytesOrHex<T>(pub T);
 impl<T: GcMark> GcMark for BytesOrHex<T> {
-    fn gc_mark(&mut self, rt: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
+    fn gc_mark(&self, rt: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
         self.0.gc_mark(rt, mark_fn);
     }
 }
@@ -100,7 +100,7 @@ pub enum BytesOrString {
 }
 
 impl GcMark for BytesOrString {
-    fn gc_mark(&mut self, rt: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
+    fn gc_mark(&self, rt: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
         match self {
             Self::Uint8Array(bytes) => bytes.gc_mark(rt, mark_fn),
             Self::String(hex) => hex.gc_mark(rt, mark_fn),
@@ -160,7 +160,7 @@ pub enum Bytes {
 }
 
 impl GcMark for Bytes {
-    fn gc_mark(&mut self, ctx: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
+    fn gc_mark(&self, ctx: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
         match self {
             Self::Uint8Array(bytes) => bytes.gc_mark(ctx, mark_fn),
             Self::Bytes(_) => {}
