@@ -15,6 +15,7 @@ pub use eval::{eval, Code};
 pub use host_function::convert_host_call_result;
 pub use js_string::JsString;
 pub use js_u8array::JsUint8Array;
+pub use js_arraybuffer::JsArrayBuffer;
 pub use native_object::{
     GcMark, IntoNativeObject, Named, Native, NativeClass, NativeValueRef, NativeValueRefMut, NoGc,
 };
@@ -35,6 +36,7 @@ mod host_function;
 mod impls;
 mod js_string;
 mod js_u8array;
+mod js_arraybuffer;
 mod native_object;
 mod opaque_value;
 mod traits;

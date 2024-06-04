@@ -388,6 +388,9 @@ impl Value {
     pub fn is_uint8_array(&self) -> bool {
         unsafe { c::JS_IsUint8Array(*self.raw_value()) != 0 }
     }
+    pub fn is_array_buffer(&self) -> bool {
+        unsafe { c::JS_IsTypeOf(*self.raw_value(), c::JS_CLASS_ARRAY_BUFFER as _) != 0 }
+    }
 }
 
 impl Value {
