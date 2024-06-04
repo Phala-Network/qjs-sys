@@ -78,7 +78,11 @@ fn patch_or_err(attrs: TokenStream, input: TokenStream) -> syn::Result<TokenStre
             #input
             #[allow(unused_variables)]
             let #ctx_var = #crate_qjsbind::Context::clone_from_ptr(c_ctx).expect("calling host function with null context");
-            let args = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
+            let args = if argc > 0 {
+                unsafe { core::slice::from_raw_parts(argv, argc as usize) }
+            } else {
+                &[]
+            };
             let mut args = args.into_iter().map(|v| #crate_qjsbind::Value::new_cloned(&ctx, *v));
             #(if with_context) {
                 let #this_var = #crate_qjsbind::Value::new_cloned(&ctx, c_this);
