@@ -25,7 +25,7 @@ macro_rules! impl_named {
         }
     };
     ($t:ty) => {
-        impl_named!($t, stringify!($t));
+        impl_named!($t as stringify!($t));
     };
 }
 
@@ -190,7 +190,7 @@ impl Context {
         Native::new(self, value)
     }
 
-    pub fn new_gc_opaque_named<T: GcMark + Named + 'static>(&self, value: T) -> Result<Native<T>> {
+    pub fn wrap_gc_opaque_named<T: GcMark + Named + 'static>(&self, value: T) -> Result<Native<T>> {
         Native::new_gc_obj_named(self, value)
     }
 }
