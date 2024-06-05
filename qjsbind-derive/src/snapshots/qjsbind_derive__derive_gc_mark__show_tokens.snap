@@ -1,5 +1,6 @@
 ---
 source: qjsbind-derive/src/derive_gc_mark.rs
+assertion_line: 139
 expression: "rustfmt_snippet::rustfmt(&generated.to_string()).unwrap()"
 ---
 const _: () = {
@@ -8,7 +9,6 @@ const _: () = {
         fn gc_mark(&self, rt: *mut c::JSRuntime, mrk: c::JS_MarkFunc) {
             #[allow(unused_variables)]
             let (rt, mrk) = (rt, mrk);
-            GcMark::gc_mark(&self.0, rt, mrk);
             GcMark::gc_mark(&self.1, rt, mrk);
             GcMark::gc_mark(&self.2, rt, mrk);
             GcMark::gc_mark(&self.3, rt, mrk);

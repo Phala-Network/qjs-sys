@@ -112,14 +112,14 @@ impl js::FromJsValue for DeriveAlgorithm {
     }
 }
 
-#[derive(js::FromJsValue, js::ToJsValue, Debug, Clone)]
+#[derive(js::FromJsValue, js::ToJsValue, js::GcMark, Debug, Clone)]
 #[qjs(rename_all = "camelCase")]
 struct HmacKeyGenParams {
     hash: js::JsString,
     length: Option<usize>,
 }
 
-#[derive(js::FromJsValue, js::ToJsValue, Debug, Clone)]
+#[derive(js::FromJsValue, js::ToJsValue, js::GcMark, Debug, Clone)]
 struct AesKeyGenParams {
     name: js::JsString,
     length: usize,
@@ -146,7 +146,7 @@ impl js::FromJsValue for DeriveKeyGenAlgorithm {
     }
 }
 
-#[derive(js::FromJsValue, js::ToJsValue, Debug, Clone)]
+#[derive(js::FromJsValue, js::ToJsValue, js::GcMark, Debug, Clone)]
 #[qjs(rename_all = "camelCase")]
 struct RsaHashedKeyGenParams {
     name: js::JsString,
@@ -155,14 +155,14 @@ struct RsaHashedKeyGenParams {
     hash: js::JsString,
 }
 
-#[derive(js::FromJsValue, js::ToJsValue, Debug, Clone)]
+#[derive(js::FromJsValue, js::ToJsValue, js::GcMark, Debug, Clone)]
 #[qjs(rename_all = "camelCase")]
 struct EcKeyGenParams {
     name: js::JsString,
     named_curve: js::JsString,
 }
 
-#[derive(Clone)]
+#[derive(Clone, js::GcMark)]
 enum KeyGenAlgorithm {
     Rsa(RsaHashedKeyGenParams),
     Ec(EcKeyGenParams),
@@ -208,7 +208,6 @@ mod native_classes {
         #[qjs(getter)]
         pub extractable: bool,
         #[qjs(getter)]
-        #[gc(skip)]
         pub algorithm: KeyGenAlgorithm,
         #[qjs(getter)]
         pub usages: Vec<js::JsString>,

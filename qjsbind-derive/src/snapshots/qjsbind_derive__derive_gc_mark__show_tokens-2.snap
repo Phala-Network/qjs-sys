@@ -1,0 +1,29 @@
+---
+source: qjsbind-derive/src/derive_gc_mark.rs
+assertion_line: 172
+expression: "rustfmt_snippet::rustfmt(&generated.to_string()).unwrap()"
+---
+const _: () = {
+    use qjsbind::{c, GcMark, Value};
+    impl GcMark for Test {
+        fn gc_mark(&self, rt: *mut c::JSRuntime, mrk: c::JS_MarkFunc) {
+            #[allow(unused_variables)]
+            let (rt, mrk) = (rt, mrk);
+            match self {
+                Test::A => {}
+                Test::B(_0) => {
+                    GcMark::gc_mark(_0, rt, mrk);
+                }
+                Test::C(_0, _1, _2) => {
+                    GcMark::gc_mark(_0, rt, mrk);
+                    GcMark::gc_mark(_2, rt, mrk);
+                }
+                Test::D { a, b, c } => {
+                    GcMark::gc_mark(a, rt, mrk);
+                    GcMark::gc_mark(b, rt, mrk);
+                    _ = c;
+                }
+            }
+        }
+    }
+};
