@@ -248,7 +248,7 @@ impl CryptoKeyOrPair {
     ) -> js::Result<Self> {
         let public_key = CryptoKey {
             r#type: "public".into(),
-            extractable,
+            extractable: true,
             usages: usages.clone(),
             algorithm: algorithm.clone(),
             raw: public_key,
@@ -541,6 +541,9 @@ fn import_key(
 #[js::host_call]
 fn export_key(fmt: js::JsString, key: Native<CryptoKey>) -> Result<js::Bytes> {
     let key = key.borrow();
+    if !key.extractable {
+        bail!("key is not extractable");
+    }
     match fmt.as_str() {
         "raw" => Ok(key.raw.clone()),
         _ => bail!("unsupported export format: {fmt}"),
