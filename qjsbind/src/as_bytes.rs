@@ -95,7 +95,8 @@ where
 #[derive(Debug)]
 pub enum BytesOrString {
     Uint8Array(JsUint8Array),
-    String(JsString),
+    JsString(JsString),
+    String(String),
     Bytes(Vec<u8>),
 }
 
@@ -103,8 +104,9 @@ impl GcMark for BytesOrString {
     fn gc_mark(&self, rt: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
         match self {
             Self::Uint8Array(bytes) => bytes.gc_mark(rt, mark_fn),
-            Self::String(hex) => hex.gc_mark(rt, mark_fn),
+            Self::JsString(s) => s.gc_mark(rt, mark_fn),
             Self::Bytes(_) => {}
+            Self::String(_) => {}
         }
     }
 }
@@ -125,8 +127,17 @@ impl BytesOrString {
     pub fn as_bytes(&self) -> &[u8] {
         match self {
             Self::Uint8Array(bytes) => bytes.as_bytes(),
-            Self::String(hex) => hex.as_str().as_bytes(),
+            Self::JsString(s) => s.as_str().as_bytes(),
             Self::Bytes(bytes) => bytes.as_slice(),
+            Self::String(s) => s.as_str().as_bytes(),
+        }
+    }
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::Uint8Array(_) => None,
+            Self::JsString(s) => Some(s.as_str()),
+            Self::Bytes(_) => None,
+            Self::String(s) => Some(s.as_str()),
         }
     }
 }
@@ -147,8 +158,9 @@ impl ToJsValue for BytesOrString {
     fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         match self {
             Self::Uint8Array(bytes) => Ok(bytes.to_js_value(ctx)?),
-            Self::String(hex) => Ok(hex.to_js_value(ctx)?),
+            Self::JsString(s) => Ok(s.to_js_value(ctx)?),
             Self::Bytes(bytes) => encode_as_bytes(ctx, bytes),
+            Self::String(s) => Ok(s.to_js_value(ctx)?),
         }
     }
 }
