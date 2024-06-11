@@ -27,6 +27,8 @@ p521 = { version = "0.13", optional = true, features = ["ecdh"] }
 rand = { version = "0.8", optional = true }
 uuid = { version = "1", optional = true, features = ["v4"] }
 anyhow = { version = "1.0.86", default-features = false }
+cbc = { version = "0.1.2", optional = true, features = ["alloc"] }
+cipher = { version = "0.4.4", optional = true }
 
 [features]
 default = ["base64", "sha1", "sha2", "sha3", "blake2", "hex", "scale", "scale2", "crypto"]
@@ -62,4 +64,6 @@ crypto = [
     "p521",
     "rand",
     "uuid",
+    "cbc",
+    "cipher",
 ]

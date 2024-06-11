@@ -1,13 +1,12 @@
-#![allow(dead_code)]
-#[warn(dead_code)]
-const TODO: &str = "Remove the warning suppression.";
-
 use anyhow::bail;
 
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use js::{ErrorContext, Native, Result, ToJsValue};
 use rand::RngCore;
+
+use cipher::generic_array::GenericArray;
+use cipher::{ArrayLength, KeyInit};
 
 fn from_js<T>(value: js::Value) -> Result<T>
 where
@@ -270,6 +269,13 @@ impl CryptoKeyOrPair {
     }
 }
 
+fn generic_array_from_slice<L>(arr: &[u8]) -> Result<GenericArray<u8, L>>
+where
+    L: ArrayLength<u8>,
+{
+    GenericArray::from_exact_iter(arr.iter().copied()).context("invalid length")
+}
+
 #[js::host_call]
 fn encrypt(
     algorithm: CryptAlgorithm,
@@ -284,13 +290,13 @@ fn encrypt(
             use aes_gcm::KeyInit;
             macro_rules! encrypt_with {
                 ($key_size:ident) => {{
-                    let aead =
-                        aes_gcm::AesGcm::<aes::$key_size, U12>::new(
-                            aes_gcm::Key::<aes::$key_size>::from_slice(&key.raw),
-                        );
-                    let nonce = aes_gcm::Nonce::from_slice(&params.iv);
+                    let aead = aes_gcm::AesGcm::<aes::$key_size, U12>::new(
+                        &generic_array_from_slice(&key.raw.as_bytes())
+                            .context("invalid key length")?,
+                    );
+                    let nonce = generic_array_from_slice(&params.iv)?;
                     let ciphertext = aead
-                        .encrypt(nonce, data.as_ref())
+                        .encrypt(&nonce, data.as_ref())
                         .context("encryption failed")?;
                     ciphertext
                 }};
@@ -318,6 +324,30 @@ fn encrypt(
             };
             Ok(ciphertext.into())
         }
+        CryptAlgorithm::AesCbc(params) => {
+            use aes::cipher::{block_padding::Pkcs7, BlockCipher, BlockEncryptMut, KeyIvInit};
+            use aes::{Aes128, Aes192, Aes256};
+            use cbc::Encryptor;
+            fn encrypt_with<C>(key: &[u8], iv: &[u8], data: &[u8]) -> Result<Vec<u8>>
+            where
+                C: BlockEncryptMut + BlockCipher + KeyInit,
+            {
+                let key = generic_array_from_slice(key).context("invalid key length")?;
+                let iv = generic_array_from_slice(iv).context("invalid iv length")?;
+                let cipher = Encryptor::<C>::new(&key, &iv);
+                Ok(cipher.encrypt_padded_vec_mut::<Pkcs7>(data))
+            }
+            let KeyGenAlgorithm::Aes(key_algo) = &key.algorithm else {
+                bail!("not a valid AES key algorithm");
+            };
+            let ciphertext = match key_algo.length {
+                128 => encrypt_with::<Aes128>(&key.raw, &params.iv, data.as_bytes())?,
+                192 => encrypt_with::<Aes192>(&key.raw, &params.iv, data.as_bytes())?,
+                256 => encrypt_with::<Aes256>(&key.raw, &params.iv, data.as_bytes())?,
+                _ => bail!("key must be 16, 24, or 32 bytes long"),
+            };
+            Ok(ciphertext.into())
+        }
         _ => bail!("unsupported encryption algorithm"),
     }
 }
@@ -336,13 +366,12 @@ fn decrypt(
             use aes_gcm::KeyInit;
             macro_rules! decrypt_with {
                 ($key_size:ident) => {{
-                    let aead =
-                        aes_gcm::AesGcm::<aes::$key_size, U12>::new(
-                            aes_gcm::Key::<aes::$key_size>::from_slice(&key.raw),
-                        );
-                    let nonce = aes_gcm::Nonce::from_slice(&params.iv);
+                    let aead = aes_gcm::AesGcm::<aes::$key_size, U12>::new(
+                        &generic_array_from_slice(&key.raw)?,
+                    );
+                    let nonce = generic_array_from_slice(&params.iv)?;
                     let plaintext = aead
-                        .decrypt(nonce, data.as_ref())
+                        .decrypt(&nonce, data.as_ref())
                         .context("decryption failed")?;
                     plaintext
                 }};
@@ -363,6 +392,32 @@ fn decrypt(
                 128 => decrypt_with!(Aes128),
                 192 => decrypt_with!(Aes192),
                 256 => decrypt_with!(Aes256),
+                _ => bail!("key must be 16, 24, or 32 bytes long"),
+            };
+            Ok(plaintext.into())
+        }
+        CryptAlgorithm::AesCbc(params) => {
+            use aes::cipher::{block_padding::Pkcs7, BlockCipher, BlockDecryptMut, KeyIvInit};
+            use aes::{Aes128, Aes192, Aes256};
+            use cbc::Decryptor;
+            fn decrypt_with<C>(key: &[u8], iv: &[u8], data: &[u8]) -> Result<Vec<u8>>
+            where
+                C: BlockDecryptMut + BlockCipher + KeyInit,
+            {
+                let key = generic_array_from_slice(key).context("invalid key length")?;
+                let iv = generic_array_from_slice(iv).context("invalid iv length")?;
+                let cipher = Decryptor::<C>::new(&key, &iv);
+                Ok(cipher
+                    .decrypt_padded_vec_mut::<Pkcs7>(data)
+                    .context("failed to decrypt")?)
+            }
+            let KeyGenAlgorithm::Aes(key_algo) = &key.algorithm else {
+                bail!("not a valid AES key algorithm");
+            };
+            let plaintext = match key_algo.length {
+                128 => decrypt_with::<Aes128>(&key.raw, &params.iv, data.as_bytes())?,
+                192 => decrypt_with::<Aes192>(&key.raw, &params.iv, data.as_bytes())?,
+                256 => decrypt_with::<Aes256>(&key.raw, &params.iv, data.as_bytes())?,
                 _ => bail!("key must be 16, 24, or 32 bytes long"),
             };
             Ok(plaintext.into())
