@@ -214,7 +214,7 @@ mod native_classes {
         pub algorithm: KeyGenAlgorithm,
         #[qjs(getter)]
         pub usages: Vec<js::JsString>,
-        pub raw: js::Bytes,
+        pub raw: Vec<u8>,
     }
 }
 
@@ -243,8 +243,8 @@ impl ToJsValue for CryptoKeyOrPair {
 impl CryptoKeyOrPair {
     fn from_pair_raw(
         ctx: js::Context,
-        priviate_key: js::Bytes,
-        public_key: js::Bytes,
+        priviate_key: Vec<u8>,
+        public_key: Vec<u8>,
         extractable: bool,
         usages: Vec<js::JsString>,
         algorithm: KeyGenAlgorithm,
@@ -292,8 +292,7 @@ fn encrypt(
             macro_rules! encrypt_with {
                 ($key_size:ident) => {{
                     let aead = aes_gcm::AesGcm::<aes::$key_size, U12>::new(
-                        &generic_array_from_slice(&key.raw.as_bytes())
-                            .context("invalid key length")?,
+                        &generic_array_from_slice(&key.raw).context("invalid key length")?,
                     );
                     let nonce = generic_array_from_slice(&params.iv)?;
                     let ciphertext = aead
@@ -355,8 +354,7 @@ fn encrypt(
             macro_rules! encrypt_with {
                 ($key_size:ident) => {{
                     let mut cipher = Ctr64LE::<aes::$key_size>::new(
-                        &generic_array_from_slice(&key.raw.as_bytes())
-                            .context("invalid key length")?,
+                        &generic_array_from_slice(&key.raw).context("invalid key length")?,
                         &generic_array_from_slice(&params.counter)
                             .context("invalid counter length")?,
                     );
@@ -458,8 +456,7 @@ fn decrypt(
             macro_rules! decrypt_with {
                 ($key_size:ident) => {{
                     let mut cipher = Ctr64LE::<aes::$key_size>::new(
-                        &generic_array_from_slice(&key.raw.as_bytes())
-                            .context("invalid key length")?,
+                        &generic_array_from_slice(&key.raw).context("invalid key length")?,
                         &generic_array_from_slice(&params.counter)
                             .context("invalid counter length")?,
                     );
@@ -586,8 +583,8 @@ fn generate_key(
                 let public_key_bytes = public_key.to_encoded_point(false).as_bytes().to_vec();
                 CryptoKeyOrPair::from_pair_raw(
                     ctx,
-                    private_key_bytes.into(),
-                    public_key_bytes.into(),
+                    private_key_bytes,
+                    public_key_bytes,
                     extractable,
                     key_usages,
                     algorithm,
@@ -650,7 +647,7 @@ fn import_key(
         extractable,
         algorithm,
         usages: key_usages,
-        raw: key_data,
+        raw: key_data.as_bytes().to_vec(),
     };
     Native::new(&ctx, key)
 }
@@ -662,7 +659,7 @@ fn export_key(fmt: js::JsString, key: Native<CryptoKey>) -> Result<js::Bytes> {
         bail!("key is not extractable");
     }
     match fmt.as_str() {
-        "raw" => Ok(key.raw.clone()),
+        "raw" => Ok(key.raw.clone().into()),
         _ => bail!("unsupported export format: {fmt}"),
     }
 }
