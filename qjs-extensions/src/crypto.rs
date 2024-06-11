@@ -2,11 +2,12 @@ use anyhow::bail;
 
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use js::{ErrorContext, Native, Result, ToJsValue};
 use rand::RngCore;
 
 use cipher::generic_array::GenericArray;
-use cipher::{ArrayLength, KeyInit};
+use cipher::{ArrayLength, KeyInit, StreamCipher};
+
+use js::{ErrorContext, Native, Result, ToJsValue};
 
 fn from_js<T>(value: js::Value) -> Result<T>
 where
@@ -348,6 +349,35 @@ fn encrypt(
             };
             Ok(ciphertext.into())
         }
+        CryptAlgorithm::AesCtr(params) => {
+            use aes::cipher::KeyIvInit;
+            use ctr::Ctr64LE;
+            macro_rules! encrypt_with {
+                ($key_size:ident) => {{
+                    let mut cipher = Ctr64LE::<aes::$key_size>::new(
+                        &generic_array_from_slice(&key.raw.as_bytes())
+                            .context("invalid key length")?,
+                        &generic_array_from_slice(&params.counter)
+                            .context("invalid counter length")?,
+                    );
+                    let mut data = data.as_bytes().to_vec();
+                    cipher
+                        .try_apply_keystream(&mut data)
+                        .context("encryption failed")?;
+                    data
+                }};
+            }
+            let KeyGenAlgorithm::Aes(key_algo) = &key.algorithm else {
+                bail!("not a valid AES key algorithm");
+            };
+            let ciphertext = match key_algo.length {
+                128 => encrypt_with!(Aes128),
+                192 => encrypt_with!(Aes192),
+                256 => encrypt_with!(Aes256),
+                _ => bail!("key must be 16, 24, or 32 bytes long"),
+            };
+            Ok(ciphertext.into())
+        }
         _ => bail!("unsupported encryption algorithm"),
     }
 }
@@ -418,6 +448,35 @@ fn decrypt(
                 128 => decrypt_with::<Aes128>(&key.raw, &params.iv, data.as_bytes())?,
                 192 => decrypt_with::<Aes192>(&key.raw, &params.iv, data.as_bytes())?,
                 256 => decrypt_with::<Aes256>(&key.raw, &params.iv, data.as_bytes())?,
+                _ => bail!("key must be 16, 24, or 32 bytes long"),
+            };
+            Ok(plaintext.into())
+        }
+        CryptAlgorithm::AesCtr(params) => {
+            use aes::cipher::KeyIvInit;
+            use ctr::Ctr64LE;
+            macro_rules! decrypt_with {
+                ($key_size:ident) => {{
+                    let mut cipher = Ctr64LE::<aes::$key_size>::new(
+                        &generic_array_from_slice(&key.raw.as_bytes())
+                            .context("invalid key length")?,
+                        &generic_array_from_slice(&params.counter)
+                            .context("invalid counter length")?,
+                    );
+                    let mut data = data.as_bytes().to_vec();
+                    cipher
+                        .try_apply_keystream(&mut data)
+                        .context("decryption failed")?;
+                    data
+                }};
+            }
+            let KeyGenAlgorithm::Aes(key_algo) = &key.algorithm else {
+                bail!("not a valid AES key algorithm");
+            };
+            let plaintext = match key_algo.length {
+                128 => decrypt_with!(Aes128),
+                192 => decrypt_with!(Aes192),
+                256 => decrypt_with!(Aes256),
                 _ => bail!("key must be 16, 24, or 32 bytes long"),
             };
             Ok(plaintext.into())
