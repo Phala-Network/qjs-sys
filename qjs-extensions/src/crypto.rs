@@ -2,8 +2,11 @@
 #[warn(dead_code)]
 const TODO: &str = "Remove the warning suppression.";
 
-use anyhow::{bail, Context};
-use js::{Native, Result, ToJsValue};
+use anyhow::bail;
+
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+use js::{ErrorContext, Native, Result, ToJsValue};
 use rand::RngCore;
 
 fn from_js<T>(value: js::Value) -> Result<T>
@@ -199,7 +202,7 @@ use native_classes::CryptoKey;
 
 #[js::qjsbind]
 mod native_classes {
-    use super::KeyGenAlgorithm;
+    use super::{KeyGenAlgorithm, String, Vec};
 
     #[qjs(class(rename_all = "camelCase"))]
     pub struct CryptoKey {
@@ -552,7 +555,7 @@ fn export_key(fmt: js::JsString, key: Native<CryptoKey>) -> Result<js::Bytes> {
 
 #[js::host_call]
 fn get_random_values(output: js::JsUint8Array) -> Result<js::JsUint8Array> {
-    let mut buf = vec![0u8; output.len()];
+    let mut buf = alloc::vec![0u8; output.len()];
     rand::thread_rng().fill_bytes(&mut buf);
     output.fill_with_bytes(&buf);
     Ok(output)

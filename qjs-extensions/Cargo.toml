@@ -29,7 +29,7 @@ uuid = { version = "1", optional = true, features = ["v4"] }
 anyhow = { version = "1.0.86", default-features = false }
 
 [features]
-default = ["base64", "sha1", "sha2", "sha3", "blake2", "hex", "scale", "scale2"]
+default = ["base64", "sha1", "sha2", "sha3", "blake2", "hex", "scale", "scale2", "crypto"]
 hex = ["dep:hex", "hex_fmt"]
 std = [
     "js/std",

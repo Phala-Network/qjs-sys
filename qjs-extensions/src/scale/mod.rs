@@ -1,8 +1,8 @@
 use alloc::{format, string::String, sync::Arc, vec::Vec};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, bail};
 use parity_scale_codec::{Compact, Decode, Encode, Output};
 
-use js::{self as js, AsBytes, BytesOrHex, FromJsValue, JsResultExt, ToJsValue};
+use js::{self as js, AsBytes, BytesOrHex, FromJsValue, JsResultExt, ToJsValue, ErrorContext};
 
 use self::parser::{EnumType, ScaleType};
 

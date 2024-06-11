@@ -201,7 +201,7 @@ impl ToTokens for Class {
             }
             impl crate_js::NativeClass for #rs_name {
                 fn constructor_object(ctx: &crate_js::Context) -> crate_js::Result<crate_js::Value> {
-                    ctx.get_qjsbind_object(std::any::type_name::<#rs_name>(), || {
+                    ctx.get_qjsbind_object(core::any::type_name::<#rs_name>(), || {
                         let #constructor_var = ctx.new_function(#class_name_str, #{self.constructor_cfn()}, 0, crate_js::c::JS_CFUNC_constructor);
                         let #proto_var = ctx.new_object(#class_name_str);
                         #(#properties)*

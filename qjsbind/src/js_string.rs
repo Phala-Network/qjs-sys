@@ -84,7 +84,7 @@ impl Deref for JsString {
 
 #[derive(Debug)]
 pub enum String {
-    Native(std::string::String),
+    Native(alloc::string::String),
     JsString(JsString),
 }
 
@@ -97,15 +97,15 @@ impl GcMark for String {
     }
 }
 
-impl From<std::string::String> for String {
-    fn from(s: std::string::String) -> Self {
+impl From<alloc::string::String> for String {
+    fn from(s: alloc::string::String) -> Self {
         Self::Native(s)
     }
 }
 
 impl From<&str> for String {
     fn from(s: &str) -> Self {
-        Self::Native(s.to_string())
+        Self::Native(s.into())
     }
 }
 
@@ -115,11 +115,11 @@ impl From<JsString> for String {
     }
 }
 
-impl From<String> for std::string::String {
+impl From<String> for alloc::string::String {
     fn from(s: String) -> Self {
         match s {
             String::Native(s) => s,
-            String::JsString(s) => s.as_str().to_string(),
+            String::JsString(s) => s.as_str().into(),
         }
     }
 }
