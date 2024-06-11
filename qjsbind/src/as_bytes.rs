@@ -3,7 +3,7 @@ use core::ops::Deref;
 use alloc::vec::Vec;
 
 use crate::{
-    self as js, error::JsResultExt, FromJsValue, GcMark, JsString, JsUint8Array, ToJsValue,
+    self as js, error::JsResultExt, FromJsValue, GcMark, JsArrayBuffer, JsUint8Array, ToJsValue,
 };
 
 use super::{Result, Value};
@@ -94,26 +94,22 @@ where
 
 #[derive(Debug)]
 pub enum BytesOrString {
-    Uint8Array(JsUint8Array),
-    JsString(JsString),
-    String(String),
-    Bytes(Vec<u8>),
+    String(crate::String),
+    Bytes(Bytes),
 }
 
 impl GcMark for BytesOrString {
     fn gc_mark(&self, rt: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
         match self {
-            Self::Uint8Array(bytes) => bytes.gc_mark(rt, mark_fn),
-            Self::JsString(s) => s.gc_mark(rt, mark_fn),
-            Self::Bytes(_) => {}
-            Self::String(_) => {}
+            Self::Bytes(b) => b.gc_mark(rt, mark_fn),
+            Self::String(s) => s.gc_mark(rt, mark_fn),
         }
     }
 }
 
 impl Default for BytesOrString {
     fn default() -> Self {
-        Self::Bytes(Vec::new())
+        Self::Bytes(Default::default())
     }
 }
 
@@ -126,16 +122,12 @@ impl AsRef<[u8]> for BytesOrString {
 impl BytesOrString {
     pub fn as_bytes(&self) -> &[u8] {
         match self {
-            Self::Uint8Array(bytes) => bytes.as_bytes(),
-            Self::JsString(s) => s.as_str().as_bytes(),
-            Self::Bytes(bytes) => bytes.as_slice(),
-            Self::String(s) => s.as_str().as_bytes(),
+            Self::Bytes(bytes) => bytes.as_bytes(),
+            Self::String(s) => s.as_bytes(),
         }
     }
     pub fn as_str(&self) -> Option<&str> {
         match self {
-            Self::Uint8Array(_) => None,
-            Self::JsString(s) => Some(s.as_str()),
             Self::Bytes(_) => None,
             Self::String(s) => Some(s.as_str()),
         }
@@ -147,19 +139,14 @@ impl FromJsValue for BytesOrString {
         if value.is_string() {
             return Ok(Self::String(FromJsValue::from_js_value(value)?));
         }
-        if value.is_uint8_array() {
-            return Ok(Self::Uint8Array(FromJsValue::from_js_value(value)?));
-        }
-        AsBytes::<Vec<u8>>::from_js_value(value).map(|v| Self::Bytes(v.0))
+        return Ok(Self::Bytes(Bytes::from_js_value(value)?));
     }
 }
 
 impl ToJsValue for BytesOrString {
     fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         match self {
-            Self::Uint8Array(bytes) => Ok(bytes.to_js_value(ctx)?),
-            Self::JsString(s) => Ok(s.to_js_value(ctx)?),
-            Self::Bytes(bytes) => encode_as_bytes(ctx, bytes),
+            Self::Bytes(bytes) => Ok(bytes.to_js_value(ctx)?),
             Self::String(s) => Ok(s.to_js_value(ctx)?),
         }
     }
@@ -167,6 +154,7 @@ impl ToJsValue for BytesOrString {
 
 #[derive(Debug, Clone)]
 pub enum Bytes {
+    ArrayBuffer(JsArrayBuffer),
     Uint8Array(JsUint8Array),
     Bytes(Vec<u8>),
 }
@@ -174,6 +162,7 @@ pub enum Bytes {
 impl GcMark for Bytes {
     fn gc_mark(&self, ctx: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
         match self {
+            Self::ArrayBuffer(bytes) => bytes.gc_mark(ctx, mark_fn),
             Self::Uint8Array(bytes) => bytes.gc_mark(ctx, mark_fn),
             Self::Bytes(_) => {}
         }
@@ -215,6 +204,7 @@ impl Deref for Bytes {
 impl Bytes {
     pub fn as_bytes(&self) -> &[u8] {
         match self {
+            Self::ArrayBuffer(bytes) => bytes.as_bytes(),
             Self::Uint8Array(bytes) => bytes.as_bytes(),
             Self::Bytes(bytes) => bytes.as_slice(),
         }
@@ -233,6 +223,7 @@ impl FromJsValue for Bytes {
 impl ToJsValue for Bytes {
     fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
         match self {
+            Self::ArrayBuffer(bytes) => Ok(bytes.to_js_value(ctx)?),
             Self::Uint8Array(bytes) => Ok(bytes.to_js_value(ctx)?),
             Self::Bytes(bytes) => encode_as_bytes(ctx, bytes),
         }

@@ -81,3 +81,82 @@ impl Deref for JsString {
         self.as_str()
     }
 }
+
+#[derive(Debug)]
+pub enum String {
+    Native(std::string::String),
+    JsString(JsString),
+}
+
+impl GcMark for String {
+    fn gc_mark(&self, rt: *mut js::c::JSRuntime, mark_fn: js::c::JS_MarkFunc) {
+        match self {
+            Self::Native(_) => {}
+            Self::JsString(s) => s.gc_mark(rt, mark_fn),
+        }
+    }
+}
+
+impl From<std::string::String> for String {
+    fn from(s: std::string::String) -> Self {
+        Self::Native(s)
+    }
+}
+
+impl From<&str> for String {
+    fn from(s: &str) -> Self {
+        Self::Native(s.to_string())
+    }
+}
+
+impl From<JsString> for String {
+    fn from(s: JsString) -> Self {
+        Self::JsString(s)
+    }
+}
+
+impl From<String> for std::string::String {
+    fn from(s: String) -> Self {
+        match s {
+            String::Native(s) => s,
+            String::JsString(s) => s.as_str().to_string(),
+        }
+    }
+}
+
+impl Deref for String {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Native(s) => s.as_str(),
+            Self::JsString(s) => s.as_str(),
+        }
+    }
+}
+
+impl Display for String {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromJsValue for String {
+    fn from_js_value(value: Value) -> Result<Self> {
+        Ok(JsString::from_js_value(value)?.into())
+    }
+}
+
+impl ToJsValue for String {
+    fn to_js_value(&self, ctx: &js::Context) -> Result<Value> {
+        match self {
+            Self::Native(s) => s.to_js_value(ctx),
+            Self::JsString(s) => s.to_js_value(ctx),
+        }
+    }
+}
+
+impl String {
+    pub fn as_str(&self) -> &str {
+        self.deref()
+    }
+}

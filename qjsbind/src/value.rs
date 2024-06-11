@@ -751,7 +751,7 @@ impl Value {
         }
     }
     pub fn decode_bytes(&self) -> Result<Vec<u8>> {
-        if self.is_uint8_array() || self.is_uint8_array() {
+        if self.is_uint8_array() || self.is_array_buffer() {
             let mut len: c::size_t = 0;
             let ctx = self.context()?;
             let ptr = unsafe {

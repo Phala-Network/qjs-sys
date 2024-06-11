@@ -13,7 +13,7 @@ pub use error::{
 };
 pub use eval::{eval, Code};
 pub use host_function::convert_host_call_result;
-pub use js_string::JsString;
+pub use js_string::{JsString, String};
 pub use js_u8array::JsUint8Array;
 pub use js_arraybuffer::JsArrayBuffer;
 pub use native_object::{
