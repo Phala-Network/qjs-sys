@@ -7,7 +7,7 @@ use rand::RngCore;
 use cipher::generic_array::GenericArray;
 use cipher::{ArrayLength, KeyInit, StreamCipher};
 
-use js::{ErrorContext, Native, Result, ToJsValue};
+use js::{NoStdContext, Native, Result, ToJsValue};
 
 fn from_js<T>(value: js::Value) -> Result<T>
 where
