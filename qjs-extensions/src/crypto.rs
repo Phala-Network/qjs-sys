@@ -7,7 +7,7 @@ use rand::RngCore;
 use cipher::generic_array::GenericArray;
 use cipher::{ArrayLength, KeyInit, StreamCipher};
 
-use js::{NoStdContext, Native, Result, ToJsValue};
+use js::{Native, NoStdContext, Result, ToJsValue};
 
 fn from_js<T>(value: js::Value) -> Result<T>
 where
@@ -16,9 +16,21 @@ where
     T::from_js_value(value)
 }
 
-#[derive(js::FromJsValue, Debug)]
+#[derive(Debug)]
 struct BaseAlgorithm {
     name: js::JsString,
+}
+
+impl js::FromJsValue for BaseAlgorithm {
+    fn from_js_value(value: js::Value) -> Result<Self> {
+        let name = if value.is_string() {
+            value
+        } else {
+            value.get_property("name")?
+        };
+        let name = js::JsString::from_js_value(name)?;
+        Ok(BaseAlgorithm { name })
+    }
 }
 
 #[allow(dead_code)]
@@ -677,6 +689,19 @@ fn random_uuid() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
+#[js::host_call]
+fn digest(algorithm: BaseAlgorithm, data: js::Bytes) -> Result<js::Bytes> {
+    use sha2::{Digest, Sha256, Sha384, Sha512};
+    let data = data.as_bytes();
+    let hash = match algorithm.name.as_str() {
+        "SHA-256" => Sha256::digest(data).to_vec(),
+        "SHA-384" => Sha384::digest(data).to_vec(),
+        "SHA-512" => Sha512::digest(data).to_vec(),
+        _ => bail!("unsupported algorithm: {}", algorithm.name),
+    };
+    Ok(hash.into())
+}
+
 fn setup_subtle(ns: &js::Value) -> Result<()> {
     ns.define_property_fn("encrypt", encrypt)?;
     ns.define_property_fn("decrypt", decrypt)?;
@@ -684,6 +709,7 @@ fn setup_subtle(ns: &js::Value) -> Result<()> {
     ns.define_property_fn("generateKey", generate_key)?;
     ns.define_property_fn("importKey", import_key)?;
     ns.define_property_fn("exportKey", export_key)?;
+    ns.define_property_fn("digest", digest)?;
     Ok(())
 }
 

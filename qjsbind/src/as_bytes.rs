@@ -169,6 +169,12 @@ impl GcMark for Bytes {
     }
 }
 
+impl From<&[u8]> for Bytes {
+    fn from(bytes: &[u8]) -> Self {
+        Self::Bytes(bytes.to_vec())
+    }
+}
+
 impl From<Vec<u8>> for Bytes {
     fn from(bytes: Vec<u8>) -> Self {
         Self::Bytes(bytes)
