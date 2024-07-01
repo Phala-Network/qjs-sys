@@ -4,6 +4,7 @@ use crate::{c, Code, Result, ToJsValue, Value};
 use alloc::string::{String, ToString};
 use anyhow::{anyhow, bail, Context as _};
 use qjs_sys::inline_fns::JSCFunction;
+use tokio::sync::broadcast;
 
 pub struct PauseGc {
     ctx: Context,
@@ -188,14 +189,58 @@ pub struct Runtime {
 }
 impl Default for Runtime {
     fn default() -> Self {
-        Self::new()
+        Self::new(Default::default())
     }
 }
 
+#[derive(Debug, Default)]
+pub struct RuntimeConfig {
+    pub memory_limit: Option<u32>,
+    pub gas_limit: Option<u32>,
+}
+
+struct RuntimeData {
+    gas_remain: u32,
+    abort_tx: Option<broadcast::Sender<()>>,
+}
+
+extern "C" fn interrupt_handler(rt: *mut c::JSRuntime, _opaque: *mut core::ffi::c_void) -> i32 {
+    let data = unsafe { &mut *(c::JS_GetRuntimeOpaque(rt) as *mut RuntimeData) };
+    println!("interrupt_handler gas_remain: {}", data.gas_remain);
+    if data.gas_remain == 0 {
+        if let Some(tx) = &data.abort_tx {
+            let _ = tx.send(());
+        }
+        return 1;
+    }
+    data.gas_remain -= 1;
+    0
+}
+
 impl Runtime {
-    pub fn new() -> Self {
+    pub fn new(config: RuntimeConfig) -> Self {
         let ptr = unsafe { c::JS_NewRuntime() };
         let ptr = NonNull::new(ptr).expect("Failed to create JSRuntime");
+
+        let gas_remain = config.gas_limit.unwrap_or_default();
+        let data = Box::new(RuntimeData {
+            gas_remain,
+            abort_tx: None,
+        });
+        unsafe {
+            c::JS_SetRuntimeOpaque(ptr.as_ptr(), Box::into_raw(data) as *mut _);
+
+            if config.gas_limit.is_some() {
+                c::JS_SetInterruptHandler(
+                    ptr.as_ptr(),
+                    Some(interrupt_handler),
+                    core::ptr::null_mut(),
+                );
+            }
+            if let Some(memory_limit) = config.memory_limit {
+                c::JS_SetMemoryLimit(ptr.as_ptr(), memory_limit as usize);
+            }
+        }
         Runtime { ptr }
     }
 
@@ -239,11 +284,24 @@ impl Runtime {
             c::JS_SetDebugFlags(self.ptr.as_ptr(), flags);
         }
     }
+
+    pub fn subscribe_abort(&self) -> broadcast::Receiver<()> {
+        let data = unsafe { &mut *(c::JS_GetRuntimeOpaque(self.ptr.as_ptr()) as *mut RuntimeData) };
+        if let Some(tx) = &data.abort_tx {
+            return tx.subscribe();
+        }
+        let (tx, rx) = broadcast::channel(1);
+        data.abort_tx = Some(tx);
+        rx
+    }
 }
 
 impl Drop for Runtime {
     fn drop(&mut self) {
         unsafe {
+            let data = c::JS_GetRuntimeOpaque(self.ptr.as_ptr());
+            let data = Box::from_raw(data as *mut RuntimeData);
+            drop(data);
             c::JS_FreeRuntime(self.ptr.as_ptr());
         }
     }

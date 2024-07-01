@@ -7,7 +7,7 @@ pub use as_bytes::{
     decode_as_bytes, decode_as_bytes_maybe_hex, encode_as_bytes, AsBytes, Bytes, BytesOrHex,
     BytesOrString,
 };
-pub use engine::{Context, Runtime};
+pub use engine::{Context, Runtime, RuntimeConfig};
 pub use error::{
     no_std_context::NoStdContext, AnyError, Context as ErrorContext, Error, JsResultExt, Result,
 };
