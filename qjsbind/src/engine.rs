@@ -187,16 +187,12 @@ impl Drop for Context {
 pub struct Runtime {
     ptr: NonNull<c::JSRuntime>,
 }
-impl Default for Runtime {
-    fn default() -> Self {
-        Self::new(Default::default())
-    }
-}
 
-#[derive(Debug, Default)]
-pub struct RuntimeConfig {
+#[derive(Debug, Clone, Default)]
+pub struct RuntimeConfig<'a> {
     pub memory_limit: Option<u32>,
     pub gas_limit: Option<u32>,
+    pub bootcode: Option<&'a [u8]>,
 }
 
 struct RuntimeData {
@@ -218,7 +214,7 @@ extern "C" fn interrupt_handler(rt: *mut c::JSRuntime, _opaque: *mut core::ffi::
 }
 
 impl Runtime {
-    pub fn new(config: RuntimeConfig) -> Self {
+    pub fn new(config: &RuntimeConfig) -> Self {
         let ptr = unsafe { c::JS_NewRuntime() };
         let ptr = NonNull::new(ptr).expect("Failed to create JSRuntime");
 
