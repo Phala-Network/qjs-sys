@@ -1,4 +1,5 @@
 use core::ptr::NonNull;
+use std::time::Instant;
 
 use crate::{c, Code, Result, ToJsValue, Value};
 use alloc::string::{String, ToString};
@@ -189,44 +190,62 @@ pub struct Runtime {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct RuntimeConfig<'a> {
+pub struct EngineConfig {
     pub memory_limit: Option<u32>,
     pub gas_limit: Option<u32>,
-    pub bootcode: Option<&'a [u8]>,
+    pub time_limit: Option<u64>,
+}
+
+impl EngineConfig {
+    pub fn need_interrupt(&self) -> bool {
+        self.gas_limit.is_some() || self.time_limit.is_some()
+    }
 }
 
 struct RuntimeData {
     gas_remain: u32,
     abort_tx: Option<broadcast::Sender<()>>,
+    start_time: Instant,
+    time_limit: Option<u64>,
 }
 
 extern "C" fn interrupt_handler(rt: *mut c::JSRuntime, _opaque: *mut core::ffi::c_void) -> i32 {
     let data = unsafe { &mut *(c::JS_GetRuntimeOpaque(rt) as *mut RuntimeData) };
-    println!("interrupt_handler gas_remain: {}", data.gas_remain);
     if data.gas_remain == 0 {
         if let Some(tx) = &data.abort_tx {
             let _ = tx.send(());
         }
         return 1;
     }
+    if let Some(time_limit) = data.time_limit {
+        let elapsed = data.start_time.elapsed();
+        if elapsed.as_millis() >= time_limit as _ {
+            if let Some(tx) = &data.abort_tx {
+                let _ = tx.send(());
+            }
+            return 1;
+        }
+    }
     data.gas_remain -= 1;
     0
 }
 
 impl Runtime {
-    pub fn new(config: &RuntimeConfig) -> Self {
+    pub fn new(config: &EngineConfig) -> Self {
         let ptr = unsafe { c::JS_NewRuntime() };
         let ptr = NonNull::new(ptr).expect("Failed to create JSRuntime");
 
         let gas_remain = config.gas_limit.unwrap_or_default();
         let data = Box::new(RuntimeData {
             gas_remain,
+            start_time: Instant::now(),
+            time_limit: config.time_limit,
             abort_tx: None,
         });
         unsafe {
             c::JS_SetRuntimeOpaque(ptr.as_ptr(), Box::into_raw(data) as *mut _);
 
-            if config.gas_limit.is_some() {
+            if config.need_interrupt() {
                 c::JS_SetInterruptHandler(
                     ptr.as_ptr(),
                     Some(interrupt_handler),
