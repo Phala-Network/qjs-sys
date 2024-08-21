@@ -309,6 +309,10 @@ impl Runtime {
         data.abort_tx = Some(tx);
         rx
     }
+
+    pub fn as_ptr(&self) -> *mut c::JSRuntime {
+        self.ptr.as_ptr()
+    }
 }
 
 impl Drop for Runtime {
