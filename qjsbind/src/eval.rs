@@ -67,17 +67,10 @@ pub fn eval(ctx: &js::Context, script: &Code) -> Result<Value, String> {
     } else {
         let output = userdata.output?;
         if output.is_error() {
-            let raw = output.raw_value().to_owned();
-            let message = unsafe { Value::new_cloned(&ctx, c::JS_ToString(ctx.as_ptr(), raw)) };
-            let backtrace = unsafe {
-                Value::new_cloned(
-                    &ctx,
-                    c::JS_GetPropertyStr(ctx.as_ptr(), raw, "stack\0".as_ptr() as *const i8),
-                )
-            };
+            let message = output.to_string();
+            let backtrace = output.get_property("stack").unwrap();
             Err(format!("{}\n{}", message, backtrace))
         } else {
-            log::info!("js_eval_code output: {output}");
             Err(output.to_string())
         }
     }
