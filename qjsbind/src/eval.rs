@@ -66,6 +66,12 @@ pub fn eval(ctx: &js::Context, script: &Code) -> Result<Value, String> {
         userdata.output
     } else {
         let output = userdata.output?;
-        Err(output.to_string())
+        if output.is_error() {
+            let message = output.to_string();
+            let backtrace = output.get_property("stack").unwrap_or_default();
+            Err(format!("{}\n{}", message, backtrace))
+        } else {
+            Err(output.to_string())
+        }
     }
 }
