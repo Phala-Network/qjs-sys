@@ -63,9 +63,14 @@ impl From<Value> for Iter {
 
 impl core::fmt::Display for Value {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self.to_string_utf8() {
-            Some(s) => s.as_str().fmt(f),
-            None => write!(f, "<value>"),
+        match self {
+            Self::Undefined => write!(f, "undefined"),
+            Self::Null => write!(f, "null"),
+            Self::Exception => write!(f, "exception"),
+            Self::Other { .. } => match self.to_string_utf8() {
+                Some(s) => s.as_str().fmt(f),
+                None => write!(f, "<value>"),
+            },
         }
     }
 }
