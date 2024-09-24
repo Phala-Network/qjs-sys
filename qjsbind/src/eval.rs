@@ -68,7 +68,7 @@ pub fn eval(ctx: &js::Context, script: &Code) -> Result<Value, String> {
         let output = userdata.output?;
         if output.is_error() {
             let message = output.to_string();
-            let backtrace = output.get_property("stack").unwrap();
+            let backtrace = output.get_property("stack").unwrap_or_default();
             Err(format!("{}\n{}", message, backtrace))
         } else {
             Err(output.to_string())
